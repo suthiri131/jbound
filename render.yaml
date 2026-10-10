@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: jbound-api
+    runtime: node
+    plan: free
+    # pnpm workspace: build from the repo root, install only the server's deps
+    buildCommand: corepack enable && pnpm install --frozen-lockfile --filter jbound-server
+    startCommand: pnpm --filter jbound-server start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: LTA_ACCOUNT_KEY
+        sync: false
