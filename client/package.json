@@ -9,9 +9,9 @@
     "preview": "vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test"
-
   },
   "dependencies": {
+    "@clerk/vue": "^2.5.12",
     "@googlemaps/js-api-loader": "^1.16.10",
     "@supabase/supabase-js": "^2.45.0",
     "axios": "^1.7.7",

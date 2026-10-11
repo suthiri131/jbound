@@ -1,23 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
 
 const routes = [
-  { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue'), meta: { public: true, title: 'Sign in' } },
-  { path: '/', name: 'basecamp', component: () => import('@/views/BasecampView.vue'), meta: { title: 'Basecamp' } }
+  { path: '/', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: 'Home' } },
+
+  // Clerk's <SignIn>/<SignUp> use path routing, so they need the catch-all (e.g. /sign-up/verify-email-address).
+  { path: '/sign-in/:pathMatch(.*)*', name: 'sign-in', component: () => import('@/views/SignInView.vue'), meta: { guestOnly: true, title: 'Sign in' } },
+  { path: '/sign-up/:pathMatch(.*)*', name: 'sign-up', component: () => import('@/views/SignUpView.vue'), meta: { guestOnly: true, title: 'Sign up' } },
+
+  // Pages that need a signed-in user get meta: { requiresAuth: true }. Example:
+  // { path: '/planner', name: 'planner', component: () => import('@/views/PlannerView.vue'), meta: { requiresAuth: true, title: 'Planner' } },
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior: () => ({ top: 0 }),
-});
-
-router.beforeEach(async (to) => {
-  const auth = useAuthStore();
-  await auth.init();
-  if (!to.meta.public && !auth.isLoggedIn) return { name: 'login', query: { next: to.fullPath } };
-  if (to.name === 'login' && auth.isLoggedIn) return { name: 'basecamp' };
-  return true;
 });
 
 router.afterEach((to) => {
