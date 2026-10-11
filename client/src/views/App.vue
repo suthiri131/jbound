@@ -17,7 +17,7 @@ function createTrip() {
 <template>
   <div class="home-page">
     <header class="topbar">
-      <a class="brand" href="#home"><span class="brand-mark">J</span> JBound</a>
+      <a class="brand" href="#home" aria-label="JBound home"><img class="brand-logo" src="/favicon.svg" alt="" /> <span>JBound</span></a>
       <span class="route-label">SINGAPORE <i></i> JOHOR BAHRU</span>
     </header>
 
@@ -87,7 +87,7 @@ button { cursor: pointer; }
 .topbar, main, .footer { width: min(100% - 48px, 1080px); margin-inline: auto; }
 .topbar { height: 76px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid var(--ink); }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-family: var(--font-display); font-size: 19px; }
-.brand-mark { display: grid; width: 34px; aspect-ratio: 1; place-items: center; border: 2px solid var(--ink); border-radius: 50%; color: var(--card); background: var(--jungle); }
+.brand-logo { width: 36px; height: 36px; }
 .route-label { color: var(--ink-mute); font-size: 11px; font-weight: 700; letter-spacing: 1.3px; }
 .route-label i { display: inline-block; width: 25px; height: 2px; margin: 0 8px 3px; background: var(--ember); }
 main { padding-block: 62px 76px; }
