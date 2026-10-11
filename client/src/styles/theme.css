@@ -1,0 +1,36 @@
+:root {
+  /* paper + ink */
+  --paper: #F3EAD3;
+  --paper-deep: #E7D9B8;
+  --map: #EADFC2;
+  --card: #FBF6E9;
+  --ink: #2A2117;
+  --ink-soft: #4A3C2B;
+  --ink-mute: #5A4A36;
+  --line: #CDB98E;
+  --line-strong: #A88F5E;
+
+  /* accents */
+  --jungle: #2E5A3C;      /* discovery / primary actions */
+  --jungle-deep: #1F3F2A;
+  --ember: #B4471F;       /* highlights, warnings */
+  --ember-line: #C2502A;
+  --mustard: #E0A43B;     /* satchel, focus, celebration */
+  --teal: #1F4E5A;        /* utility pages: Watcher, Ledger, Memory box */
+  --brick: #9E3B1B;
+
+  /* tints */
+  --sand: #F6E2B3;
+  --sage: #DCE5CF;
+  --clay: #F2CDB8;
+  --mist: #CFE0D9;
+  --leaf: #CFE0C3;
+
+  --font-display: 'Alfa Slab One', Georgia, serif;
+  --font-body: 'Archivo', system-ui, sans-serif;
+  --font-hand: 'Caveat', cursive;
+
+  --radius: 14px;
+  --shadow: 5px 5px 0 var(--ink);
+  --shadow-sm: 3px 3px 0 var(--ink);
+}
