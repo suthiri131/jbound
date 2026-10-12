@@ -7,8 +7,9 @@ const routes = [
   { path: '/sign-in/:pathMatch(.*)*', name: 'sign-in', component: () => import('@/views/SignInView.vue'), meta: { guestOnly: true, title: 'Sign in' } },
   { path: '/sign-up/:pathMatch(.*)*', name: 'sign-up', component: () => import('@/views/SignUpView.vue'), meta: { guestOnly: true, title: 'Sign up' } },
 
-  // Pages that need a signed-in user get meta: { requiresAuth: true }. Example:
-  // { path: '/planner', name: 'planner', component: () => import('@/views/PlannerView.vue'), meta: { requiresAuth: true, title: 'Planner' } },
+  { path: '/trips', name: 'my-trips', component: () => import('@/views/trips/MyTripsView.vue'), meta: { requiresAuth: true, title: 'My Trips' } },
+  { path: '/trips/new', name: 'create-trip', component: () => import('@/views/trips/CreateTripView.vue'), meta: { requiresAuth: true, title: 'Create Trip' } },
+  { path: '/trips/:tripId/planner', name: 'trip-planner', component: () => import('@/views/trips/TripPlannerView.vue'), meta: { requiresAuth: true, title: 'Trip Planner' } },
 ];
 
 const router = createRouter({
