@@ -10,6 +10,9 @@ const routes = [
   { path: '/trips', name: 'my-trips', component: () => import('@/views/trips/MyTripsView.vue'), meta: { requiresAuth: true, title: 'My Trips' } },
   { path: '/trips/new', name: 'create-trip', component: () => import('@/views/trips/CreateTripView.vue'), meta: { requiresAuth: true, title: 'Create Trip' } },
   { path: '/trips/:tripId/planner', name: 'trip-planner', component: () => import('@/views/trips/TripPlannerView.vue'), meta: { requiresAuth: true, title: 'Trip Planner' } },
+
+  // Tales + Border routes
+  {path: '/tales', name: 'tales', component: () => import('@/views/TalesView.vue'), meta: { requiresAuth: true, title: 'Tales' }}
 ];
 
 const router = createRouter({
