@@ -21,6 +21,7 @@ function createTrip() {
       <a class="brand" href="#home" aria-label="JBound home"><img class="brand-logo" src="/favicon.svg" alt="" /> <span>JBound</span></a>
       <div class="topbar-right">
   <span class="route-label">SINGAPORE <i></i> JOHOR BAHRU</span>
+  <RouterLink :to="{ name: 'my-trips' }">My Trips</RouterLink>
   <NavAuth />
 </div>
     </header>
