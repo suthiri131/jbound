@@ -33,5 +33,8 @@ export const config = {
   },
 
   frankfurterBaseUrl: process.env.FRANKFURTER_BASE_URL || 'https://api.frankfurter.dev',
-  osrmBaseUrl: process.env.OSRM_BASE_URL || 'https://router.project-osrm.org',
+  ors: {
+    apiKey: process.env.ORS_API_KEY || '',
+    baseUrl: process.env.ORS_BASE_URL || 'https://api.openrouteservice.org',
+  },
 };
