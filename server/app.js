@@ -4,6 +4,7 @@ import helmet from 'helmet';      //security middleware
 import morgan from 'morgan';      // HTTP request logging middleware
 import { config } from './config.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
+import routesRouter from './routes/routes.js';
 
 export const app = express();
 
@@ -27,6 +28,8 @@ app.get('/', (_req, res) => res.json({ name: 'JBound API', docs: '/api/health' }
 app.get('/api/health', (_req, res) =>
   res.json({ ok: true, env: config.env, ltaConfigured: Boolean(config.lta.accountKey), time: new Date().toISOString() }),
 );
+
+app.use('/api/routes', routesRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
