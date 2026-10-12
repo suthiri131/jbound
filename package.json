@@ -12,5 +12,8 @@
   "license": "ISC",
   "dependencies": {
     "@clerk/vue": "^2.5.12"
-  }
+  },
+  "db:new": "npx supabase migration new",
+  "db:push": "npx supabase db push",
+  "db:status": "npx supabase migration list"
 }
