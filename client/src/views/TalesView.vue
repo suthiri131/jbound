@@ -1,8 +1,4 @@
 <script setup>
-/**
- * Tales: community reviews around the campfire.
- * GET/POST /api/posts, POST /api/posts/:id/like, GET/POST /api/posts/:id/comments
- */
 import { ref, reactive, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage, uploadImage } from '@/lib/api';
