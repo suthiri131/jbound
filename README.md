@@ -7,7 +7,7 @@ JBound is a Singapore–Johor Bahru travel companion. Friends use it to plan tri
 - **Client:** Vue 3, Vite, Vue Router, Pinia, axios, and the Google Maps JavaScript API
 - **Server:** Node.js, Express 5, CORS, zod, and multer
 - **Database & auth:** Supabase (Postgres, Auth, Storage, and Realtime)
-- **External APIs:** Google Places API (New), LTA DataMall (traffic cameras), Frankfurter (exchange rates), and OSRM (driving routes)
+- **External APIs:** Google Places API (New), LTA DataMall (traffic cameras), Frankfurter (exchange rates), and OpenRouteService (driving routes)
 
 ## Run locally
 
@@ -27,6 +27,8 @@ cp client/.env.example client/.env.local
 ```
 
 Fill in your Supabase URL, `anon` key and `service_role` key, all found under **Project Settings → API**. The `service_role` key belongs in `server/.env` only, and should never go in the client. An LTA DataMall key is optional. Without it, the Watcher page shows congestion estimates but no live camera images.
+
+Add your OpenRouteService key as `ORS_API_KEY` in `server/.env`. Keep it server-side; do not add it to a `VITE_` variable or expose it in the client.
 
 Google Maps needs a [Google Cloud](https://console.cloud.google.com) project with billing enabled. Under **APIs & Services → Library**, enable the **Maps JavaScript API** and **Places API (New)**. Then, under **APIs & Services → Credentials**, create two API keys with these restrictions:
 
@@ -58,7 +60,7 @@ pnpm dev
 
 Open the client at [http://localhost:5173](http://localhost:5173) and sign in with `alex@jbound.test` and the password `JBound123!`. The API is available at [http://localhost:3000](http://localhost:3000), and its health check is at `/api/health`.
 
-<!-- insert API endpoints here -->
+Driving directions are available at `POST /api/routes`. Send JSON with a `coordinates` array containing at least two `[longitude, latitude]` pairs; the response is ORS GeoJSON.
 
 The server only accepts requests from the origins listed in `CLIENT_ORIGIN` in `server/.env`, which is `http://localhost:5173` by default. To change the API port, set `PORT` in `server/.env`. If you do, also update `VITE_API_URL` in `client/.env.local` to match.
 
