@@ -14,7 +14,7 @@ import * as itinerary from "../controllers/itineraryController.js";
 // TO DO
 // import * as messages from '../controllers/messagesController.js';
 // import * as expenses from '../controllers/expensesController.js';
-// import * as memories from "../controllers/memoriesController.js";
+import * as memories from "../controllers/memoriesController.js";
 
 import * as s from "./schemas.js";
 
