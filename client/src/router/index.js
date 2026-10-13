@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
 const routes = [
-  { path: '/', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: 'Home' } },
+  // Basecamp homepage
+  { path: '/', name: 'basecamp', component: () => import('@/views/BasecampView.vue'), meta: { title: 'Basecamp' } },
 
   // Clerk's <SignIn>/<SignUp> use path routing, so they need the catch-all (e.g. /sign-up/verify-email-address).
   { path: '/sign-in/:pathMatch(.*)*', name: 'sign-in', component: () => import('@/views/SignInView.vue'), meta: { guestOnly: true, title: 'Sign in' } },
@@ -13,6 +14,8 @@ const routes = [
 
   // Tales + Border routes
   {path: '/tales', name: 'tales', component: () => import('@/views/TalesView.vue'), meta: { requiresAuth: true, title: 'Tales' }}
+
+  // 
 ];
 
 const router = createRouter({

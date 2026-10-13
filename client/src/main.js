@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 import { clerkPlugin } from '@clerk/vue';
 import App from './views/App.vue';
 import router from './router';
@@ -11,6 +12,7 @@ if (!publishableKey) {
 }
 
 const app = createApp(App);
+app.use(createPinia());
 app.use(clerkPlugin, {
   publishableKey,
   signInUrl: '/sign-in',
