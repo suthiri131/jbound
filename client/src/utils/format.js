@@ -1,26 +1,26 @@
 export function initials(name) {
-  const words = String(name || '')
+  const words = String(name || "")
     .trim()
     .split(/\s+/)
     .filter(Boolean);
 
-  if (!words.length) return '?';
+  if (!words.length) return "?";
   return words
     .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() || '')
-    .join('');
+    .map((word) => word[0]?.toUpperCase() || "")
+    .join("");
 }
 
 export function timeAgo(iso) {
-  if (!iso) return 'just now';
+  if (!iso) return "just now";
 
   const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return 'just now';
+  if (Number.isNaN(ms)) return "just now";
 
   const diff = Math.max(0, Date.now() - ms);
   const minutes = Math.floor(diff / 60000);
 
-  if (minutes < 1) return 'just now';
+  if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
 
   const hours = Math.floor(minutes / 60);
@@ -35,3 +35,30 @@ export function timeAgo(iso) {
   const years = Math.floor(months / 12);
   return `${years}y ago`;
 }
+
+export function shortDate(iso) {
+  if (!iso) return "";
+  const d = asDate(iso);
+  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+export function longDate(iso) {
+  if (!iso) return "";
+  const d = asDate(iso);
+  return `${FULL_DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+
+export function dateRange(start, end) {
+  if (!start) return "No dates yet";
+  if (!end || end === start) return shortDate(start);
+  return `${shortDate(start)} – ${shortDate(end)}`;
+}
+
+export function dayLabel(start, day) {
+  if (!day) return "Unscheduled";
+  if (!start) return shortDate(day);
+  const diff = Math.round((asDate(day) - asDate(start)) / 86_400_000);
+  return diff >= 0 ? `Day ${diff + 1}` : shortDate(day);
+}
+
+export const hhmm = (t) => (t ? String(t).slice(0, 5) : "");

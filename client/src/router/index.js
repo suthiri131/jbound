@@ -29,6 +29,13 @@ const routes = [
     component: () => import("@/views/TalesView.vue"),
     meta: { requiresAuth: true, title: "Tales" },
   },
+
+  {
+    path: "/planner/:tripId?",
+    name: "planner",
+    component: () => import("@/views/PlannerView.vue"),
+    meta: { requiresAuth: true, title: "Planner" },
+  },
 ];
 
 const router = createRouter({
