@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { clerkPlugin } from '@clerk/vue';
+import { createPinia } from 'pinia';
 import App from './views/App.vue';
 import router from './router';
 import { installAuthGuard } from './router/authGuard';
@@ -11,6 +12,7 @@ if (!publishableKey) {
 }
 
 const app = createApp(App);
+app.use(createPinia());
 app.use(clerkPlugin, {
   publishableKey,
   signInUrl: '/sign-in',
