@@ -1,8 +1,12 @@
 import { createRouter, createWebHistory } from "vue-router";
 
 const routes = [
-  // Basecamp homepage
-  { path: '/', name: 'basecamp', component: () => import('@/views/BasecampView.vue'), meta: { title: 'Basecamp' } },
+  {
+    path: "/",
+    name: "home",
+    component: () => import("@/views/BasecampView.vue"),
+    meta: { title: "Home" },
+  },
 
   // Clerk's <SignIn>/<SignUp> use path routing, so they need the catch-all (e.g. /sign-up/verify-email-address).
   {

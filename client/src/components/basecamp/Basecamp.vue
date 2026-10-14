@@ -14,6 +14,116 @@ defineProps({
 
 <template>
   <div class="house">
+    <svg viewBox="0 0 1000 720" aria-hidden="true" class="art">
+      <rect width="1000" height="720" fill="#E9DDBF" />
+      <circle cx="140" cy="118" r="48" fill="#E0A43B" />
+      <path
+        d="M250 120q10-10 20 0q10-10 20 0M310 90q8-8 16 0q8-8 16 0M820 150q9-9 18 0q9-9 18 0"
+        fill="none"
+        stroke="#2A2117"
+        stroke-width="3"
+        stroke-linecap="round"
+      />
+      <path
+        d="M0 500C140 430 300 470 430 440S720 400 1000 460V720H0Z"
+        fill="#CBD5B0"
+      />
+      <path
+        d="M0 560C180 520 320 560 520 540S820 520 1000 560V720H0Z"
+        fill="#B5C495"
+      />
+      <!-- tree -->
+      <rect
+        x="58"
+        y="520"
+        width="22"
+        height="168"
+        fill="#6B4A2B"
+        stroke="#2A2117"
+        stroke-width="3"
+      />
+      <circle
+        cx="40"
+        cy="520"
+        r="42"
+        fill="#2E5A3C"
+        stroke="#2A2117"
+        stroke-width="3"
+      />
+      <circle
+        cx="104"
+        cy="512"
+        r="44"
+        fill="#2E5A3C"
+        stroke="#2A2117"
+        stroke-width="3"
+      />
+      <circle
+        cx="70"
+        cy="470"
+        r="58"
+        fill="#3B6E49"
+        stroke="#2A2117"
+        stroke-width="3"
+      />
+      <!-- chimney + smoke -->
+      <rect
+        x="692"
+        y="150"
+        width="60"
+        height="160"
+        fill="#9E3B1B"
+        stroke="#2A2117"
+        stroke-width="4"
+      />
+      <path
+        d="M692 180h60M692 210h60M692 240h60M712 150v30M732 180v30M712 210v30"
+        stroke="#7A2D14"
+        stroke-width="2"
+      />
+      <rect x="684" y="138" width="76" height="16" fill="#2A2117" />
+      <!-- ground floor -->
+      <rect
+        x="130"
+        y="430"
+        width="740"
+        height="256"
+        fill="#E4C796"
+        stroke="#2A2117"
+        stroke-width="5"
+      />
+      <path
+        d="M132 470H868M132 510H868M132 550H868M132 590H868M132 630H868M132 670H868"
+        stroke="#C9A46A"
+        stroke-width="2"
+      />
+      <!-- roof -->
+      <polygon
+        points="66,442 500,68 934,442"
+        fill="#B4471F"
+        stroke="#2A2117"
+        stroke-width="5"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M407 150H593M337 210H663M268 270H732M198 330H802M128 390H872"
+        stroke="#8E3718"
+        stroke-width="3"
+        stroke-dasharray="18 10"
+      />
+      <polygon
+        points="170,432 500,145 830,432"
+        fill="#D9B37E"
+        stroke="#2A2117"
+        stroke-width="4"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M436 200H564M390 240H610M344 280H656M297 320H703M251 360H749M205 400H795"
+        stroke="#B58B55"
+        stroke-width="2"
+      />
+    </svg>
   </div>
 </template>
 
