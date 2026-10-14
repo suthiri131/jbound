@@ -67,18 +67,9 @@ defineProps({
         stroke-width="3"
       />
       <!-- chimney + smoke -->
-<<<<<<< HEAD
-<<<<<<< HEAD
       <circle class="smoke" cx="722" cy="128" r="16" fill="#D9CDB2" />
       <circle class="smoke s2" cx="722" cy="128" r="16" fill="#D9CDB2" />
       <circle class="smoke s3" cx="722" cy="128" r="16" fill="#D9CDB2" />
-=======
->>>>>>> 823dba9 (house)
-=======
-      <circle class="smoke" cx="722" cy="128" r="16" fill="#D9CDB2" />
-      <circle class="smoke s2" cx="722" cy="128" r="16" fill="#D9CDB2" />
-      <circle class="smoke s3" cx="722" cy="128" r="16" fill="#D9CDB2" />
->>>>>>> b9c3bc6 (attic windows)
       <rect
         x="692"
         y="150"
@@ -135,9 +126,6 @@ defineProps({
         stroke="#B58B55"
         stroke-width="2"
       />
-<<<<<<< HEAD
-<<<<<<< HEAD
-
       <!-- attic windows -->
       <circle
         cx="372"
@@ -214,24 +202,10 @@ defineProps({
         stroke="#2A2117"
         stroke-width="3"
       />
-=======
->>>>>>> 823dba9 (house)
-=======
-
-      <!-- attic windows -->
-      <circle cx="372" cy="360" r="24" fill="#F6E2B3" stroke="#2A2117" stroke-width="4" />
-      <path d="M372 336v48M348 360h48" stroke="#2A2117" stroke-width="3" />
-      <circle cx="628" cy="360" r="24" fill="#F6E2B3" stroke="#2A2117" stroke-width="4" />
-      <path d="M628 336v48M604 360h48" stroke="#2A2117" stroke-width="3" />
-      
-      <!-- attic door frame, ledge, rope ladder -->
-      <path d="M444 412V312A56 48 0 0 1 556 312V412Z" fill="#2A2117" />
-      <rect x="120" y="428" width="760" height="14" fill="#2A2117" />
-      <rect x="420" y="410" width="160" height="12" fill="#6B4A2B" stroke="#2A2117" stroke-width="3" />
-      <path d="M592 422V478M612 422V478M592 434H612M592 446H612M592 458H612M592 470H612" stroke="#8A6A3B" stroke-width="3" />
-
-
->>>>>>> b9c3bc6 (attic windows)
+      <!-- door frames -->
+      <rect x="168" y="484" width="164" height="200" fill="#2A2117" />
+      <path d="M418 684V546A82 64 0 0 1 582 546V684Z" fill="#2A2117" />
+      <rect x="668" y="484" width="164" height="200" fill="#2A2117" />
     </svg>
   </div>
 </template>
