@@ -68,11 +68,17 @@ defineProps({
       />
       <!-- chimney + smoke -->
 <<<<<<< HEAD
+<<<<<<< HEAD
       <circle class="smoke" cx="722" cy="128" r="16" fill="#D9CDB2" />
       <circle class="smoke s2" cx="722" cy="128" r="16" fill="#D9CDB2" />
       <circle class="smoke s3" cx="722" cy="128" r="16" fill="#D9CDB2" />
 =======
 >>>>>>> 823dba9 (house)
+=======
+      <circle class="smoke" cx="722" cy="128" r="16" fill="#D9CDB2" />
+      <circle class="smoke s2" cx="722" cy="128" r="16" fill="#D9CDB2" />
+      <circle class="smoke s3" cx="722" cy="128" r="16" fill="#D9CDB2" />
+>>>>>>> b9c3bc6 (attic windows)
       <rect
         x="692"
         y="150"
@@ -129,6 +135,7 @@ defineProps({
         stroke="#B58B55"
         stroke-width="2"
       />
+<<<<<<< HEAD
 <<<<<<< HEAD
 
       <!-- attic windows -->
@@ -209,6 +216,15 @@ defineProps({
       />
 =======
 >>>>>>> 823dba9 (house)
+=======
+
+      <!-- attic windows -->
+      <circle cx="372" cy="360" r="24" fill="#F6E2B3" stroke="#2A2117" stroke-width="4" />
+      <path d="M372 336v48M348 360h48" stroke="#2A2117" stroke-width="3" />
+      <circle cx="628" cy="360" r="24" fill="#F6E2B3" stroke="#2A2117" stroke-width="4" />
+      <path d="M628 336v48M604 360h48" stroke="#2A2117" stroke-width="3" />
+
+>>>>>>> b9c3bc6 (attic windows)
     </svg>
   </div>
 </template>
