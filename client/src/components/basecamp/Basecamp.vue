@@ -67,9 +67,12 @@ defineProps({
         stroke-width="3"
       />
       <!-- chimney + smoke -->
+<<<<<<< HEAD
       <circle class="smoke" cx="722" cy="128" r="16" fill="#D9CDB2" />
       <circle class="smoke s2" cx="722" cy="128" r="16" fill="#D9CDB2" />
       <circle class="smoke s3" cx="722" cy="128" r="16" fill="#D9CDB2" />
+=======
+>>>>>>> 823dba9 (house)
       <rect
         x="692"
         y="150"
@@ -126,6 +129,7 @@ defineProps({
         stroke="#B58B55"
         stroke-width="2"
       />
+<<<<<<< HEAD
 
       <!-- attic windows -->
       <circle
@@ -203,6 +207,8 @@ defineProps({
         stroke="#2A2117"
         stroke-width="3"
       />
+=======
+>>>>>>> 823dba9 (house)
     </svg>
   </div>
 </template>
