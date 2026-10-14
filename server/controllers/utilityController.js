@@ -3,24 +3,24 @@ import { getDrivingRoute } from '../services/routingService.js';
 import { uploadImage } from '../services/storageService.js';
 import { badRequest } from '../utils/httpError.js';
 
-/** GET /api/currency/rate?from=SGD&to=RM */
+/** GET /api/currency/rate?from=SGD&to=MYR */
 export async function currencyRate(req, res) {
   const {from, to } = req.valid.query
   res.json(await getRate(from, to))
 }
 
-/** GET /api/currency/convert?amount=50&from=SGD&to=RM */
+/** GET /api/currency/convert?amount=50&from=SGD&to=MYR */
 export async function currencyConvert(req, res) {
     const {amount, from, to } = req.valid.query
     res.json(await convert(amount, from, to))
 }
 
-/** POST /api/routing  */
+/** POST /api/routing  { points: [{lat,lng}, ...] } */
 export async function route(req, res) {
     res.json(await getDrivingRoute(req.valid.body.points))
 }
 
-/** POST /api/uploads?folder=posts|avatars|memories */
+/** POST /api/uploads?folder=posts|avatars|memories  (multipart field name: "image") */
 export async function upload(req, res) {
     if (!req.file ) {
         throw badRequest('Attach an image in the "image" field')
