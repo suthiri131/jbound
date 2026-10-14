@@ -203,10 +203,70 @@ defineProps({
         stroke-width="3"
       />
       <!-- door frames -->
-      <rect x="168" y="484" width="164" height="200" fill="#2A2117" />
-      <path d="M418 684V546A82 64 0 0 1 582 546V684Z" fill="#2A2117" />
-      <rect x="668" y="484" width="164" height="200" fill="#2A2117" />
+      <rect 
+        x="168" 
+        y="484" 
+        width="164" 
+        height="200" 
+        fill="#2A2117" 
+      />
+      <path 
+        d="M418 684V546A82 64 0 0 1 582 546V684Z" 
+        fill="#2A2117" 
+      />
+      <rect 
+        x="668" 
+        y="484" 
+        width="164" 
+        height="200" 
+        fill="#2A2117" 
+      />
+
+      <!-- signpost pole -->
+      <rect
+        x="936"
+        y="548"
+        width="12"
+        height="146"
+        fill="#6B4A2B"
+        stroke="#2A2117"
+        stroke-width="3"
+      />
     </svg>
+
+
+    <!-- Doors to different pages -->
+    <RouterLink to="/watcher" class="door" :aria-label="`Watcher: border congestion. ${watcherSub}`" style="left: 17.5%; top: 61.67%; width: 15%; height: 32.78%" data-cy="door-watcher">
+      <span class="plaque watcher-plaque" style="height: 15.3%"><span class="plaque-title">Border Watcher</span><span class="plaque-sub">{{ watcherSub }}</span></span>
+      <span class="door-frame" style="height: 80.5%">
+        <svg viewBox="0 0 150 190" preserveAspectRatio="none" aria-hidden="true">
+          <!-- Glow behind the door -->
+          <rect width="150" height="190" fill="#1A140E" />
+          <rect class="glow" width="150" height="190" fill="#E0A43B" />
+          <path class="glow" d="M0 190 40 120H110L150 190Z" fill="#F6E2B3" />
+        </svg>
+        <!-- Design of watcher door -->
+        <svg class="door-leaf" viewBox="0 0 150 190" preserveAspectRatio="none" aria-hidden="true">
+          <rect width="150" height="190" fill="#1F4E5A" stroke="#2A2117" stroke-width="4" />
+          <rect x="12" y="12" width="126" height="166" fill="none" stroke="#163A43" stroke-width="4" />
+          <g fill="#CFE0C3"><circle cx="20" cy="20" r="2.6" /><circle cx="130" cy="20" r="2.6" /><circle cx="20" cy="95" r="2.6" /><circle cx="130" cy="95" r="2.6" /><circle cx="20" cy="170" r="2.6" /><circle cx="130" cy="170" r="2.6" /></g>
+
+          <!-- Binocular-eyes -->
+          <circle cx="54" cy="58" r="21" fill="#CFE0D9" stroke="#2A2117" stroke-width="4" />
+          <circle cx="96" cy="58" r="21" fill="#CFE0D9" stroke="#2A2117" stroke-width="4" />
+          <rect x="68" y="52" width="14" height="12" fill="#2A2117" />
+
+          <!-- Traffic light -->
+          <path d="M44 50a12 12 0 0 1 10-6M86 50a12 12 0 0 1 10-6" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" />
+          <rect x="58" y="100" width="34" height="64" rx="8" fill="#2A2117" />
+          <circle cx="75" cy="114" r="7" fill="#5A2A1A" />
+          <circle cx="75" cy="132" r="7" fill="#E0A43B" />
+          <circle cx="75" cy="150" r="7" fill="#4E5E40" />
+          <rect x="120" y="96" width="9" height="28" rx="3" fill="#E0A43B" stroke="#2A2117" stroke-width="2" />
+        </svg>
+      </span>
+    </RouterLink>
+
   </div>
 </template>
 
@@ -253,6 +313,9 @@ defineProps({
   white-space: nowrap;
   line-height: 1.1;
   transition: transform 0.2s;
+}
+.watcher-plaque {
+  padding: 0.3cqw 0.6cqw;
 }
 .plaque-title {
   font-family: var(--font-display);
