@@ -1,10 +1,10 @@
-import { createApp } from "vue";
-import { clerkPlugin } from "@clerk/vue";
-import { createPinia } from "pinia";
-import App from "./views/App.vue";
-import router from "./router";
-import { installAuthGuard } from "./router/authGuard";
-import "./styles/theme.css";
+import { createApp } from 'vue';
+import { clerkPlugin } from '@clerk/vue';
+import { createPinia } from 'pinia';
+import App from './views/App.vue';
+import router from './router';
+import { installAuthGuard } from './router/authGuard';
+import './styles/theme.css';
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (!publishableKey) {
