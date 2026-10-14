@@ -132,6 +132,13 @@ defineProps({
       <path d="M372 336v48M348 360h48" stroke="#2A2117" stroke-width="3" />
       <circle cx="628" cy="360" r="24" fill="#F6E2B3" stroke="#2A2117" stroke-width="4" />
       <path d="M628 336v48M604 360h48" stroke="#2A2117" stroke-width="3" />
+      
+      <!-- attic door frame, ledge, rope ladder -->
+      <path d="M444 412V312A56 48 0 0 1 556 312V412Z" fill="#2A2117" />
+      <rect x="120" y="428" width="760" height="14" fill="#2A2117" />
+      <rect x="420" y="410" width="160" height="12" fill="#6B4A2B" stroke="#2A2117" stroke-width="3" />
+      <path d="M592 422V478M612 422V478M592 434H612M592 446H612M592 458H612M592 470H612" stroke="#8A6A3B" stroke-width="3" />
+
 
     </svg>
   </div>
