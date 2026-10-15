@@ -8,19 +8,21 @@ const routes = [
     meta: { title: "Home" },
   },
 
-  // Clerk's <SignIn>/<SignUp> use path routing, so they need the catch-all (e.g. /sign-up/verify-email-address).
   {
-    path: "/sign-in/:pathMatch(.*)*",
+    path: "/sign-in",
     name: "sign-in",
     component: () => import("@/views/SignInView.vue"),
     meta: { guestOnly: true, title: "Sign in" },
   },
   {
-    path: "/sign-up/:pathMatch(.*)*",
+    path: "/sign-up",
     name: "sign-up",
     component: () => import("@/views/SignUpView.vue"),
     meta: { guestOnly: true, title: "Sign up" },
   },
+
+  // AppNav sends people to /login after signing out
+  { path: "/login", redirect: { name: "sign-in" } },
 
   // Tales + Border routes
   {

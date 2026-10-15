@@ -6,6 +6,7 @@ import { config } from "./config.js";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 import routesRouter from "./routes/routes.js";
 import tripRoutes from "./routes/trips.js";
+import authRoutes from "./routes/auth.js";
 
 export const app = express();
 
@@ -43,6 +44,7 @@ app.get("/api/health", (_req, res) =>
   }),
 );
 
+app.use("/api/auth", authRoutes);
 app.use("/api/routes", routesRouter);
 app.use("/api/trips", tripRoutes);
 
