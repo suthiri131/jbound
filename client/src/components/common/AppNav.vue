@@ -1,24 +1,46 @@
 <script setup>
-import { useRouter } from "vue-router";
+import { ref, watch, onMounted, onBeforeUnmount } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { initials } from "@/utils/format";
 
 defineEmits(["open-satchel"]);
 const auth = useAuthStore();
 const router = useRouter();
+const route = useRoute();
+
+// Account menu (avatar -> name, @username, Sign out)
+const menuOpen = ref(false);
+const menuRoot = ref(null);
+const closeOnOutsideClick = (e) => {
+  if (menuOpen.value && menuRoot.value && !menuRoot.value.contains(e.target)) menuOpen.value = false;
+};
+const closeOnEscape = (e) => {
+  if (e.key === "Escape") menuOpen.value = false;
+};
+onMounted(() => {
+  document.addEventListener("click", closeOnOutsideClick);
+  document.addEventListener("keydown", closeOnEscape);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("click", closeOnOutsideClick);
+  document.removeEventListener("keydown", closeOnEscape);
+});
+watch(() => route.fullPath, () => (menuOpen.value = false));
 
 // One nav for every page. Names must match the room names used across the app.
 const links = [
   { to: "/", label: "Basecamp", exact: true },
   { to: "/planner", label: "Planner" },
-  { to: "/explorer", label: "Explorer" },
   { to: "/watcher", label: "Watcher" },
   { to: "/tales", label: "Tales" },
   { to: "/ledger", label: "Ledger" },
   { to: "/archives", label: "Archives" },
+  { to: "/explorer", label: "Explorer" },
 ];
 
 async function logout() {
+  menuOpen.value = false;
   await auth.logout();
   router.push("/login");
 }
@@ -49,7 +71,7 @@ async function logout() {
       </nav>
 
       <div class="actions">
-        <button type="button" class="satchel" @click="$emit('open-satchel')">
+        <button v-if="auth.isLoggedIn" type="button" class="satchel" @click="$emit('open-satchel')">
           <svg
             width="22"
             height="22"
@@ -67,15 +89,28 @@ async function logout() {
           </svg>
           Satchel
         </button>
-        <button
-          type="button"
-          class="avatar"
-          :aria-label="`Signed in as ${auth.profile?.name}. Sign out`"
-          :title="`Sign out (${auth.profile?.name})`"
-          @click="logout"
-        >
-          {{ initials(auth.profile?.name) }}
-        </button>
+        <div v-if="auth.isLoggedIn" ref="menuRoot" class="account">
+          <button
+            type="button"
+            class="avatar"
+            aria-haspopup="menu"
+            :aria-expanded="menuOpen"
+            :aria-label="`Account menu for ${auth.profile?.name}`"
+            @click="menuOpen = !menuOpen"
+          >
+            {{ initials(auth.profile?.name) }}
+          </button>
+          <div v-if="menuOpen" class="menu" role="menu">
+            <p class="menu-name">{{ auth.profile?.name }}</p>
+            <p v-if="auth.profile?.username" class="menu-meta">@{{ auth.profile.username }}</p>
+            <p v-if="auth.user?.email" class="menu-meta">{{ auth.user.email }}</p>
+            <button type="button" class="btn btn-sm menu-out" role="menuitem" @click="logout">Sign out</button>
+          </div>
+        </div>
+        <template v-else-if="auth.ready">
+          <RouterLink class="btn btn-sm btn-ghost" :to="{ name: 'sign-in', query: { next: route.fullPath } }">Sign in</RouterLink>
+          <RouterLink class="btn btn-sm btn-primary" :to="{ name: 'sign-up', query: { next: route.fullPath } }">Sign up</RouterLink>
+        </template>
       </div>
     </div>
   </header>
@@ -156,5 +191,35 @@ async function logout() {
   background: var(--sage);
   font-weight: 800;
   cursor: pointer;
+}
+.account {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 50;
+  min-width: 220px;
+  padding: 14px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+.menu-name {
+  margin: 0;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.menu-meta {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.menu-out {
+  width: 100%;
+  margin-top: 12px;
 }
 </style>
