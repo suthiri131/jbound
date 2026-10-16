@@ -94,7 +94,7 @@ export async function getTrip(req, res) {
   });
 }
 
-/** PATCH /api/trips/:tripId — owner only */
+/** PATCH /api/trips/:tripId — any trip member, including the owner */
 export async function updateTrip(req, res) {
   const { name, mission, coverColor, startDate, endDate } = req.valid.body;
   const nextStart = startDate === undefined ? req.trip.start_date : startDate;

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 
+const props = defineProps({ canDelete: { type: Boolean, default: false } });
 const emit = defineEmits(['edit', 'delete']);
 const open = ref(false);
 const root = ref(null);
@@ -13,6 +14,7 @@ function close() {
   trigger.value?.focus();
 }
 function choose(action) {
+  if (action === 'delete' && !props.canDelete) return;
   close();
   emit(action);
 }
@@ -25,7 +27,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', dismiss));
     <button ref="trigger" type="button" class="btn btn-ghost actions-trigger" aria-label="Trip actions" :aria-expanded="open" @click="open = !open">⋮</button>
     <div v-if="open" class="actions-popover">
       <button type="button" @click="choose('edit')">Edit trip</button>
-      <button type="button" class="delete-action" @click="choose('delete')">Delete trip</button>
+      <button v-if="canDelete" type="button" class="delete-action" @click="choose('delete')">Delete trip</button>
     </div>
   </div>
 </template>
