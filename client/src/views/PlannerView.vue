@@ -11,6 +11,8 @@ import FeasibilityCard from "@/components/planner/FeasibilityCard.vue";
 import RouteMap from "@/components/planner/RouteMap.vue";
 import MemoryBox from "@/components/planner/MemoryBox.vue";
 import ToastMessage from "@/components/common/ToastMessage.vue";
+import TripModal from "@/components/planner/TripModal.vue";
+import DeleteTripModal from "@/components/planner/DeleteTripModal.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -18,6 +20,50 @@ const trips = useTripsStore();
 
 const tripId = computed(() => route.params.tripId || null);
 const trip = ref(null);
+const editing = ref(false);
+const deleting = ref(false);
+const deleteTarget = ref(null);
+const deleteError = ref('');
+
+function requestDelete() {
+  if (!trip.value || trip.value.myRole !== 'owner') return;
+  deleteError.value = '';
+  deleteTarget.value = trip.value;
+}
+
+async function deleteTrip() {
+  if (deleting.value || !deleteTarget.value || deleteTarget.value.myRole !== 'owner') return;
+  const target = deleteTarget.value;
+  deleteError.value = '';
+  deleting.value = true;
+  try {
+    await trips.remove(target.id);
+    deleteTarget.value = null;
+    trip.value = null;
+    feas.value = null;
+    await router.replace('/planner');
+    notify('Trip deleted');
+  } catch (err) {
+    deleteError.value = errorMessage(err, 'Could not delete this trip');
+  } finally {
+    deleting.value = false;
+  }
+}
+
+function closeEdit() {
+  editing.value = false;
+}
+
+async function onTripSaved() {
+  editing.value = false;
+  await refresh();
+  try {
+    await trips.fetch(true);
+    notify('Trip updated');
+  } catch (err) {
+    notify(`Trip saved. ${errorMessage(err, 'Could not refresh the Satchel')}`);
+  }
+}
 const feas = ref(null);
 const feasLoading = ref(false);
 const loadError = ref("");
@@ -187,6 +233,8 @@ const canMemories = computed(() =>
           class="left"
           @changed="refresh"
           @error="notify"
+          @edit="editing = true"
+          @delete="requestDelete"
         >
           <template #feasibility>
             <FeasibilityCard
@@ -226,6 +274,8 @@ const canMemories = computed(() =>
       </div>
     </template>
 
+    <TripModal v-if="editing && trip" :key="trip.id" :trip="trip" @close="closeEdit" @saved="onTripSaved" />
+    <DeleteTripModal v-if="deleteTarget" :trip="deleteTarget" :busy="deleting" :error="deleteError" @close="deleteTarget = null" @confirm="deleteTrip" />
     <ToastMessage v-bind="toast" @close="toast.message = ''" />
   </main>
 </template>

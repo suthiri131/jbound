@@ -9,12 +9,13 @@ import { api, errorMessage } from '@/lib/api';
 import { dateRange, dayLabel, longDate, hhmm } from '@/utils/format';
 import { VIBE_LABEL, VIBE_TINT, PHASE_STAMP } from '@/utils/constants';
 import AddStopForm from './AddStopForm.vue';
+import TripActions from './TripActions.vue';
 
 const props = defineProps({
   trip: { type: Object, required: true },
   legs: { type: Object, default: () => ({}) }, // itemId → 'tight' | 'overloaded'
 });
-const emit = defineEmits(['changed', 'error']);
+const emit = defineEmits(['changed', 'error', 'edit', 'delete']);
 
 const editable = computed(() => ['planning', 'on_the_road'].includes(props.trip.phase));
 const ended = computed(() => props.trip.phase === 'memory_box' || props.trip.phase === 'archived');
@@ -93,10 +94,15 @@ function move(group, idx, dir) {
     <div class="row head">
       <div style="min-width: 0; flex: 1 1 200px">
         <p class="eyebrow" style="color: var(--jungle)">{{ dateRange(trip.start_date, trip.end_date) }}</p>
-        <h1 class="display display-lg" style="margin-top: 6px" data-cy="trip-title">{{ trip.name }}</h1>
+        <div class="row" style="justify-content: space-between; align-items: center; flex-wrap: nowrap; gap: 8px">
+          <h1 class="display display-lg" style="margin-top: 6px; overflow-wrap: anywhere" data-cy="trip-title">{{ trip.name }}</h1>
+        </div>
         <p v-if="trip.mission" class="hand muted" style="margin: 6px 0 0; font-size: 24px">{{ trip.mission }}</p>
       </div>
-      <div class="stamp big-stamp" :style="{ color: stamp.color }" :aria-label="`Status: ${stamp.label}`">{{ stamp.label }}</div>
+      <div class="header-actions">
+        <div class="stamp big-stamp" :style="{ color: stamp.color }" :aria-label="`Status: ${stamp.label}`">{{ stamp.label }}</div>
+        <TripActions v-if="trip.myRole === 'owner'" :key="trip.id" @edit="emit('edit')" @delete="emit('delete')" />
+      </div>
     </div>
 
     <div class="progress">
@@ -194,6 +200,7 @@ function move(group, idx, dir) {
 .bucket { position: relative; border: 2px solid var(--ink); border-radius: 6px 16px 16px 6px; background: var(--card); box-shadow: 8px 8px 0 var(--ink); padding: 28px 24px 24px 40px; }
 .margin-line { position: absolute; top: 0; bottom: 0; left: 20px; width: 2px; background: #E2A08A; }
 .head { justify-content: space-between; align-items: flex-start; gap: 14px; }
+.header-actions { display: flex; align-items: center; gap: 12px; flex: none; }
 .big-stamp { width: 110px; height: 110px; font-size: 13px; flex: none; }
 .progress { margin-top: 20px; padding: 14px 16px; border: 2px dashed var(--line-strong); border-radius: 12px; }
 .progress .hand { font-size: 24px; }

@@ -97,6 +97,11 @@ export async function getTrip(req, res) {
 /** PATCH /api/trips/:tripId — owner only */
 export async function updateTrip(req, res) {
   const { name, mission, coverColor, startDate, endDate } = req.valid.body;
+  const nextStart = startDate === undefined ? req.trip.start_date : startDate;
+  const nextEnd = endDate === undefined ? req.trip.end_date : endDate;
+  if (nextStart && nextEnd && nextEnd < nextStart) {
+    throw badRequest('End date must be on or after start date');
+  }
   const patch = {};
   if (name !== undefined) patch.name = name;
   if (mission !== undefined) patch.mission = mission;

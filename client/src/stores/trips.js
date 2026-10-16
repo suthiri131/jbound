@@ -35,6 +35,16 @@ export const useTripsStore = defineStore('trips', {
       await this.fetch(true);
       return data;
     },
+    async remove(tripId) {
+      await api.delete(`/trips/${tripId}`);
+      this.trips = this.trips.filter((trip) => trip.id !== tripId);
+      this.loaded = false;
+    },
+    async update(tripId, payload) {
+      const { data } = await api.patch(`/trips/${tripId}`, payload);
+      this.loaded = false;
+      return data;
+    },
     async join(inviteCode) {
       const { data } = await api.post('/trips/join', { inviteCode });
       await this.fetch(true);
