@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import WatcherView from '../views/WatcherView.vue';
 
 const routes = [
   {
@@ -44,6 +45,13 @@ const routes = [
     name: "explorer",
     component: () => import("@/views/ExplorerView.vue"),
     meta: { title: "Explorer" },
+  },
+
+  // watcher path
+  {
+  path: '/watcher',
+  name: 'watcher',
+  component: WatcherView,
   },
 ];
 
