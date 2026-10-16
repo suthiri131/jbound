@@ -109,9 +109,13 @@ async function post() {
 }
 
 async function like(p) {
+  try {
   const { data } = await api.post(`/posts/${p.id}/like`);
   p.likedByMe = data.liked;
   p.likeCount = data.likeCount;
+  } catch (error) {
+    console.log(error)
+  }
 }
 
 async function toggleComments(p) {
