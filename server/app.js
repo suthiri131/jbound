@@ -5,6 +5,8 @@ import morgan from 'morgan';      // HTTP request logging middleware
 import { config } from './config.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 import routesRouter from './routes/routes.js';
+import postsRouter from './routes/posts.js';
+import checkpointRouter from './routes/checkpoint.js';
 
 export const app = express();
 
@@ -30,6 +32,8 @@ app.get('/api/health', (_req, res) =>
 );
 
 app.use('/api/routes', routesRouter);
+app.use('/api/posts', postsRouter);
+app.use('/api/checkpoints', checkpointRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
