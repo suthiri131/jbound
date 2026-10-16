@@ -42,7 +42,6 @@ r.get("/:tripId", member, trips.getTrip);
 r.patch(
   "/:tripId",
   member,
-  requireTripOwner,
   validate({ body: s.updateTripBody }),
   trips.updateTrip,
 );
