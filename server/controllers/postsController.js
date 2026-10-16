@@ -4,11 +4,11 @@ import { badRequest, check, forbidden, notFound, unauthorized } from '../utils/h
 const AUTHOR = 'author:profiles!posts_user_id_fkey(id, username, name, avatar_url)';
 const POST_FIELDS = `id, caption, vibe, images, created_at, place_id, ${AUTHOR}, place:places(id, name, vibes), likes:post_likes(count), comments:post_comments(count)`;
 
-function shape(post, likedIds = new set()) {
+function shape(post, likedIds = new Set()) {
     const {likes, comments, ...rest} = post
     return {
         ...rest,
-        likeCount: likes?.[0].count ?? 0,
+        likeCount: likes?.[0]?.count ?? 0,
         commentCount: comments?.[0]?.count ?? 0,
         likedByMe: likedIds.has(post.id)   
     }
