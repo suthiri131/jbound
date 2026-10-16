@@ -266,7 +266,7 @@ onBeforeUnmount(() => clearTimeout(timer));
 }
 .hint {
   position: absolute;
-  left: calc(5% + clamp(190px, 30%, 340px) + 16px);
+  left: calc(5% + clamp(190px, 30%, 340px) + 6px);
   top: 10%;
   margin: 0;
   max-width: 34%;
