@@ -236,6 +236,8 @@ defineProps({
 
 
     <!-- Doors to different pages -->
+
+    <!-- Left door: Border watcher -->
     <RouterLink to="/watcher" class="door" :aria-label="`Watcher: border congestion. ${watcherSub}`" style="left: 17.5%; top: 61.67%; width: 15%; height: 32.78%" data-cy="door-watcher">
       <span class="plaque watcher-plaque" style="height: 15.3%"><span class="plaque-title">Border Watcher</span><span class="plaque-sub">{{ watcherSub }}</span></span>
       <span class="door-frame" style="height: 80.5%">
@@ -266,6 +268,29 @@ defineProps({
         </svg>
       </span>
     </RouterLink>
+
+    <!-- Middle door: Campfire tales -->
+    <RouterLink to="/tales" class="door" :aria-label="`Tales: read and share reviews. ${talesSub}`" style="left: 42.5%; top: 61.67%; width: 15%; height: 32.78%" data-cy="door-tales">
+      <span class="plaque" style="height: 15.3%"><span class="plaque-title">Tales</span><span class="plaque-sub">{{ talesSub }}</span></span>
+      <span class="door-frame" style="height: 80.5%">
+        <svg viewBox="0 0 150 190" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 190V64A75 62 0 0 1 150 64V190Z" fill="#1A140E" />
+          <path class="glow" d="M0 190V64A75 62 0 0 1 150 64V190Z" fill="#E0A43B" />
+          <path class="glow" d="M75 176c-18-10-22-26-10-44 2 10 8 14 12 14 0-12 4-20 12-28 4 16 14 24 10 42-2 10-12 16-24 16Z" fill="#B4471F" />
+        </svg>
+        <svg class="door-leaf" viewBox="0 0 150 190" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 190V64A75 62 0 0 1 150 64V190Z" fill="#B4471F" stroke="#2A2117" stroke-width="4" />
+          <path d="M37.5 12V190M75 2V190M112.5 12V190" stroke="#8E3718" stroke-width="3" />
+          <rect x="0" y="80" width="64" height="9" fill="#2A2117" />
+          <rect x="0" y="150" width="64" height="9" fill="#2A2117" />
+          <path d="M52 76V52A23 20 0 0 1 98 52V76Z" fill="#E0A43B" stroke="#2A2117" stroke-width="3" />
+          <path d="M75 74c-8-5-10-12-5-20 1 5 4 7 6 7 0-6 2-10 6-13 2 8 6 11 4 19-1 5-5 7-11 7Z" fill="#B4471F" />
+          <path d="M64 104v12a11 11 0 0 0 22 0v-12" fill="none" stroke="#CDB98E" stroke-width="5" stroke-linecap="round" />
+          <circle cx="128" cy="126" r="6" fill="#E0A43B" stroke="#2A2117" stroke-width="2" />
+        </svg>
+      </span>
+    </RouterLink>
+
 
   </div>
 </template>
