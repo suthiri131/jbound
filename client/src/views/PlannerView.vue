@@ -149,7 +149,6 @@ const canMemories = computed(() =>
 <template>
   <main class="container page planner">
     <div class="row crumbs">
-      <RouterLink to="/" class="back">← Basecamp</RouterLink>
       <span class="eyebrow muted">Planner</span>
     </div>
 
@@ -241,12 +240,6 @@ const canMemories = computed(() =>
 .crumbs {
   align-items: baseline;
   gap: 6px 14px;
-}
-.back {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  font-weight: 700;
 }
 .empty {
   text-align: center;
