@@ -1,14 +1,14 @@
 <script setup>
 /**
  * Horizontal satchel at the top of the Planner: one cover per trip,
- * "+ Pack a new trip" (opens NewTripModal) and a join-by-code box.
+ * "+ Pack a new trip" (opens TripModal) and a join-by-code box.
  */
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useTripsStore } from '@/stores/trips';
 import { errorMessage } from '@/lib/api';
 import TripCover from '@/components/common/TripCover.vue';
-import NewTripModal from './NewTripModal.vue';
+import TripModal from './TripModal.vue';
 
 const props = defineProps({
   currentId: { type: String, default: '' },
@@ -77,7 +77,7 @@ function created(trip) {
       </form>
     </div>
 
-    <NewTripModal v-if="showNew" @close="showNew = false" @created="created" />
+    <TripModal v-if="showNew" @close="showNew = false" @created="created" />
   </section>
 </template>
 
