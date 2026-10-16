@@ -16,6 +16,9 @@ const copied = ref(false);
 
 const inviteLink = computed(() => `${window.location.origin}/planner?join=${props.trip.invite_code}`);
 const isOwner = computed(() => props.trip.myRole === 'owner');
+const copyFailed = ref(false);
+
+const fallbackInput = ref(null);
 
 async function invite() {
   const u = username.value.replace(/^@/, '').trim().toLowerCase();
@@ -34,12 +37,17 @@ async function invite() {
 }
 
 async function copyLink() {
+  copyFailed.value=false;
+
   try {
+    // throw new Error('test') // use to throw error to test validation 
     await navigator.clipboard.writeText(inviteLink.value);
     copied.value = true;
-    setTimeout(() => (copied.value = false), 2000);
+    setTimeout(()=> (copied.value = false), 3000)
+   
   } catch {
-    window.prompt('Copy this link', inviteLink.value); // TODO(team): replace with a nicer fallback
+    copyFailed.value= true;
+   setTimeout(() => fallbackInput.value?.select(),0)
   }
 }
 
@@ -63,11 +71,14 @@ async function newCode() {
     </ul>
 
     <div class="tools">
-      <div class="row" style="gap: 8px">
+      <div class="row" style="gap: 8px; flex-wrap: wrap ">
         <span class="label">Invite code</span>
         <code class="code">{{ trip.invite_code }}</code>
         <button type="button" class="btn btn-sm" @click="copyLink">{{ copied ? 'Copied!' : 'Copy link' }}</button>
-        <button v-if="isOwner" type="button" class="btn btn-sm btn-ghost" title="Make a new code (old one stops working)" @click="newCode">↻</button>
+        <button v-if="isOwner" type="button" class="btn btn-sm btn-ghost"  @click="newCode">↻</button>
+        <input v-if="copyFailed" ref="fallbackInput" class="input" style="width: 220px" readonly :value="inviteLink" @click="$event.target.select()" aria-label="Invite link — select and copy"/>
+      <span v-if="copyFailed" class="hand muted" style="font-size: 13px">Error copying </span>
+      
       </div>
       <form class="row" style="gap: 8px" @submit.prevent="invite">
         <label class="label" for="invite-user">Invite</label>
