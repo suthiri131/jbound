@@ -317,7 +317,7 @@ defineProps({
       </span>
     </RouterLink>
 
-    <!-- ARCHIVES (attic door) -->
+    <!-- Attic door: Archives -->
     <RouterLink to="/archives" class="door" :aria-label="`Archives in the attic: ${archivesSub}`" style="left: 45%; top: 31.25%; width: 10%; height: 25.69%" data-cy="door-archives">
       <span class="plaque" style="height: 20%; left: -32%; right: -32%"><span class="plaque-title">Archives</span><span class="plaque-sub">{{ archivesSub }}</span></span>
       <span class="door-frame" style="height: 75.7%">
@@ -339,7 +339,8 @@ defineProps({
       </span>
     </RouterLink>
 
-
+    <!-- Signpost: JB Explorer -->
+    <RouterLink to="/explorer" class="sign" style="left: 86.4%; top: 79%; width: 13.2%; height: 4.4%">Explorer →</RouterLink>
 
   </div>
 </template>
