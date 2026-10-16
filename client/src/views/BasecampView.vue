@@ -4,6 +4,8 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useTripsStore } from "@/stores/trips";
 import BasecampHouse from "@/components/basecamp/Basecamp.vue";
+import IdlingCar from "@/components/basecamp/IdlingCar.vue";
+
 
 const auth = useAuthStore();
 const trips = useTripsStore();

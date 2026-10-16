@@ -130,7 +130,7 @@ onBeforeUnmount(() => clearTimeout(timer));
       </svg>
     </button>
     <p class="hint" :style="{ opacity: zooming ? 0 : 1 }" aria-hidden="true">
-      vroom vroom! tap the car to plan a trip
+      vroom vroom!
     </p>
     <RouterLink to="/planner" class="planner-link">Planner →</RouterLink>
   </div>
