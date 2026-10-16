@@ -339,7 +339,7 @@ defineProps({
       </span>
     </RouterLink>
 
-    <!-- Signpost: JB Explorer -->
+    <!-- SIGNPOST → Explorer -->
     <RouterLink to="/explorer" class="sign" style="left: 86.4%; top: 79%; width: 13.2%; height: 4.4%">Explorer →</RouterLink>
 
   </div>

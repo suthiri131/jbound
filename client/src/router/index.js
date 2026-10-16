@@ -38,6 +38,13 @@ const routes = [
     component: () => import("@/views/PlannerView.vue"),
     meta: { requiresAuth: true, title: "Planner" },
   },
+
+  {
+    path: "/explorer",
+    name: "explorer",
+    component: () => import("@/views/ExplorerView.vue"),
+    meta: { title: "Explorer" },
+  },
 ];
 
 const router = createRouter({
