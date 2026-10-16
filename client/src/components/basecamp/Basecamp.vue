@@ -158,11 +158,6 @@ defineProps({
         stroke="#2A2117"
         stroke-width="3"
       />
-      <path
-        d="M592 422V478M612 422V478M592 434H612M592 446H612M592 458H612M592 470H612"
-        stroke="#8A6A3B"
-        stroke-width="3"
-      />
       <!-- ground windows + flower boxes -->
       <rect
         x="345"
@@ -237,7 +232,7 @@ defineProps({
 
     <!-- Doors to different pages -->
 
-    <!-- Left door: Border watcher -->
+    <!-- Left door: Border Watcher -->
     <RouterLink to="/watcher" class="door" :aria-label="`Watcher: border congestion. ${watcherSub}`" style="left: 17.5%; top: 61.67%; width: 15%; height: 32.78%" data-cy="door-watcher">
       <span class="plaque watcher-plaque" style="height: 15.3%"><span class="plaque-title">Border Watcher</span><span class="plaque-sub">{{ watcherSub }}</span></span>
       <span class="door-frame" style="height: 80.5%">
@@ -269,15 +264,20 @@ defineProps({
       </span>
     </RouterLink>
 
-    <!-- Middle door: Campfire tales -->
+    <!-- Middle door: Campfire Tales -->
     <RouterLink to="/tales" class="door" :aria-label="`Tales: read and share reviews. ${talesSub}`" style="left: 42.5%; top: 61.67%; width: 15%; height: 32.78%" data-cy="door-tales">
       <span class="plaque" style="height: 15.3%"><span class="plaque-title">Tales</span><span class="plaque-sub">{{ talesSub }}</span></span>
       <span class="door-frame" style="height: 80.5%">
+
+        <!-- Glow behind door -->
         <svg viewBox="0 0 150 190" preserveAspectRatio="none" aria-hidden="true">
           <path d="M0 190V64A75 62 0 0 1 150 64V190Z" fill="#1A140E" />
           <path class="glow" d="M0 190V64A75 62 0 0 1 150 64V190Z" fill="#E0A43B" />
+          <path class="glow" d="M0 190 40 120H110L150 190Z" fill="#F6E2B3" />
           <path class="glow" d="M75 176c-18-10-22-26-10-44 2 10 8 14 12 14 0-12 4-20 12-28 4 16 14 24 10 42-2 10-12 16-24 16Z" fill="#B4471F" />
         </svg>
+
+        <!-- Door design -->
         <svg class="door-leaf" viewBox="0 0 150 190" preserveAspectRatio="none" aria-hidden="true">
           <path d="M0 190V64A75 62 0 0 1 150 64V190Z" fill="#B4471F" stroke="#2A2117" stroke-width="4" />
           <path d="M37.5 12V190M75 2V190M112.5 12V190" stroke="#8E3718" stroke-width="3" />
@@ -290,6 +290,55 @@ defineProps({
         </svg>
       </span>
     </RouterLink>
+
+
+    <!-- Right door: Expense Ledger -->
+    <RouterLink to="/ledger" class="door" :aria-label="`Ledger: split costs in Singapore dollars and ringgit. ${ledgerSub}`" style="left: 67.5%; top: 61.67%; width: 15%; height: 32.78%" data-cy="door-ledger">
+      <span class="plaque" style="height: 15.3%"><span class="plaque-title">Ledger</span><span class="plaque-sub">{{ ledgerSub }}</span></span>
+      <span class="door-frame" style="height: 80.5%">
+        <svg viewBox="0 0 150 190" preserveAspectRatio="none" aria-hidden="true">
+          <rect width="150" height="190" fill="#1A140E" />
+          <rect class="glow" width="150" height="190" fill="#E0A43B" />
+          <path class="glow" d="M0 190 40 120H110L150 190Z" fill="#F6E2B3" />
+          <g class="glow" fill="#F6E2B3" stroke="#8A6A3B" stroke-width="2"><rect x="20" y="130" width="40" height="34" /><rect x="66" y="140" width="34" height="24" /><rect x="40" y="104" width="30" height="26" /></g>
+        </svg>
+        <svg class="door-leaf" viewBox="0 0 150 190" preserveAspectRatio="none" aria-hidden="true">
+          <rect width="150" height="190" fill="#E0A43B" stroke="#2A2117" stroke-width="4" />
+          <rect x="12" y="12" width="126" height="72" fill="none" stroke="#B5832A" stroke-width="4" />
+          <rect x="0" y="90" width="150" height="10" fill="#8A6A3B" stroke="#2A2117" stroke-width="2" />
+          <rect x="12" y="108" width="126" height="70" fill="none" stroke="#8A6A3B" stroke-width="5" />
+          <path d="M14 110 136 176M136 110 14 176" stroke="#8A6A3B" stroke-width="5" />
+          <path d="M56 22 46 40M94 22 104 40M56 22H94" stroke="#2A2117" stroke-width="2" />
+          <circle cx="75" cy="20" r="3" fill="#2A2117" />
+          <rect x="25" y="40" width="100" height="32" rx="3" fill="#FBF6E9" stroke="#2A2117" stroke-width="2.5" />
+          <text x="75" y="62" text-anchor="middle" font-family="Archivo, sans-serif" font-weight="800" font-size="15" fill="#2A2117">SGD ⇄ RM</text>
+          <circle cx="128" cy="124" r="6" fill="#2A2117" />
+        </svg>
+      </span>
+    </RouterLink>
+
+    <!-- ARCHIVES (attic door) -->
+    <RouterLink to="/archives" class="door" :aria-label="`Archives in the attic: ${archivesSub}`" style="left: 45%; top: 31.25%; width: 10%; height: 25.69%" data-cy="door-archives">
+      <span class="plaque" style="height: 20%; left: -32%; right: -32%"><span class="plaque-title">Archives</span><span class="plaque-sub">{{ archivesSub }}</span></span>
+      <span class="door-frame" style="height: 75.7%">
+        <svg viewBox="0 0 100 140" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 140V46A50 42 0 0 1 100 46V140Z" fill="#1A140E" />
+          <path class="glow" d="M0 140V46A50 42 0 0 1 100 46V140Z" fill="#E0A43B" />
+          <g class="glow"><rect x="22" y="96" width="56" height="32" rx="3" fill="#8A6A3B" stroke="#2A2117" stroke-width="2" /><rect x="22" y="96" width="56" height="10" fill="#6B4A2B" /><circle cx="50" cy="112" r="4" fill="#E0A43B" /></g>
+        </svg>
+        <svg class="door-leaf" viewBox="0 0 100 140" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 140V46A50 42 0 0 1 100 46V140Z" fill="#6B4A2B" stroke="#2A2117" stroke-width="4" />
+          <path d="M25 10V140M50 4V140M75 10V140" stroke="#523820" stroke-width="2.5" />
+          <rect x="0" y="44" width="100" height="9" fill="#2A2117" />
+          <rect x="0" y="104" width="100" height="9" fill="#2A2117" />
+          <g fill="#CDB98E"><circle cx="10" cy="48.5" r="2" /><circle cx="90" cy="48.5" r="2" /><circle cx="10" cy="108.5" r="2" /><circle cx="90" cy="108.5" r="2" /></g>
+          <circle cx="50" cy="76" r="8" fill="#2A2117" />
+          <path d="M45 78h10l3 14H42Z" fill="#2A2117" />
+          <path d="M16 34 30 20M16 34 26 14M16 34 34 28M20 28q4-1 5-5M23 32q5-1 7-6" fill="none" stroke="#EADFC2" stroke-width="1.3" />
+        </svg>
+      </span>
+    </RouterLink>
+
 
 
   </div>
