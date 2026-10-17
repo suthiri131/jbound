@@ -12,7 +12,7 @@ import * as trips from "../controllers/tripsController.js";
 import * as itinerary from "../controllers/itineraryController.js";
 
 // TO DO
-// import * as messages from '../controllers/messagesController.js';
+import * as messages from "../controllers/messagesController.js";
 // import * as expenses from '../controllers/expensesController.js';
 import * as memories from "../controllers/memoriesController.js";
 
@@ -98,10 +98,19 @@ r.get(
   itinerary.getDayRoute,
 );
 
-// TO DO
 // Camp chat
-// r.get('/:tripId/messages', member, validate({ query: s.messagesQuery }), messages.listMessages);
-// r.post('/:tripId/messages', member, validate({ body: s.messageBody }), messages.sendMessage);
+r.get(
+  "/:tripId/messages",
+  member,
+  validate({ query: s.messagesQuery }),
+  messages.listMessages,
+);
+r.post(
+  "/:tripId/messages",
+  member,
+  validate({ body: s.messageBody }),
+  messages.sendMessage,
+);
 
 // Ledger
 // r.get('/:tripId/expenses', member, expenses.listExpenses);
