@@ -3,6 +3,7 @@ import { badRequest, check, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
 import { getDrivingRoute } from '../services/routingService.js';
 import { CHECKPOINTS } from '../services/logic/geo.js';
+import { validateStopDay } from '../utils/stopDay.js';
 import { assessTrip } from '../services/logic/feasibility.js';
 
 const ITEM_FIELDS =
@@ -49,6 +50,7 @@ export async function listItems(req, res) {
 /** POST /api/trips/:tripId/itinerary  { placeId? | title?, day?, time?, notes?, vibe?, dwellMinutes?, lat?, lng?, crossing?, crossingDir? } */
 export async function addItem(req, res) {
   const { placeId, title, day, time, notes } = req.valid.body;
+  validateStopDay(req.trip, day);
   let finalTitle = title;
   let vibe = req.valid.body.vibe;
   if (placeId) {
@@ -84,9 +86,14 @@ export async function addItem(req, res) {
 /** PATCH /api/trips/:tripId/itinerary/:itemId — edit fields, or tick off with { done: true } */
 export async function updateItem(req, res) {
   const { title, day, time, notes, done } = req.valid.body;
+  validateStopDay(req.trip, day);
   const patch = stopPatch(req.valid.body);
   if (title !== undefined) patch.title = title;
-  if (day !== undefined) patch.day = day;
+  if (day !== undefined) {
+    const existing = check(await supabase.from('itinerary_items').select('day').eq('id', req.params.itemId).eq('trip_id', req.params.tripId).single(), 'Itinerary item not found');
+    patch.day = day;
+    if (day !== existing.day) patch.position = await nextPosition(req.params.tripId, day);
+  }
   if (time !== undefined) patch.time = time;
   if (notes !== undefined) patch.notes = notes;
   if (done !== undefined) {
@@ -112,6 +119,8 @@ export async function updateItem(req, res) {
 export async function reorderItems(req, res) {
   const { items } = req.valid.body;
   const tripId = req.params.tripId;
+
+  for (const item of items) validateStopDay(req.trip, item.day);
 
   const existing = check(await supabase.from('itinerary_items').select('id').eq('trip_id', tripId));
   const valid = new Set(existing.map((r) => r.id));

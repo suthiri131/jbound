@@ -7,7 +7,6 @@ import { useTripRealtime } from "@/composables/useTripRealtime";
 import SatchelBar from "@/components/planner/SatchelBar.vue";
 import CrewBar from "@/components/planner/CrewBar.vue";
 import BucketList from "@/components/planner/BucketList.vue";
-import FeasibilityCard from "@/components/planner/FeasibilityCard.vue";
 import RouteMap from "@/components/planner/RouteMap.vue";
 import MemoryBox from "@/components/planner/MemoryBox.vue";
 import ToastMessage from "@/components/common/ToastMessage.vue";
@@ -65,7 +64,6 @@ async function onTripSaved() {
   }
 }
 const feas = ref(null);
-const feasLoading = ref(false);
 const loadError = ref("");
 const mapVersion = ref(0);
 const rightTab = ref("map"); // 'map' | 'memories'
@@ -103,14 +101,11 @@ async function loadTrip() {
 
 async function loadFeas() {
   if (!tripId.value) return;
-  feasLoading.value = true;
   try {
     const { data } = await api.get(`/trips/${tripId.value}/feasibility`);
     feas.value = data;
   } catch {
     feas.value = null;
-  } finally {
-    feasLoading.value = false;
   }
 }
 
@@ -166,15 +161,6 @@ function dismissPrompt() {
 function startMemories() {
   dismissPrompt();
   rightTab.value = "memories";
-}
-
-async function applyFix({ itemId, time }) {
-  try {
-    await api.patch(`/trips/${tripId.value}/itinerary/${itemId}`, { time });
-    await refresh();
-  } catch (err) {
-    notify(errorMessage(err));
-  }
 }
 
 async function onArchived() {
@@ -235,16 +221,7 @@ const canMemories = computed(() =>
           @error="notify"
           @edit="editing = true"
           @delete="requestDelete"
-        >
-          <template #feasibility>
-            <FeasibilityCard
-              v-if="trip.phase === 'planning' || trip.phase === 'on_the_road'"
-              :report="feas"
-              :loading="feasLoading"
-              @fix="applyFix"
-            />
-          </template>
-        </BucketList>
+        />
 
         <div class="right">
           <MemoryBox
