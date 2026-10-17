@@ -46,6 +46,8 @@ To avoid surprise charges, set a budget alert under **Billing → Budgets & aler
 
 If your database was created before Google Places was added, also run `server/db/migrations/002_google_places.sql` in the Supabase SQL Editor.
 
+For an existing database, run `server/db/migrations/003_ledger_currency.sql` to add the SGD conversion amount and exchange-rate date to ledger expenses.
+
 Load the demo users, trips, reviews and expenses:
 
 ```sh
@@ -62,9 +64,13 @@ Open the client at [http://localhost:5173](http://localhost:5173) and sign in wi
 
 Driving directions are available at `POST /api/routes`. Send JSON with a `coordinates` array containing at least two `[longitude, latitude]` pairs; the response is ORS GeoJSON.
 
+Trip expense endpoints are mounted at `/api/trips/:tripId/expenses`. They require a signed-in trip member and support listing/creating/updating expenses, retrieving SGD balances, and recording SGD settlements. MYR expenses include the exchange rate and its effective date.
+
 The server only accepts requests from the origins listed in `CLIENT_ORIGIN` in `server/.env`, which is `http://localhost:5173` by default. To change the API port, set `PORT` in `server/.env`. If you do, also update `VITE_API_URL` in `client/.env.local` to match.
 
 To run either service separately, use `pnpm dev:client` or `pnpm dev:server` from the repository root. Run the server's unit and API tests with `pnpm test`.
+
+Run the Planner map end-to-end specs with the client running at `http://localhost:5173` and `pnpm --filter jbound-client test:e2e:cypress`.
 
 ## Build the client
 

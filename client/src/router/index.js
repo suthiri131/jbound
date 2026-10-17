@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 
 const routes = [
   { path: '/', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: 'Home' } },
+  { path: '/planner', name: 'planner', component: () => import('@/views/PlannerView.vue'), meta: { title: 'Planner' } },
+  { path: '/ledger', name: 'ledger', component: () => import('@/views/LedgerView.vue'), meta: { title: 'Ledger' } },
 
   // Clerk's <SignIn>/<SignUp> use path routing, so they need the catch-all (e.g. /sign-up/verify-email-address).
   { path: '/sign-in/:pathMatch(.*)*', name: 'sign-in', component: () => import('@/views/SignInView.vue'), meta: { guestOnly: true, title: 'Sign in' } },
