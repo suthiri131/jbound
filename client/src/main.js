@@ -1,22 +1,12 @@
-import { createApp } from 'vue';
-import { clerkPlugin } from '@clerk/vue';
-import App from './views/App.vue';
-import router from './router';
-import { installAuthGuard } from './router/authGuard';
-import './styles/theme.css';
-
-const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-if (!publishableKey) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY. Add it to client/.env.local and restart pnpm dev.');
-}
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+import App from "./views/App.vue";
+import router from "./router";
+import { installAuthGuard } from "./router/authGuard";
+import "./styles/theme.css";
 
 const app = createApp(App);
-app.use(clerkPlugin, {
-  publishableKey,
-  signInUrl: '/sign-in',
-  signUpUrl: '/sign-up',
-  afterSignOutUrl: '/',
-});
+app.use(createPinia()); // before the router: the auth guard uses the auth store
+installAuthGuard(router);
 app.use(router);
-installAuthGuard(app, router); // must come after app.use(clerkPlugin) and app.use(router)
-app.mount('#app');
+app.mount("#app");

@@ -1,16 +1,49 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory } from "vue-router";
 
 const routes = [
-  { path: '/', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: 'Home' } },
-  { path: '/planner', name: 'planner', component: () => import('@/views/PlannerView.vue'), meta: { title: 'Planner' } },
-  { path: '/ledger', name: 'ledger', component: () => import('@/views/LedgerView.vue'), meta: { title: 'Ledger' } },
+  {
+    path: "/",
+    name: "home",
+    component: () => import("@/views/BasecampView.vue"),
+    meta: { title: "Home" },
+  },
 
-  // Clerk's <SignIn>/<SignUp> use path routing, so they need the catch-all (e.g. /sign-up/verify-email-address).
-  { path: '/sign-in/:pathMatch(.*)*', name: 'sign-in', component: () => import('@/views/SignInView.vue'), meta: { guestOnly: true, title: 'Sign in' } },
-  { path: '/sign-up/:pathMatch(.*)*', name: 'sign-up', component: () => import('@/views/SignUpView.vue'), meta: { guestOnly: true, title: 'Sign up' } },
+  {
+    path: "/sign-in",
+    name: "sign-in",
+    component: () => import("@/views/SignInView.vue"),
+    meta: { guestOnly: true, title: "Sign in" },
+  },
+  {
+    path: "/sign-up",
+    name: "sign-up",
+    component: () => import("@/views/SignUpView.vue"),
+    meta: { guestOnly: true, title: "Sign up" },
+  },
 
-  // Pages that need a signed-in user get meta: { requiresAuth: true }. Example:
-  // { path: '/planner', name: 'planner', component: () => import('@/views/PlannerView.vue'), meta: { requiresAuth: true, title: 'Planner' } },
+  // AppNav sends people to /login after signing out
+  { path: "/login", redirect: { name: "sign-in" } },
+
+  // Tales + Border routes
+  {
+    path: "/tales",
+    name: "tales",
+    component: () => import("@/views/TalesView.vue"),
+    meta: { requiresAuth: true, title: "Tales" },
+  },
+
+  {
+    path: "/planner/:tripId?",
+    name: "planner",
+    component: () => import("@/views/PlannerView.vue"),
+    meta: { requiresAuth: true, title: "Planner" },
+  },
+  {
+    path: "/ledger",
+    name: "ledger",
+    component: () => import("@/views/LedgerView.vue"),
+    meta: { requiresAuth: true, title: "Ledger" },
+  },
 ];
 
 const router = createRouter({
@@ -20,7 +53,7 @@ const router = createRouter({
 });
 
 router.afterEach((to) => {
-  document.title = to.meta.title ? `${to.meta.title} · JBound` : 'JBound';
+  document.title = to.meta.title ? `${to.meta.title} · JBound` : "JBound";
 });
 
 export default router;

@@ -1,10 +1,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useAuth } from '@clerk/vue';
 import { useRoute } from 'vue-router';
+import { api, errorMessage as getErrorMessage } from '@/lib/api';
 
 const route = useRoute();
-const { getToken, isLoaded, isSignedIn } = useAuth();
 const tripId = ref(typeof route.query.tripId === 'string' ? route.query.tripId : '');
 const expenses = ref([]);
 const members = ref([]);
@@ -24,7 +23,6 @@ const emptyForm = () => ({
 });
 const form = reactive(emptyForm());
 const isEditing = computed(() => editingId.value !== null);
-const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 function formatMoney(amount, currency = 'SGD') {
   return new Intl.NumberFormat('en-SG', { style: 'currency', currency }).format(Number(amount));
@@ -34,23 +32,13 @@ function memberName(memberId) {
   return members.value.find(({ id }) => id === memberId)?.name ?? memberId;
 }
 
-async function apiRequest(path, options = {}) {
-  if (!isLoaded.value) throw new Error('Authentication is still loading. Try again shortly.');
-  if (!isSignedIn.value) throw new Error('Sign in to use the trip ledger.');
-  const token = await getToken();
-  if (!token) throw new Error('Could not obtain an authentication token for the trip ledger.');
-
-  const response = await fetch(`${apiBase}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...options.headers,
-    },
-  });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || `Ledger request failed (${response.status})`);
-  return result;
+async function apiRequest(path, { method = 'GET', body } = {}) {
+  try {
+    const { data } = await api.request({ url: path, method, data: body });
+    return data;
+  } catch (error) {
+    throw new Error(getErrorMessage(error, 'Ledger request failed'));
+  }
 }
 
 async function loadLedger() {
@@ -58,7 +46,7 @@ async function loadLedger() {
   loading.value = true;
   errorMessage.value = '';
   try {
-    const path = `/api/trips/${encodeURIComponent(tripId.value.trim())}/expenses`;
+    const path = `/trips/${encodeURIComponent(tripId.value.trim())}/expenses`;
     const [ledger, balanceData] = await Promise.all([
       apiRequest(path),
       apiRequest(`${path}/balances`),
@@ -103,18 +91,18 @@ async function saveExpense() {
   saving.value = true;
   errorMessage.value = '';
   try {
-    const path = `/api/trips/${encodeURIComponent(tripId.value.trim())}/expenses`;
+    const path = `/trips/${encodeURIComponent(tripId.value.trim())}/expenses`;
     const result = await apiRequest(
       isEditing.value ? `${path}/${encodeURIComponent(editingId.value)}` : path,
       {
         method: isEditing.value ? 'PUT' : 'POST',
-        body: JSON.stringify({
+        body: {
           amount: Number(form.amount),
           currency: form.currency,
           description: form.description.trim(),
           paidBy: form.paidBy,
           splitAmong: form.splitAmong,
-        }),
+        },
       },
     );
     if (!result.expense) throw new Error('The server did not return the saved expense.');
@@ -130,13 +118,13 @@ async function saveExpense() {
 async function markSettled(settlement) {
   errorMessage.value = '';
   try {
-    await apiRequest(`/api/trips/${encodeURIComponent(tripId.value.trim())}/expenses/settlements`, {
+    await apiRequest(`/trips/${encodeURIComponent(tripId.value.trim())}/expenses/settlements`, {
       method: 'POST',
-      body: JSON.stringify({
+      body: {
         from: settlement.from,
         to: settlement.to,
         amountSgd: settlement.amountSgd,
-      }),
+      },
     });
     await loadLedger();
   } catch (error) {

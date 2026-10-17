@@ -17,7 +17,13 @@ Install [Node.js](https://nodejs.org) 18 or newer and [pnpm](https://pnpm.io/ins
 pnpm install
 ```
 
-Create a free [Supabase](https://supabase.com) project. In its SQL Editor, run `server/db/schema.sql` and then `server/db/seed.sql`.
+### Database
+Schema changes live in `supabase/migrations/`. Never edit the remote database by hand.
+```sh
+npx supabase login
+npx supabase link --project-ref <your-project-ref>
+npx supabase db push
+```
 
 Copy the example environment files:
 
