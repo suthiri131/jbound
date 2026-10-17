@@ -8,6 +8,7 @@ import routesRouter from "./routes/routes.js";
 import expensesRouter from "./routes/expensesRoutes.js";
 import tripRoutes from "./routes/trips.js";
 import authRoutes from "./routes/auth.js";
+import utilityRoutes from "./routes/utility.js";
 
 export const app = express();
 
@@ -46,6 +47,7 @@ app.get("/api/health", (_req, res) =>
 );
 
 app.use("/api/auth", authRoutes);
+app.use("/api", utilityRoutes);
 app.use("/api/routes", routesRouter);
 app.use("/api/trips", tripRoutes);
 app.use("/api/trips/:tripId/expenses", expensesRouter);

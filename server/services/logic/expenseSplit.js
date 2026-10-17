@@ -1,3 +1,5 @@
+import { convertAmountToCents } from '../currencyService.js';
+
 const BASE_CURRENCY = 'SGD';
 
 function getMemberId(member) {
@@ -33,7 +35,7 @@ function amountInBaseCents(expense, rates) {
   }
 
   const amountCents = Math.round((amount + Number.EPSILON) * 100);
-  const convertedCents = Math.round(amountCents * rate);
+  const convertedCents = convertAmountToCents(amountCents, rate);
   if (!Number.isSafeInteger(convertedCents) || convertedCents <= 0) {
     throw new RangeError('Converted expense amount must be positive and within the safe integer range');
   }

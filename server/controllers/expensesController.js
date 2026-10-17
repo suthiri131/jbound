@@ -1,6 +1,6 @@
 import { supabase } from '../db/supabase.js';
 import { calculateExpenseSplit, settleBalances } from '../services/logic/expenseSplit.js';
-import { getSgdRate } from '../services/exchangeRates.js';
+import { getExchangeRate } from '../services/currencyService.js';
 import { badRequest, forbidden, notFound, check } from '../utils/httpError.js';
 
 const SGD_RATES = { SGD: 1 };
@@ -28,7 +28,7 @@ async function getTripMembers(tripId) {
 
 async function normalizeExpenseRows(rows) {
   const needsMyrRate = rows.some((expense) => expense.currency === 'MYR' && !expense.exchange_rate);
-  const myrRate = needsMyrRate ? await getSgdRate('MYR') : null;
+  const myrRate = needsMyrRate ? await getExchangeRate('latest', 'MYR', 'SGD') : null;
   return rows.map((expense) => {
     const exchangeRate = Number(expense.exchange_rate ?? (expense.currency === 'SGD' ? 1 : myrRate?.rate));
     const amountSgd = Number(expense.amount_sgd ?? (Number(expense.amount) * exchangeRate));
@@ -123,7 +123,7 @@ function computeTripSplit(expenses, settlements, memberIds = []) {
 }
 
 async function resolveCurrencyMetadata(amount, currency) {
-  const metadata = await getSgdRate(currency);
+  const metadata = await getExchangeRate('latest', currency, 'SGD');
   const amountSgd = dollars(Math.round(toCents(amount) * metadata.rate));
   if (amountSgd <= 0) throw badRequest('Expense amount converts to less than one SGD cent');
   return { amount_sgd: amountSgd, exchange_rate: metadata.rate, rate_date: metadata.date };
