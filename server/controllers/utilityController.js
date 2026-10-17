@@ -1,19 +1,19 @@
-// import { getRate, convert } from '../services/currencyService.js';
-// import { getDrivingRoute } from '../services/routingService.js';
+import { convertCurrency, getExchangeRate } from '../services/currencyService.js';
+import { getDrivingRoute } from '../services/routingService.js';
 import { uploadImage } from '../services/storageService.js';
 import { badRequest } from '../utils/httpError.js';
 
-/** GET /api/currency/rate?from=SGD&to=RM */
-// export async function currencyRate(req, res) {
-//   const {from, to } = req.valid.query
-//   res.json(await getRate(from, to))
-// }
+/** GET /api/currency/rate?from=SGD&to=MYR&date=latest */
+export async function currencyRate(req, res) {
+  const { from, to, date } = req.valid.query;
+  res.json(await getExchangeRate(date, from, to));
+}
 
-/** GET /api/currency/convert?amount=50&from=SGD&to=RM */
-// export async function currencyConvert(req, res) {
-//     const {amount, from, to } = req.valid.query
-//     res.json(await convert(amount, from, to))
-// }
+/** GET /api/currency/convert?amount=50&from=SGD&to=MYR&date=latest */
+export async function currencyConvert(req, res) {
+  const { amount, from, to, date } = req.valid.query;
+  res.json(await convertCurrency(amount, from, to, date));
+}
 
 /** POST /api/routing  */
 // export async function route(req, res) {

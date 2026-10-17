@@ -162,6 +162,9 @@ create table if not exists public.expenses (
   paid_by      uuid not null references public.profiles (id) on delete cascade,
   amount       numeric(12,2) not null check (amount > 0),
   currency     text not null check (currency in ('SGD','MYR')),
+  amount_sgd   numeric(12,2) not null check (amount_sgd > 0),
+  exchange_rate numeric(18,10) not null check (exchange_rate > 0),
+  rate_date    date not null,
   description  text not null,
   created_by   uuid references public.profiles (id) on delete set null,
   created_at   timestamptz not null default now()

@@ -9,7 +9,10 @@ export function getDrivingRoute(coordinates) {
 
   return fetchJson(`${config.ors.baseUrl}/v2/directions/driving-car/geojson`, {
     method: 'POST',
-    headers: { Authorization: config.ors.apiKey },
+    headers: {
+      Authorization: config.ors.apiKey,
+      Accept: 'application/geo+json',
+    },
     body: { coordinates },
     timeoutMs: 15000,
   });

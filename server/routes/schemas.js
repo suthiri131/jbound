@@ -202,6 +202,7 @@ export const snapshotsQuery = z.object({ limit: z.coerce.number().int().min(1).m
 export const rateQuery = z.object({
   from: z.string().toUpperCase().pipe(currency).default('SGD'),
   to: z.string().toUpperCase().pipe(currency).default('MYR'),
+  date: z.union([z.literal('latest'), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]).optional(),
 });
 export const convertQuery = rateQuery.extend({ amount: z.coerce.number().nonnegative().max(1_000_000) });
 export const routingBody = z.object({
