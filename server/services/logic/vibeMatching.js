@@ -14,7 +14,7 @@
  */
 import { distanceFromCheckpointKm } from './geo.js';
 
-export const VIBES = ['eating', 'activities', 'culture', 'adventure'];
+export const VIBES = ['eating', 'activities', 'culture', 'adventure', 'cozy', 'peaceful', 'chaotic'];
 export const HIDDEN_GEM_MAX_POSTS = 3;
 const POPULARITY_SATURATION = 20; // 20+ posts counts as "very popular"
 
