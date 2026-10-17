@@ -44,7 +44,7 @@ const routes = [
     name: "ledger",
     component: () => import("@/views/LedgerView.vue"),
     meta: { requiresAuth: true, title: "Ledger" },
-
+  },
   {
     path: "/explorer",
     name: "explorer",
