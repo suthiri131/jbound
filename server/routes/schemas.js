@@ -33,11 +33,12 @@ export const commentParam = z.object({ id: uuid, commentId: uuid });
 export const checkpointParam = z.object({ id: z.enum(['woodlands', 'tuas']) });
 
 // ---------- auth / users ----------
+// Usernames are generated server-side (see authController.signup), so sign-up only asks for a first + last name.
 export const signupBody = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8, 'At least 8 characters'),
-  name: z.string().trim().min(1).max(60),
-  username,
+  firstName: z.string().trim().min(1, 'First name is required').max(30, 'First name is too long'),
+  lastName: z.string().trim().min(1, 'Last name is required').max(30, 'Last name is too long'),
 });
 export const loginBody = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1) });
 export const refreshBody = z.object({ refresh_token: z.string().min(1) });

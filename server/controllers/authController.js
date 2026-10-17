@@ -22,11 +22,50 @@ async function getProfile(user) {
   return created.data;
 }
 
+/**
+ * Adds first_name / last_name to the profile we send to the client.
+ * They are saved in the auth user's metadata at sign-up (profiles.name stays "First Last" so the
+ * rest of the app is untouched). Accounts made before this change fall back to splitting `name`.
+ */
+function withNames(profile, authUser) {
+  const meta = authUser?.user_metadata || {};
+  const [first = '', ...rest] = (profile.name || '').trim().split(/\s+/);
+  return { ...profile, first_name: meta.first_name || first, last_name: meta.last_name || rest.join(' ') };
+}
+
+/** "Darwin Núñez" -> "darwinnunez": lowercase letters/digits only, accents stripped. */
+const slug = (text) =>
+  text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+
+/**
+ * People no longer type a username. We build one from their name (first_last) and add a number
+ * if it is taken, so "@username" invites keep working. Always matches profiles' ^[a-z0-9_]{3,20}$ check.
+ */
+async function pickUsername(firstName, lastName) {
+  let base = [slug(firstName), slug(lastName)].filter(Boolean).join('_').slice(0, 16);
+  if (base.length < 3) base = `jbound_${base}`.replace(/_$/, '').slice(0, 16);
+
+  // underscore is a LIKE wildcard, so this can over-match; that is fine, we compare exact names below
+  const { data, error } = await supabase.from('profiles').select('username').like('username', `${base}%`).limit(1000);
+  if (error) throw new HttpError(500, error.message);
+  const taken = new Set((data || []).map((row) => row.username));
+
+  if (!taken.has(base)) return base;
+  for (let n = 2; n < 10000; n++) {
+    if (!taken.has(`${base}${n}`)) return `${base}${n}`; // base is <= 16 chars, so this stays <= 20
+  }
+  return `${base.slice(0, 11)}${Date.now().toString(36).slice(-5)}`;
+}
+
 /** Shape the Vue auth store expects: { user, profile, session }. */
 function authPayload(authUser, session, profile) {
   return {
     user: { id: authUser.id, email: authUser.email },
-    profile,
+    profile: withNames(profile, authUser),
     session: {
       access_token: session.access_token,
       refresh_token: session.refresh_token,
@@ -35,29 +74,34 @@ function authPayload(authUser, session, profile) {
   };
 }
 
-// POST /api/auth/signup  { email, password, name, username }
+// POST /api/auth/signup  { email, password, firstName, lastName }
 export async function signup(req, res) {
-  const { email, password, name, username } = req.valid.body;
-
-  // Friendly check first; the unique constraint on profiles.username still guards against races.
-  const taken = await supabase.from('profiles').select('id').eq('username', username).maybeSingle();
-  if (taken.error) throw new HttpError(500, taken.error.message);
-  if (taken.data) throw conflict('That username is taken. Try another one.');
+  const { email, password, firstName, lastName } = req.valid.body;
+  const name = `${firstName} ${lastName}`;
 
   // email_confirm: true marks the email as verified, so nobody has to click a confirmation link.
-  const created = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { name, username },
-  });
-  if (created.error) {
+  // The username is generated; if two people sign up at the same moment the unique constraint on
+  // profiles.username makes the trigger fail ("Database error ..."), so we pick again and retry.
+  let created;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const username = await pickUsername(firstName, lastName);
+    created = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { name, username, first_name: firstName, last_name: lastName },
+    });
+    if (!created.error) break;
+
     const { code, message = '' } = created.error;
     if (code === 'email_exists' || /already (been )?registered/i.test(message)) {
       throw conflict('An account with this email already exists. Try signing in instead.');
     }
-    // the profiles trigger failed on the unique username (two people signing up at the same moment)
-    if (/database error/i.test(message)) throw conflict('That username is taken. Try another one.');
+    if (!/database error/i.test(message)) break;
+  }
+  if (created.error) {
+    const { message = '' } = created.error;
+    if (/database error/i.test(message)) throw new HttpError(500, 'Could not create your account. Please try again.');
     throw new HttpError(created.error.status || 400, message || 'Could not create your account.');
   }
 
@@ -87,5 +131,8 @@ export async function login(req, res) {
 
 // GET /api/auth/me  (Authorization: Bearer <access token>)
 export async function me(req, res) {
-  res.json({ user: req.user, profile: await getProfile(req.user) });
+  const profile = await getProfile(req.user);
+  // req.user only holds { id, email }; the sign-up metadata (first/last name) lives on the auth user.
+  const { data } = await supabase.auth.admin.getUserById(req.user.id);
+  res.json({ user: req.user, profile: withNames(profile, data?.user) });
 }
