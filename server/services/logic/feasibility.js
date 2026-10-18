@@ -3,6 +3,9 @@
  * FEASIBILITY CHECK — Well planned / Rushed / Overloaded
  * (core business logic — see README AI disclosure)
  * ============================================================
+ * 
+ * 
+ * this information is stale and I will change accordingly 
  * For each pair of consecutive stops on a day:
  *   need  = time spent at the previous stop + travel time to the next
  *   slack = (next.time − prev.time) − need
@@ -21,7 +24,7 @@ import { scoreFor, levelFor } from './congestionHeuristic.js';
 export const DWELL_BY_VIBE = { eating: 60, culture: 45, activities: 90, adventure: 60 };
 export const DEFAULT_DWELL = 60;
 export const UNKNOWN_TRAVEL_MIN = 15; // stop without coordinates
-export const THRESHOLDS = { tightSlack: 15, overSlack: -15, rushedHours: 11, overHours: 13, maxStops: 6 };
+export const THRESHOLDS = { tightSlack: 15, overSlack: -15, rushedHours: 11, overHours: 13, maxStops: 12 };
 export const VERDICTS = ['well_planned', 'rushed', 'overloaded'];
 export const LABELS = ['Well planned', 'Rushed', 'Overloaded'];
 export const SUMMARIES = [
@@ -49,8 +52,9 @@ export function haversineKm(a, b) {
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
-
-/** Rough door-to-door minutes. Straight line × detour factor ÷ speed + parking/walking buffer. */
+// Guessing how long it takes to go from one stop to another
+// Uses straight line distance, then adds a bit of an extra since real roads are not straight theoretically
+// Assumption is made that the further the distance the faster the speed and speed is cap at 70
 export function travelMinutes(a, b) {
   if (a?.lat == null || b?.lat == null) return UNKNOWN_TRAVEL_MIN;
   const km = haversineKm(a, b);
@@ -61,7 +65,7 @@ export function travelMinutes(a, b) {
 
 export const dwellOf = (item) => (item.dwellMinutes != null ? item.dwellMinutes : DWELL_BY_VIBE[item.vibe] ?? DEFAULT_DWELL);
 
-/** Suggest a start time: previous stop + need + 10 min breathing room, rounded up to the next 15 min. */
+//Add 10 mins of buffer then round up to the next 15 minutes so it looks clean (1015, 1020 etc instead of 1008)
 const suggest = (prevMin, need) => fmtMin(Math.ceil((prevMin + need + 10) / 15) * 15);
 
 /**
@@ -82,7 +86,15 @@ export function assessDay(day) {
   for (let k = 1; k < timed.length; k++) {
     const a = timed[k - 1];
     const b = timed[k];
-    const gap = toMin(b.time) - toMin(a.time);
+    let  gap = toMin(b.time) - toMin(a.time);
+    // if the next stop's time looks smaller, it might mean it's actually after midnight
+    // (e.g. bar at 11pm, supper at 1am) instead of genuinely being out of order
+    const prevStopIsEvening = toMin(a.time) >= 18 * 60; // 6pm or later
+    const nextStopIsEarlyMorning = toMin(b.time) < 6 * 60; // before 6am
+    if (gap < 0 && prevStopIsEvening && nextStopIsEarlyMorning) {
+        gap = gap + 24 * 60; // treat it as happening the next day
+    }
+
     const stay = dwellOf(a);
     const travel = travelMinutes(a, b);
     const need = stay + travel;
@@ -129,6 +141,15 @@ export function assessDay(day) {
   let hours = 0;
   if (timed.length) {
     const last = timed[timed.length - 1];
+    const first = timed[0];
+    let lastEndTime = toMin(last.time) + dwellOf(last);
+    //similar to the midnight check but specifically for the last stop of the day
+    const firstStopIsEvening = toMin(first.time) >= 18 * 60;
+    const lastStopIsEarlyMorning = toMin(last.time) < 6 * 60;
+     if (toMin(last.time) < toMin(first.time) && firstStopIsEvening && lastStopIsEarlyMorning) {
+     lastEndTime = lastEndTime + 24 * 60;
+    }
+
     hours = (toMin(last.time) + dwellOf(last) - toMin(timed[0].time)) / 60;
     if (timed.length > THRESHOLDS.maxStops || hours > THRESHOLDS.overHours) {
       raise(2);
