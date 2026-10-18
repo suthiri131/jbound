@@ -1,9 +1,16 @@
 <script setup>
-import { ref, reactive, watch, onMounted } from "vue";
+/**
+ * Explorer: find places by vibe and pin them to a trip's bucket list
+ * GET /api/places?vibes=&hiddenGem=&maxDistanceKm=&maxPrice=&checkpoint=&q=
+ * GET /api/places/google/search?q=&vibe=&…  → live Google Places results (key stays on the server)
+ * ?pinTo=<tripId> preselects the trip in the pin modal (from Planner "+ Add from Explorer").
+ */
+import { ref, reactive, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { api, errorMessage, assetUrl } from "@/lib/api";
 import { useTripsStore } from "@/stores/trips";
 import { VIBES, VIBE_LABEL, VIBE_TINT } from "@/utils/constants";
+import { dayLabel } from "@/utils/format";
 import VibeIcon from "@/components/common/VibeIcon.vue";
 import ToastMessage from "@/components/common/ToastMessage.vue";
 
@@ -341,67 +348,73 @@ const price = (n) => (n ? "$".repeat(n) : "");
         </div>
       </li>
     </ul>
+
+    <template v-if="pinning">
+      <div class="scrim" @click="pinning = null" />
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pin-title"
+        @keydown.esc="pinning = null"
+      >
+        <h2 id="pin-title" class="display display-md">
+          Pin {{ pinning.name }}
+        </h2>
+        <p v-if="!trips.plannable.length" class="lead">
+          No trips to pin to yet.
+          <RouterLink to="/planner?new=1">Pack a new trip</RouterLink> first.
+        </p>
+        <form
+          v-else
+          class="stack"
+          style="gap: 14px; margin-top: 16px"
+          @submit.prevent="pin"
+        >
+          <label class="field"
+            >Trip
+            <select v-model="pinTrip" class="select" data-cy="pin-trip">
+              <option v-for="t in trips.plannable" :key="t.id" :value="t.id">
+                {{ t.name }}
+              </option>
+            </select>
+          </label>
+          <div class="row" style="gap: 12px">
+            <label class="field" style="flex: 1"
+              >Day
+              <select v-model="pinDay" class="select">
+                <option value="">Unscheduled</option>
+                <option v-for="d in pinDates" :key="d" :value="d">
+                  {{ dayLabel(pinTripObj?.start_date, d) }} · {{ d }}
+                </option>
+              </select>
+            </label>
+            <label class="field" style="flex: 1"
+              >Time (optional)<input
+                v-model="pinTime"
+                type="time"
+                class="input"
+            /></label>
+          </div>
+          <div class="row" style="justify-content: flex-end">
+            <button type="button" class="btn btn-ghost" @click="pinning = null">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              :disabled="pinBusy || !pinTrip"
+              data-cy="pin-confirm"
+            >
+              Pin it
+            </button>
+          </div>
+        </form>
+      </div>
+    </template>
+
     <ToastMessage v-bind="toast" @close="toast.message = ''" />
   </main>
-</template>
-
-<template v-if="pinning">
-  <div class="scrim" @click="pinning = null" />
-  <div
-    class="modal"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="pin-title"
-    @keydown.esc="pinning = null"
-  >
-    <h2 id="pin-title" class="display display-md">Pin {{ pinning.name }}</h2>
-    <p v-if="!trips.plannable.length" class="lead">
-      No trips to pin to yet.
-      <RouterLink to="/planner?new=1">Pack a new trip</RouterLink> first.
-    </p>
-    <form
-      v-else
-      class="stack"
-      style="gap: 14px; margin-top: 16px"
-      @submit.prevent="pin"
-    >
-      <label class="field"
-        >Trip
-        <select v-model="pinTrip" class="select" data-cy="pin-trip">
-          <option v-for="t in trips.plannable" :key="t.id" :value="t.id">
-            {{ t.name }}
-          </option>
-        </select>
-      </label>
-      <div class="row" style="gap: 12px">
-        <label class="field" style="flex: 1"
-          >Day
-          <select v-model="pinDay" class="select">
-            <option value="">Unscheduled</option>
-            <option v-for="d in pinDates" :key="d" :value="d">
-              {{ dayLabel(pinTripObj?.start_date, d) }} · {{ d }}
-            </option>
-          </select>
-        </label>
-        <label class="field" style="flex: 1"
-          >Time (optional)<input v-model="pinTime" type="time" class="input"
-        /></label>
-      </div>
-      <div class="row" style="justify-content: flex-end">
-        <button type="button" class="btn btn-ghost" @click="pinning = null">
-          Cancel
-        </button>
-        <button
-          type="submit"
-          class="btn btn-primary"
-          :disabled="pinBusy || !pinTrip"
-          data-cy="pin-confirm"
-        >
-          Pin it
-        </button>
-      </div>
-    </form>
-  </div>
 </template>
 
 <style scoped>
