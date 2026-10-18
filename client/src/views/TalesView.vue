@@ -64,7 +64,8 @@ watch(placeQuery, (q) => {
     try {
       const { data } = await api.get('/places/autocomplete', { params: { q } });
       suggestions.value = data;
-    } catch {
+    } catch (error) {
+      console.log(error)
       suggestions.value = [];
     }
   }, 200);
@@ -109,19 +110,23 @@ async function post() {
 }
 
 async function like(p) {
-  try {
   const { data } = await api.post(`/posts/${p.id}/like`);
   p.likedByMe = data.liked;
   p.likeCount = data.likeCount;
-  } catch (error) {
-    console.log(error)
-  }
 }
 
 async function toggleComments(p) {
-  if (openComments[p.id]) return delete openComments[p.id];
+  try {
+  if (openComments[p.id]) {
+    delete openComments[p.id]
+    return
+  }
   const { data } = await api.get(`/posts/${p.id}/comments`);
   openComments[p.id] = data;
+  } catch (error) {
+    console.log(error)
+    alert(errorMessage(error))
+  }
 }
 
 async function comment(p) {

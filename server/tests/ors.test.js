@@ -76,6 +76,7 @@ test('driving route requests call ORS with the server key and return GeoJSON', a
   assert.equal(request.url, 'https://api.openrouteservice.org/v2/directions/driving-car/geojson');
   assert.equal(request.options.method, 'POST');
   assert.equal(request.options.headers.Authorization, 'test-ors-key');
+  assert.equal(request.options.headers.Accept, 'application/geo+json');
   assert.deepEqual(JSON.parse(request.options.body), { coordinates });
 });
 

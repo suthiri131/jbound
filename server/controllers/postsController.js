@@ -1,8 +1,11 @@
 import { supabase } from '../db/supabase.js';
 import { badRequest, check, forbidden, notFound, unauthorized } from '../utils/httpError.js';
 
-const AUTHOR = 'author:profiles!posts_user_id_fkey(id, username, name, avatar_url)';
-const POST_FIELDS = `id, caption, vibe, images, created_at, place_id, ${AUTHOR}, place:places(id, name, vibes), likes:post_likes(count), comments:post_comments(count)`;
+const POST_AUTHOR =
+  'author:profiles!posts_user_id_fkey(id, username, name, avatar_url)';
+const COMMENT_AUTHOR =
+  'author:profiles!post_comments_user_id_fkey(id, username, name, avatar_url)';
+const POST_FIELDS = `id, caption, vibe, images, created_at, place_id, ${POST_AUTHOR}, place:places(id, name, vibes), likes:post_likes(count), comments:post_comments(count)`;
 
 function shape(post, likedIds = new Set()) {
     const {likes, comments, ...rest} = post
@@ -127,7 +130,7 @@ export async function listComments(req, res) {
   const data = check(
     await supabase
       .from('post_comments')
-      .select(`id, text, created_at, ${AUTHOR}`)
+      .select(`id, text, created_at, ${COMMENT_AUTHOR}`)
       .eq('post_id', req.params.id)
       .order('created_at', { ascending: true }),
   );
@@ -144,7 +147,7 @@ export async function addComment(req, res) {
     await supabase
       .from('post_comments')
       .insert({ post_id: req.params.id, user_id: req.user.id, text: req.valid.body.text })
-      .select(`id, text, created_at, ${AUTHOR}`)
+      .select(`id, text, created_at, ${COMMENT_AUTHOR}`)
       .single(),
   );
 

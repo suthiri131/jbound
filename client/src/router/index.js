@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import WatcherView from '../views/WatcherView.vue';
 
 const routes = [
   {
@@ -38,12 +39,24 @@ const routes = [
     component: () => import("@/views/PlannerView.vue"),
     meta: { requiresAuth: true, title: "Planner" },
   },
-
+  {
+    path: "/ledger",
+    name: "ledger",
+    component: () => import("@/views/LedgerView.vue"),
+    meta: { requiresAuth: true, title: "Ledger" },
+  },
   {
     path: "/explorer",
     name: "explorer",
     component: () => import("@/views/ExplorerView.vue"),
     meta: { title: "Explorer" },
+  },
+
+  // watcher path
+  {
+  path: '/watcher',
+  name: 'watcher',
+  component: WatcherView,
   },
 ];
 
