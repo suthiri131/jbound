@@ -1,5 +1,4 @@
 <script setup>
-
 import { ref, reactive, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { api, errorMessage, assetUrl } from "@/lib/api";
@@ -25,6 +24,29 @@ const places = ref([]);
 const loading = ref(false);
 const error = ref("");
 const toast = ref({ message: "", linkTo: "", linkLabel: "" });
+
+// pin modal
+const pinning = ref(null); // place being pinned
+const pinTrip = ref("");
+const pinDay = ref("");
+const pinTime = ref("");
+const pinBusy = ref(false);
+
+const pinTripObj = computed(() =>
+  trips.plannable.find((t) => t.id === pinTrip.value),
+);
+const pinDates = computed(() => {
+  const t = pinTripObj.value;
+  if (!t?.start_date) return [];
+  const out = [];
+  const d = new Date(t.start_date + "T00:00:00");
+  const end = new Date((t.end_date || t.start_date) + "T00:00:00");
+  while (d <= end && out.length < 7) {
+    out.push(d.toLocaleDateString("en-CA"));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+});
 
 function toggleVibe(id) {
   const i = filters.vibes.indexOf(id);
@@ -79,6 +101,47 @@ onMounted(async () => {
   search();
   await trips.fetch().catch(() => {});
 });
+
+function openPin(place) {
+  pinning.value = place;
+  pinTrip.value = trips.plannable.some((t) => t.id === route.query.pinTo)
+    ? route.query.pinTo
+    : trips.plannable[0]?.id || "";
+  pinDay.value = "";
+  pinTime.value = "";
+}
+watch(pinDates, (d) => {
+  pinDay.value = d[0] || "";
+});
+
+async function pin() {
+  pinBusy.value = true;
+  try {
+    // Google results aren't in our database yet: import first so the stop can reference the place.
+    if (!pinning.value.id && pinning.value.googlePlaceId) {
+      const { data } = await api.post("/places/google/import", {
+        googlePlaceId: pinning.value.googlePlaceId,
+      });
+      pinning.value.id = data.id;
+    }
+    await api.post(`/trips/${pinTrip.value}/itinerary`, {
+      placeId: pinning.value.id,
+      day: pinDay.value || undefined,
+      time: pinTime.value || undefined,
+    });
+    toast.value = {
+      message: `Pinned ${pinning.value.name} to ${pinTripObj.value.name}`,
+      linkTo: `/planner/${pinTrip.value}`,
+      linkLabel: "Open trip",
+    };
+    trips.fetch(true);
+    pinning.value = null;
+  } catch (err) {
+    toast.value = { message: errorMessage(err) };
+  } finally {
+    pinBusy.value = false;
+  }
+}
 
 const price = (n) => (n ? "$".repeat(n) : "");
 </script>
@@ -280,6 +343,65 @@ const price = (n) => (n ? "$".repeat(n) : "");
     </ul>
     <ToastMessage v-bind="toast" @close="toast.message = ''" />
   </main>
+</template>
+
+<template v-if="pinning">
+  <div class="scrim" @click="pinning = null" />
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="pin-title"
+    @keydown.esc="pinning = null"
+  >
+    <h2 id="pin-title" class="display display-md">Pin {{ pinning.name }}</h2>
+    <p v-if="!trips.plannable.length" class="lead">
+      No trips to pin to yet.
+      <RouterLink to="/planner?new=1">Pack a new trip</RouterLink> first.
+    </p>
+    <form
+      v-else
+      class="stack"
+      style="gap: 14px; margin-top: 16px"
+      @submit.prevent="pin"
+    >
+      <label class="field"
+        >Trip
+        <select v-model="pinTrip" class="select" data-cy="pin-trip">
+          <option v-for="t in trips.plannable" :key="t.id" :value="t.id">
+            {{ t.name }}
+          </option>
+        </select>
+      </label>
+      <div class="row" style="gap: 12px">
+        <label class="field" style="flex: 1"
+          >Day
+          <select v-model="pinDay" class="select">
+            <option value="">Unscheduled</option>
+            <option v-for="d in pinDates" :key="d" :value="d">
+              {{ dayLabel(pinTripObj?.start_date, d) }} · {{ d }}
+            </option>
+          </select>
+        </label>
+        <label class="field" style="flex: 1"
+          >Time (optional)<input v-model="pinTime" type="time" class="input"
+        /></label>
+      </div>
+      <div class="row" style="justify-content: flex-end">
+        <button type="button" class="btn btn-ghost" @click="pinning = null">
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          :disabled="pinBusy || !pinTrip"
+          data-cy="pin-confirm"
+        >
+          Pin it
+        </button>
+      </div>
+    </form>
+  </div>
 </template>
 
 <style scoped>
