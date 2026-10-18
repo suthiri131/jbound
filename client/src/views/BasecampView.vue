@@ -4,6 +4,8 @@ import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useTripsStore } from "@/stores/trips";
 import BasecampHouse from "@/components/basecamp/Basecamp.vue";
+import IdlingCar from "@/components/basecamp/IdlingCar.vue";
+
 
 const auth = useAuthStore();
 const trips = useTripsStore();
@@ -14,6 +16,8 @@ const watcherSub = ref("Check the queue");
 const talesSub = ref("Read and share reviews");
 const ledgerSub = ref("Split costs in S$ and RM");
 const archivesSub = ref("Past trip scrapbooks");
+const explorerSub = ref('Find places by vibe');
+
 
 const rooms = [
   {
@@ -47,7 +51,7 @@ const rooms = [
     to: "/archives",
   },
   {
-    where: "Signpost",
+    where: "The birdhouse",
     name: "Explorer",
     job: "Find places by vibe",
     to: "/explorer",
@@ -78,6 +82,7 @@ const live = computed(() => trips.onTheRoad);
         :tales-sub="talesSub"
         :ledger-sub="ledgerSub"
         :archives-sub="archivesSub"
+        :explorer-sub="explorerSub"
       />
       <IdlingCar @arrive="router.push('/planner')" />
     </section>

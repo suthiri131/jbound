@@ -9,6 +9,7 @@ import expensesRouter from "./routes/expensesRoutes.js";
 import tripRoutes from "./routes/trips.js";
 import authRoutes from "./routes/auth.js";
 import utilityRoutes from "./routes/utility.js";
+import placeRoutes from "./routes/places.js";
 
 export const app = express();
 
@@ -51,6 +52,7 @@ app.use("/api", utilityRoutes);
 app.use("/api/routes", routesRouter);
 app.use("/api/trips", tripRoutes);
 app.use("/api/trips/:tripId/expenses", expensesRouter);
+app.use("/api/places", placeRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

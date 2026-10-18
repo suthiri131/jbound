@@ -28,7 +28,6 @@ async function submit() {
       dwellMinutes: form.dwellMinutes === '' ? undefined : Number(form.dwellMinutes),
       crossing: form.crossing || undefined,
       crossingDir: form.crossing ? form.crossingDir : undefined,
-      // TODO(team): add a map picker / geocoder so scribbled stops get lat/lng and show on the route map
     });
     Object.assign(form, blank());
     open.value = false;

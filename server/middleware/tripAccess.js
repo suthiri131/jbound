@@ -7,7 +7,7 @@ import { forbidden, notFound } from '../utils/httpError.js';
  */
 export async function requireTripMember(req, _res, next) {
   const { tripId } = req.params;
-  const { data: trip } = await supabase.from('trips').select('id, owner_id, name, start_date').eq('id', tripId).maybeSingle();
+  const { data: trip } = await supabase.from('trips').select('id, owner_id, name, start_date, end_date').eq('id', tripId).maybeSingle();
   if (!trip) return next(notFound('Trip not found'));
 
   const { data: member } = await supabase

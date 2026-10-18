@@ -44,6 +44,13 @@ const routes = [
     component: () => import("@/views/LedgerView.vue"),
     meta: { requiresAuth: true, title: "Ledger" },
   },
+
+  {
+    path: "/explorer",
+    name: "explorer",
+    component: () => import("@/views/ExplorerView.vue"),
+    meta: { title: "Explorer" },
+  },
 ];
 
 const router = createRouter({
