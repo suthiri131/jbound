@@ -139,7 +139,7 @@ watch(() => [props.trip.id, day.value, fromCheckpoint.value, props.version], loa
 const caption = computed(() => {
   const r = result.value?.route;
   if (r) return `${r.distanceKm} km · about ${r.durationMin} min driving · ${r.note}`;
-  return result.value?.message || 'Stops from Explorer have a location; scribbled stops do not (yet).';
+  return result.value?.message || 'Add a location to your stops to see them on the map.';
 });
 </script>
 

@@ -3,6 +3,7 @@ import { badRequest, check, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
 import { getDrivingRoute } from '../services/routingService.js';
 import { CHECKPOINTS } from '../services/logic/geo.js';
+import { validateStopDay } from '../utils/stopDay.js';
 import { assessTrip } from '../services/logic/feasibility.js';
 
 const ITEM_FIELDS =
@@ -49,6 +50,7 @@ export async function listItems(req, res) {
 /** POST /api/trips/:tripId/itinerary  { placeId? | title?, day?, time?, notes?, vibe?, dwellMinutes?, lat?, lng?, crossing?, crossingDir? } */
 export async function addItem(req, res) {
   const { placeId, title, day, time, notes } = req.valid.body;
+  validateStopDay(req.trip, day);
   let finalTitle = title;
   let vibe = req.valid.body.vibe;
   if (placeId) {
@@ -84,9 +86,16 @@ export async function addItem(req, res) {
 /** PATCH /api/trips/:tripId/itinerary/:itemId — edit fields, or tick off with { done: true } */
 export async function updateItem(req, res) {
   const { title, day, time, notes, done } = req.valid.body;
+  validateStopDay(req.trip, day);
+  let movedDay = false;
   const patch = stopPatch(req.valid.body);
   if (title !== undefined) patch.title = title;
-  if (day !== undefined) patch.day = day;
+  if (day !== undefined) {
+    const existing = check(await supabase.from('itinerary_items').select('day').eq('id', req.params.itemId).eq('trip_id', req.params.tripId).single(), 'Itinerary item not found');
+    patch.day = day;
+    movedDay = day !== existing.day;
+    if (movedDay) patch.position = await nextPosition(req.params.tripId, day);
+  }
   if (time !== undefined) patch.time = time;
   if (notes !== undefined) patch.notes = notes;
   if (done !== undefined) {
@@ -104,6 +113,10 @@ export async function updateItem(req, res) {
       .single(),
     'Itinerary item not found',
   );
+  if (movedDay) {
+    const destination = day ? dayLabel(req.trip, day) : 'Unscheduled';
+    await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} moved ${data.title} to ${destination}`);
+  }
   if (done === true) await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} ticked off ${data.title}`);
   res.json(data);
 }
@@ -113,7 +126,9 @@ export async function reorderItems(req, res) {
   const { items } = req.valid.body;
   const tripId = req.params.tripId;
 
-  const existing = check(await supabase.from('itinerary_items').select('id').eq('trip_id', tripId));
+  for (const item of items) validateStopDay(req.trip, item.day);
+
+  const existing = check(await supabase.from('itinerary_items').select('id, title, day').eq('trip_id', tripId));
   const valid = new Set(existing.map((r) => r.id));
   const foreign = items.filter((i) => !valid.has(i.id));
   if (foreign.length) throw badRequest('Some items do not belong to this trip', foreign.map((i) => i.id));
@@ -125,6 +140,15 @@ export async function reorderItems(req, res) {
   );
   const failed = results.find((r) => r.error);
   if (failed) check(failed);
+  const previous = new Map(existing.map((item) => [item.id, item]));
+  const moved = items.filter((item) => previous.get(item.id).day !== (item.day ?? null));
+  if (moved.length) {
+    const name = await displayName(req.user.id);
+    for (const item of moved) {
+      const destination = item.day ? dayLabel(req.trip, item.day) : 'Unscheduled';
+      await postSystemMessage(tripId, `${name} moved ${previous.get(item.id).title} to ${destination}`);
+    }
+  }
   res.json(await listOrdered(tripId));
 }
 
