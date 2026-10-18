@@ -15,10 +15,10 @@ export async function currencyConvert(req, res) {
   res.json(await convertCurrency(amount, from, to, date));
 }
 
-/** POST /api/routing  */
-// export async function route(req, res) {
-//     res.json(await getDrivingRoute(req.valid.body.points))
-// }
+/** POST /api/routing { points: [{ lat, lng }, ...] } */
+export async function route(req, res) {
+  res.json(await getDrivingRoute(req.valid.body.points));
+}
 
 /** POST /api/uploads?folder=posts|avatars|memories */
 export async function upload(req, res) {

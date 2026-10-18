@@ -1,7 +1,7 @@
 <script setup>
 /**
- * Google Map of one day's stops + the OSRM driving route.
- * Data: GET /api/trips/:id/route?day=YYYY-MM-DD   (route geometry from OSRM, drawn on Google Maps)
+ * Google Map of one day's stops + the ORS driving route.
+ * Data: GET /api/trips/:id/route?day=YYYY-MM-DD   (route geometry from ORS, drawn on Google Maps)
  * Map: Maps JavaScript API, loaded with VITE_GOOGLE_MAPS_API_KEY (see lib/googleMaps.js).
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';

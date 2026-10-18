@@ -1,10 +1,9 @@
 /**
- * OSRM driving-route wrapper (public demo server — rate-limited, fine for a class demo).
- * Returns the route geometry as [lat, lng] pairs (the client turns them into a Google Maps polyline).
+ * OpenRouteService driving-route wrapper.
+ * Returns the route geometry as [lat, lng] pairs for the planner's Google Maps polyline.
  */
-import { config } from '../config.js';
 import { cached } from '../utils/cache.js';
-import { fetchJson } from '../utils/fetchJson.js';
+import { getDrivingRoute as getOrsRoute } from './ors.js';
 import { badRequest, HttpError } from '../utils/httpError.js';
 
 const CACHE_MS = 10 * 60 * 1000;
@@ -14,25 +13,27 @@ export async function getDrivingRoute(points) {
   if (!Array.isArray(points) || points.length < 2) throw badRequest('Need at least 2 points for a route');
   if (points.length > 25) throw badRequest('Max 25 points per route');
 
-  // OSRM expects lng,lat order
-  const coords = points.map((p) => `${Number(p.lng).toFixed(6)},${Number(p.lat).toFixed(6)}`).join(';');
+  // ORS expects coordinates as [longitude, latitude] pairs.
+  const coordinates = points.map((p) => [Number(p.lng), Number(p.lat)]);
+  const key = coordinates.map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`).join(';');
 
-  return cached(`osrm:${coords}`, CACHE_MS, async () => {
-    const url = `${config.osrmBaseUrl}/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=false`;
-    const data = await fetchJson(url, { timeoutMs: 10_000 });
-    if (data.code !== 'Ok' || !data.routes?.length) {
-      throw new HttpError(502, `Routing failed: ${data.code || 'no route'}`);
+  return cached(`ors:${key}`, CACHE_MS, async () => {
+    const data = await getOrsRoute(coordinates);
+    const route = data.features?.[0];
+    const summary = route?.properties?.summary;
+    if (!route || !summary || !Array.isArray(route.geometry?.coordinates)) {
+      throw new HttpError(502, 'Routing failed: ORS returned no route');
     }
-    const route = data.routes[0];
+
     return {
-      distanceKm: Math.round(route.distance / 100) / 10,
-      durationMin: Math.round(route.duration / 60),
+      distanceKm: Math.round(summary.distance / 100) / 10,
+      durationMin: Math.round(summary.duration / 60),
       latlngs: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
-      legs: route.legs.map((l) => ({
-        distanceKm: Math.round(l.distance / 100) / 10,
-        durationMin: Math.round(l.duration / 60),
+      legs: (route.properties.segments || []).map((segment) => ({
+        distanceKm: Math.round(segment.distance / 100) / 10,
+        durationMin: Math.round(segment.duration / 60),
       })),
-      note: 'Free-flow driving estimate; excludes checkpoint queue time.',
+      note: 'Driving estimate; excludes checkpoint queue time.',
     };
   });
 }
