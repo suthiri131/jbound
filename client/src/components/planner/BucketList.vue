@@ -101,7 +101,7 @@ function move(group, idx, dir) {
       </div>
       <div class="header-actions">
         <div class="stamp big-stamp" :style="{ color: stamp.color }" :aria-label="`Status: ${stamp.label}`">{{ stamp.label }}</div>
-        <TripActions v-if="trip.myRole === 'owner'" :key="trip.id" @edit="emit('edit')" @delete="emit('delete')" />
+        <TripActions v-if="['owner', 'member'].includes(trip.myRole)" :key="trip.id" :can-delete="trip.myRole === 'owner'" @edit="emit('edit')" @delete="emit('delete')" />
       </div>
     </div>
 

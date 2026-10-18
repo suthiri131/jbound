@@ -1,8 +1,9 @@
 export const VIBES = [
   { id: "cozy", label: "Cozy" },
-  { id: "adventurous", label: "Adventurous" },
-  { id: "regional", label: "Regional" },
-  { id: "foodie", label: "Foodie" },
+  { id: "adventure", label: "Adventurous" },
+  { id: "culture", label: "Regional" },
+  { id: "eating", label: "Foodie" },
+  { id: "activities", label: "Activities" },
   { id: "peaceful", label: "Peaceful" },
   { id: "chaotic", label: "Chaotic" },
 ];
@@ -19,12 +20,13 @@ export const VIBE_ICON = {
 
 
 export const VIBE_TINT = {
+  eating: "#F7CACC", 
+  activities: "#E7F2D8",
+  culture: "#D8E6F3",
+  adventure: "#F8D7A7",
   cozy: "#E7F2D8",
-  adventurous: "#F8D7A7",
-  regional: "#D8E6F3",
-  foodie: "#F7CACC",
-  peaceful: "#DDEAE2",
   chaotic: "#EAD6F7",
+  peaceful: "#DDEAE2"
 };
 
 export const COVER_COLORS = [
