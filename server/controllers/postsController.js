@@ -5,7 +5,7 @@ const POST_AUTHOR =
   'author:profiles!posts_user_id_fkey(id, username, name, avatar_url)';
 const COMMENT_AUTHOR =
   'author:profiles!post_comments_user_id_fkey(id, username, name, avatar_url)';
-const POST_FIELDS = `id, caption, vibe, images, created_at, place_id, ${POST_AUTHOR}, place:places(id, name, vibes), likes:post_likes(count), comments:post_comments(count)`;
+const POST_FIELDS = `id, caption, vibe, images, created_at, place_id, custom_place_name, ${POST_AUTHOR}, place:places(id, name, vibes), likes:post_likes(count), comments:post_comments(count)`;
 
 function shape(post, likedIds = new Set()) {
     const {likes, comments, ...rest} = post
@@ -40,7 +40,7 @@ async function friendIds(userId) {
 
 // handles the feed in chronological order
 export async function listPosts(req, res) {
-    const { vibe, placeId, scope, limit, before} = req.valid.query
+    const { vibe, placeId, customPlaceName, scope, limit, before } = req.valid.query;
     let query = supabase
         .from('posts')
         .select(POST_FIELDS)
@@ -53,6 +53,10 @@ export async function listPosts(req, res) {
 
     if (placeId) {
         query = query.eq('place_id', placeId)
+    }
+
+    if (customPlaceName) {
+        query = query.ilike('custom_place_name', customPlaceName);
     }
 
     if (before) {
@@ -81,16 +85,32 @@ export async function getPost(req, res) {
 }
 
 export async function createPost(req, res) {
-  const { caption, placeId, vibe, images } = req.valid.body;
+  const { caption, placeId, customPlaceName, vibe, images } = req.valid.body;
+
   const inserted = check(
     await supabase
       .from('posts')
-      .insert({ user_id: req.user.id, caption, place_id: placeId, vibe, images })
+      .insert({
+        user_id: req.user.id,
+        caption,
+        place_id: placeId || null,
+        custom_place_name: placeId ? null : (customPlaceName?.trim() || null),
+        vibe,
+        images
+      })
       .select('id')
       .single(),
   );
-  const post = check(await supabase.from('posts').select(POST_FIELDS).eq('id', inserted.id).single());
-  res.status(201).json(shape(post))
+
+  const post = check(
+    await supabase
+      .from('posts')
+      .select(POST_FIELDS)
+      .eq('id', inserted.id)
+      .single()
+  );
+
+  res.status(201).json(shape(post));
 }
 
 export async function deletePost(req, res) {
