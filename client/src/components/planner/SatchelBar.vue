@@ -6,40 +6,36 @@
 import { ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useTripsStore } from '@/stores/trips';
-import { errorMessage } from '@/lib/api';
 import TripCover from '@/components/common/TripCover.vue';
 import TripModal from './TripModal.vue';
+import JoinTripForm from './JoinTripForm.vue';
 
 const props = defineProps({
   currentId: { type: String, default: '' },
   startOpen: { type: Boolean, default: false },
 });
 
+// `notice` lets the Planner show a toast ("You joined …") after we navigate to the trip
+const emit = defineEmits(['notice']);
 const trips = useTripsStore();
 const router = useRouter();
 const showNew = ref(props.startOpen);
 watch(() => props.startOpen, (v) => { if (v) showNew.value = true; });
-const code = ref('');
-const joinError = ref('');
-const joining = ref(false);
 
-async function join() {
-  if (!code.value.trim()) return;
-  joinError.value = '';
-  joining.value = true;
-  try {
-    const trip = await trips.join(code.value.trim());
-    code.value = '';
-    router.push(`/planner/${trip.id}`);
-  } catch (err) {
-    joinError.value = errorMessage(err);
-  } finally {
-    joining.value = false;
-  }
+function joined(trip) {
+  emit('notice', trip.alreadyMember ? `You're already in "${trip.name}".` : `You joined "${trip.name}"!`);
+  router.push(`/planner/${trip.id}`);
 }
 
 function created(trip) {
   showNew.value = false;
+  const missing = trip.skippedUsernames || [];
+  emit(
+    'notice',
+    missing.length
+      ? `"${trip.name}" is packed, but we couldn't find ${missing.map((u) => '@' + u).join(', ')}. Share the invite code instead.`
+      : `"${trip.name}" is packed!`,
+  );
   router.push(`/planner/${trip.id}`);
 }
 </script>
@@ -65,16 +61,7 @@ function created(trip) {
 
       <button type="button" class="new" data-cy="new-trip" @click="showNew = true">+ Pack a new trip</button>
 
-      <form class="join card-flat" @submit.prevent="join">
-        <label class="field">
-          Join a crew with an invite code
-          <span class="row" style="gap: 8px; flex-wrap: nowrap">
-            <input v-model="code" class="input" placeholder="e.g. a3f9c21e" aria-describedby="join-err" />
-            <button type="submit" class="btn btn-dark btn-sm" :disabled="joining">Join</button>
-          </span>
-        </label>
-        <p v-if="joinError" id="join-err" class="error-text" role="alert" style="margin: 6px 0 0">{{ joinError }}</p>
-      </form>
+      <JoinTripForm class="join card-flat" @joined="joined" />
     </div>
 
     <TripModal v-if="showNew" @close="showNew = false" @created="created" />

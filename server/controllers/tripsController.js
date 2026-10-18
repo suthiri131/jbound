@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { supabase } from '../db/supabase.js';
 import { badRequest, check, conflict, forbidden, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
@@ -59,15 +60,29 @@ export async function createTrip(req, res) {
       .select(TRIP_FIELDS)
       .single(),
   );
-  await addMember(trip.id, req.user.id, 'owner');
-
-  const skipped = [];
-  if (inviteUsernames?.length) {
-    const profiles = check(await supabase.from('profiles').select('id, username').in('username', inviteUsernames));
-    for (const p of profiles) if (p.id !== req.user.id) await addMember(trip.id, p.id);
-    const found = new Set(profiles.map((p) => p.username));
-    skipped.push(...inviteUsernames.filter((u) => !found.has(u)));
+  try {
+    await addMember(trip.id, req.user.id, 'owner');
+  } catch (err) {
+    // The satchel lists trips through trip_members, so a trip without its owner row could never be opened.
+    await supabase.from('trips').delete().eq('id', trip.id);
+    throw err;
   }
+
+  // Inviting friends is a bonus: if it fails the trip still exists, and we report who we could not add.
+  const wanted = [...new Set(inviteUsernames || [])];
+  const invited = new Set();
+  if (wanted.length) {
+    try {
+      const profiles = check(await supabase.from('profiles').select('id, username').in('username', wanted));
+      for (const p of profiles) {
+        if (p.id !== req.user.id) await addMember(trip.id, p.id); // the owner is already in
+        invited.add(p.username);
+      }
+    } catch (err) {
+      console.warn('[createTrip] inviting the crew failed:', err.message);
+    }
+  }
+  const skipped = wanted.filter((u) => !invited.has(u));
 
   await postSystemMessage(trip.id, `${await displayName(req.user.id)} packed the trip "${trip.name}"`);
   res.status(201).json({ ...(await withPhase(trip)), skippedUsernames: skipped });
@@ -144,8 +159,10 @@ export async function inviteMember(req, res) {
 
 /** POST /api/trips/join  { inviteCode } */
 export async function joinByCode(req, res) {
+  // Codes are lowercase letters/digits; forgive capitals and stray spaces from copy-paste.
+  const code = req.valid.body.inviteCode.replace(/\s+/g, '').toLowerCase();
   const trip = check(
-    await supabase.from('trips').select(TRIP_FIELDS).eq('invite_code', req.valid.body.inviteCode.trim()).single(),
+    await supabase.from('trips').select(TRIP_FIELDS).eq('invite_code', code).single(),
     'Invite code not valid',
   );
   const { data: existing } = await supabase
@@ -154,11 +171,19 @@ export async function joinByCode(req, res) {
     .eq('trip_id', trip.id)
     .eq('user_id', req.user.id)
     .maybeSingle();
+
+  let alreadyMember = Boolean(existing);
   if (!existing) {
-    await addMember(trip.id, req.user.id);
-    await postSystemMessage(trip.id, `${await displayName(req.user.id)} joined the crew`);
+    try {
+      await addMember(trip.id, req.user.id);
+      await postSystemMessage(trip.id, `${await displayName(req.user.id)} joined the crew`);
+    } catch (err) {
+      // Double-tapped Join: the other request won the race and added us, which is still a success.
+      if (err.status !== 409) throw err;
+      alreadyMember = true;
+    }
   }
-  res.json({ ...trip, alreadyMember: Boolean(existing) });
+  res.json({ ...trip, alreadyMember });
 }
 
 /** DELETE /api/trips/:tripId/members/:userId */
@@ -178,7 +203,7 @@ export async function removeMember(req, res) {
 
 /** POST /api/trips/:tripId/invite-code — owner regenerates the share code */
 export async function regenerateInviteCode(req, res) {
-  const code = Math.random().toString(36).slice(2, 10);
+  const code = randomBytes(4).toString('hex'); // 8 chars, same shape as the database default
   const data = check(
     await supabase.from('trips').update({ invite_code: code }).eq('id', req.params.tripId).select('invite_code').single(),
   );

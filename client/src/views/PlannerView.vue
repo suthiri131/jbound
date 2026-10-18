@@ -127,6 +127,19 @@ function refreshSoon() {
 }
 useTripRealtime(tripId, ["itinerary_items"], refreshSoon);
 
+// Joins, invites, leaves and removals are posted as "...the crew" system messages. trip_members is not in
+// the realtime publication, so listen for those messages to keep everyone's crew list live.
+let crewTimer;
+function reloadCrewSoon() {
+  clearTimeout(crewTimer);
+  crewTimer = setTimeout(loadTrip, 300);
+}
+useTripRealtime(tripId, ["messages"], (_table, payload) => {
+  // no payload = the polling fallback, which just reloads
+  // those four messages all end with "the crew"; anchoring avoids matching a stop or trip named "...Crew..."
+  if (!payload || /\bthe crew$/i.test(payload.new?.text || "")) reloadCrewSoon();
+});
+
 /** Pick the trip to show, handle ?join= links, then load. */
 watch(
   () => route.fullPath,
@@ -135,6 +148,11 @@ watch(
     if (route.query.join) {
       try {
         const joined = await trips.join(String(route.query.join));
+        notify(
+          joined.alreadyMember
+            ? `You're already in "${joined.name}".`
+            : `You joined "${joined.name}"!`,
+        );
         return router.replace(`/planner/${joined.id}`);
       } catch (err) {
         notify(errorMessage(err));
@@ -201,6 +219,7 @@ const canMemories = computed(() =>
     <SatchelBar
       :current-id="tripId || ''"
       :start-open="Boolean(route.query.new)"
+      @notice="notify"
     />
 
     <p v-if="loadError" class="error-text card-flat card-pad" role="alert">

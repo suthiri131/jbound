@@ -12,7 +12,7 @@ const AVATAR_TINTS = ['#E0A43B', '#DCE5CF', '#F2CDB8', '#CFE0D9', '#F6E2B3'];
 const username = ref('');
 const msg = ref('');
 const isError = ref(false);
-const copied = ref(false);
+const copied = ref(''); // '' | 'code' | 'link'
 
 const inviteLink = computed(() => `${window.location.origin}/planner?join=${props.trip.invite_code}`);
 const isOwner = computed(() => props.trip.myRole === 'owner');
@@ -33,19 +33,29 @@ async function invite() {
   }
 }
 
-async function copyLink() {
+async function copy(kind) {
+  const text = kind === 'code' ? props.trip.invite_code : inviteLink.value;
   try {
-    await navigator.clipboard.writeText(inviteLink.value);
-    copied.value = true;
-    setTimeout(() => (copied.value = false), 2000);
+    await navigator.clipboard.writeText(text);
+    copied.value = kind;
+    setTimeout(() => (copied.value = ''), 2000);
   } catch {
-    window.prompt('Copy this link', inviteLink.value); // TODO(team): replace with a nicer fallback
+    window.prompt(kind === 'code' ? 'Copy this code' : 'Copy this link', text); // TODO(team): replace with a nicer fallback
   }
 }
 
 async function newCode() {
-  await api.post(`/trips/${props.trip.id}/invite-code`);
-  emit('changed');
+  if (!window.confirm('Make a new invite code? The old code and link will stop working.')) return;
+  msg.value = '';
+  try {
+    await api.post(`/trips/${props.trip.id}/invite-code`);
+    msg.value = 'New invite code ready. The old one no longer works.';
+    isError.value = false;
+    emit('changed');
+  } catch (err) {
+    msg.value = errorMessage(err, 'Could not make a new code');
+    isError.value = true;
+  }
 }
 </script>
 
@@ -65,8 +75,9 @@ async function newCode() {
     <div class="tools">
       <div class="row" style="gap: 8px">
         <span class="label">Invite code</span>
-        <code class="code">{{ trip.invite_code }}</code>
-        <button type="button" class="btn btn-sm" @click="copyLink">{{ copied ? 'Copied!' : 'Copy link' }}</button>
+        <code class="code" data-cy="invite-code">{{ trip.invite_code }}</code>
+        <button type="button" class="btn btn-sm" @click="copy('code')">{{ copied === 'code' ? 'Copied!' : 'Copy code' }}</button>
+        <button type="button" class="btn btn-sm" @click="copy('link')">{{ copied === 'link' ? 'Copied!' : 'Copy link' }}</button>
         <button v-if="isOwner" type="button" class="btn btn-sm btn-ghost" title="Make a new code (old one stops working)" @click="newCode">↻</button>
       </div>
       <form class="row" style="gap: 8px" @submit.prevent="invite">
