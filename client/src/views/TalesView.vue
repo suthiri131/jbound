@@ -1,10 +1,11 @@
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue';
+import { ref, reactive, watch, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage, uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { VIBES, VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
 import { timeAgo, initials } from '@/utils/format';
+
 
 const route = useRoute();
 const router = useRouter();
@@ -26,6 +27,8 @@ const composeError = ref('');
 // comments per post id
 const openComments = reactive({});
 const commentDraft = reactive({});
+
+const photoDialog = ref(null);
 
 async function load(more = false) {
   feed.loading = true;
@@ -77,6 +80,13 @@ function pickPlace(p) {
   suggestions.value = [];
 }
 
+watch(placeQuery, (q) => {
+    if (draft.place && q !== draft.place.name) {
+        draft.place = null;
+    }
+});
+
+
 async function addImages(files) {
   uploading.value = true;
   composeError.value = '';
@@ -97,11 +107,24 @@ async function post() {
       caption: draft.caption,
       vibe: draft.vibe || undefined,
       placeId: draft.place?.id,
+      customPlaceName: draft.place ? undefined : (placeQuery.value.trim() || undefined),
       images: draft.images,
     });
+
     feed.items.unshift(data);
     Object.assign(draft, { caption: '', vibe: '', place: null, images: [] });
     placeQuery.value = '';
+    
+    Object.assign(customPlace, {
+        name: '',
+        description: '',
+        address: '',
+        lat: '',
+        lng: ''
+    });
+
+    placeQuery.value = '';
+
   } catch (err) {
     composeError.value = errorMessage(err);
   } finally {
@@ -143,6 +166,42 @@ async function removePost(p) {
   await api.delete(`/posts/${p.id}`);
   feed.items = feed.items.filter((x) => x.id !== p.id);
 }
+
+// click-to-enlarge section
+const selectedPhotos = ref([]);
+const selectedPhotoIndex = ref(0);
+
+async function openPhotoViewer(images, index) {
+  selectedPhotos.value = images;
+  selectedPhotoIndex.value = index;
+
+  await nextTick();
+  photoDialog.value?.focus();
+}
+
+function closePhotoViewer() {
+  selectedPhotos.value = [];
+  selectedPhotoIndex.value = 0;
+}
+
+function nextPhoto() {
+  selectedPhotoIndex.value =
+    (selectedPhotoIndex.value + 1) % selectedPhotos.value.length;
+}
+
+function previousPhoto() {
+  selectedPhotoIndex.value =
+    (selectedPhotoIndex.value - 1 + selectedPhotos.value.length)
+    % selectedPhotos.value.length;
+}
+
+function handlePhotoKeydown(event) {
+  if (!selectedPhotos.value.length) return;
+
+  if (event.key === 'Escape') closePhotoViewer();
+  if (event.key === 'ArrowRight') nextPhoto();
+  if (event.key === 'ArrowLeft') previousPhoto();
+}
 </script>
 
 <template>
@@ -168,6 +227,7 @@ async function removePost(p) {
               </li>
             </ul>
           </div>
+
           <label class="field">Vibe
             <select v-model="draft.vibe" class="select">
               <option value="">None</option>
@@ -207,20 +267,49 @@ async function removePost(p) {
             <div style="flex: 1">
               <strong>{{ p.author?.name }}</strong>
               <span class="muted" style="font-size: 13px"> · {{ timeAgo(p.created_at) }}</span>
-              <p v-if="p.place" style="margin: 0; font-size: 13px">at <RouterLink :to="`/tales?placeId=${p.place.id}`" @click="placeFilter = p.place.id">{{ p.place.name }}</RouterLink></p>
-            </div>
-            <span v-if="p.vibe" class="pill" :style="{ background: VIBE_TINT[p.vibe] }">{{ VIBE_LABEL[p.vibe] }}</span>
+              <p v-if="p.place || p.custom_place_name" style="margin: 0; font-size: 13px">
+                at
+                <RouterLink
+                    v-if="p.place"
+                    :to="`/tales/place/${p.place.id}`"
+                >
+                    {{ p.place.name }}
+                </RouterLink>
+
+                <RouterLink
+                    v-else
+                    :to="`/tales/custom/${encodeURIComponent(p.custom_place_name)}`"
+                >
+                    {{ p.custom_place_name }}
+                </RouterLink>
+            </p>
+          </div>
+          <span v-if="p.vibe" class="pill" :style="{ background: VIBE_TINT[p.vibe] }">{{ VIBE_LABEL[p.vibe] }}</span>
           </header>
           <p class="caption">{{ p.caption }}</p>
+
           <div v-if="p.images?.length" class="photos">
-            <img v-for="u in p.images" :key="u" :src="u" alt="" loading="lazy" />
+            <img
+              v-for="(u, index) in p.images"
+              :key="u"
+              :src="u"
+              :alt="`Tale photo ${index + 1}`"
+              loading="lazy"
+              tabindex="0"
+              role="button"
+              @click="openPhotoViewer(p.images, index)"
+              @keydown.enter="openPhotoViewer(p.images, index)"
+              @keydown.space.prevent="openPhotoViewer(p.images, index)"
+            />
           </div>
+
           <footer class="row" style="gap: 8px; margin-top: 12px">
             <button type="button" class="btn btn-sm" :aria-pressed="p.likedByMe" :class="{ liked: p.likedByMe }" @click="like(p)">♥ {{ p.likeCount }}</button>
             <button type="button" class="btn btn-sm btn-ghost" :aria-expanded="Boolean(openComments[p.id])" @click="toggleComments(p)">Comments {{ p.commentCount }}</button>
             <span class="spacer" />
             <button v-if="p.author?.id === auth.user?.id" type="button" class="btn btn-sm btn-ghost" @click="removePost(p)">Delete</button>
           </footer>
+
           <div v-if="openComments[p.id]" class="comments">
             <p v-for="c in openComments[p.id]" :key="c.id"><strong>{{ c.author?.name }}</strong> {{ c.text }}</p>
             <form class="row" style="gap: 8px; flex-wrap: nowrap" @submit.prevent="comment(p)">
@@ -228,12 +317,64 @@ async function removePost(p) {
               <button type="submit" class="btn btn-sm btn-dark">Post</button>
             </form>
           </div>
+
         </article>
 
         <p v-if="!feed.loading && !feed.items.length" class="hand muted">No tales yet. Be the first by the fire.</p>
         <button v-if="feed.nextCursor" type="button" class="btn btn-ghost" style="margin-top: 16px" :disabled="feed.loading" @click="load(true)">Older tales</button>
       </section>
     </div>
+
+    <!-- Enlarged photo viewer -->
+      <div
+        v-if="selectedPhotos.length"
+        class="photo-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Photo viewer"
+        tabindex="-1"
+        @click.self="closePhotoViewer"
+        @keydown="handlePhotoKeydown"
+        ref="photoDialog"
+      >
+        <button
+          type="button"
+          class="photo-close"
+          aria-label="Close photo"
+          @click="closePhotoViewer"
+        >
+          ✕
+        </button>
+
+        <button
+          v-if="selectedPhotos.length > 1"
+          type="button"
+          class="photo-prev"
+          aria-label="Previous photo"
+          @click="previousPhoto"
+        >
+          ❮
+        </button>
+
+        <img
+          class="photo-enlarged"
+          :src="selectedPhotos[selectedPhotoIndex]"
+          :alt="`Photo ${selectedPhotoIndex + 1}`"
+        />
+
+        <button
+          v-if="selectedPhotos.length > 1"
+          type="button"
+          class="photo-next"
+          aria-label="Next photo"
+          @click="nextPhoto">
+          ❯
+        </button>
+
+        <div class="photo-counter">
+          {{ selectedPhotoIndex + 1 }} / {{ selectedPhotos.length }}
+        </div>
+      </div>
   </main>
 </template>
 
@@ -250,9 +391,25 @@ async function removePost(p) {
 .avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 2px solid var(--ink); border-radius: 50%; background: var(--sand); font-weight: 800; font-size: 14px; }
 .caption { margin: 12px 0 0; white-space: pre-line; }
 .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
-.photos img { width: 100%; height: 140px; object-fit: cover; border: 2px solid var(--ink); border-radius: 8px; }
+.photos img { width: 100%; height: 140px; object-fit: contain; border: 2px solid var(--ink); border-radius: 8px; }
 .liked { background: var(--clay); }
 .comments { margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); font-size: 14px; }
 .comments p { margin: 0 0 8px; }
 @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .composer { position: static; } }
+
+/* Make Tale photos clickable */
+.photos img { cursor: zoom-in; }
+/* Fullscreen overlay */
+.photo-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; padding: 55px 50px; }
+/* Enlarged image */
+.photo-enlarged { max-width: 100%; max-height: 85vh; object-fit: contain; border-radius: 8px; }
+/* Close button */
+.photo-close { position: absolute; top: 18px; right: 22px; background: none; border: none; color: white; font-size: 30px; cursor: pointer; }
+/* Navigation arrows */
+.photo-prev, .photo-next { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.15); border: none; border-radius: 50%; color: white; font-size: 26px; width: 44px; height: 44px; cursor: pointer; }
+.photo-prev { left: 12px; }
+.photo-next { right: 12px; }
+.photo-counter { position: absolute; bottom: 20px; color: white; font-size: 14px; }
+/* Mobile responsiveness */
+@media (max-width: 600px) { .photo-overlay { padding: 60px 12px; } .photo-prev, .photo-next { width: 36px; height: 36px; font-size: 20px; } }
 </style>

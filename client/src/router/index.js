@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import WatcherView from '../views/WatcherView.vue';
+import PlaceTalesView from '../views/PlaceTalesView.vue';
 
 const routes = [
   {
@@ -52,11 +53,22 @@ const routes = [
     meta: { title: "Explorer" },
   },
 
-  // watcher path
   {
   path: '/watcher',
   name: 'watcher',
   component: WatcherView,
+  },
+
+  {
+  path: '/tales/place/:placeId',
+  name: 'place-tales',
+  component: PlaceTalesView,
+  },
+
+  {
+    path: '/tales/custom/:name',
+    name: 'custom-place-tales',
+    component: PlaceTalesView
   },
 ];
 
