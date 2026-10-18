@@ -15,8 +15,6 @@
  * A day is also Rushed if it runs > 11 h, Overloaded if > 13 h or > 6 stops.
  * Border crossings planned at an hour the Watcher heuristic marks "High" → Rushed.
  * The trip's verdict is its worst day.
- *
- * TODO(team): rewrite in your own words and tune the constants below
  * with your own observations — this is what graders will ask about.
  */
 import { scoreFor, levelFor } from './congestionHeuristic.js';
@@ -150,7 +148,7 @@ export function assessDay(day) {
      lastEndTime = lastEndTime + 24 * 60;
     }
 
-    hours = (toMin(last.time) + dwellOf(last) - toMin(timed[0].time)) / 60;
+    hours = (lastEndTime - toMin(timed[0].time)) / 60;
     if (timed.length > THRESHOLDS.maxStops || hours > THRESHOLDS.overHours) {
       raise(2);
       warnings.push({ level: 2, tag: 'TOO MUCH', message: `${day.label} packs ${timed.length} stops into ${hours.toFixed(1)} hours. Move some to another day.` });
