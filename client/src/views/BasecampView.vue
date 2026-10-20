@@ -71,11 +71,6 @@ const live = computed(() => trips.onTheRoad);
       </h1>
     </section>
 
-    <RouterLink v-if="live" :to="`/planner/${live.id}`" class="live-card">
-      <TripCover :trip="live" />
-      <span class="hand">You're on the road! Tap to tick off stops →</span>
-    </RouterLink>
-
     <section class="house-card" aria-label="Basecamp house: choose a door">
       <BasecampHouse
         :watcher-sub="watcherSub"
