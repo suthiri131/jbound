@@ -363,7 +363,7 @@ const price = (n) => (n ? "$".repeat(n) : "");
         </h2>
         <p v-if="!trips.plannable.length" class="lead">
           No trips to pin to yet.
-          <RouterLink to="/planner?new=1">Pack a new trip</RouterLink> first.
+          <RouterLink to="/planner?new=1">Create a new trip</RouterLink> first.
         </p>
         <form
           v-else
