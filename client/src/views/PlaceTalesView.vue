@@ -211,6 +211,24 @@
                     : placePhotos[currentPlacePhoto]"
                 :alt="`${place?.name} photo ${currentPlacePhoto + 1}`"
                 class="place-hero"
+                role="button"
+                tabindex="0"
+                @click="openPhotoViewer(
+                    placePhotos.map(photo =>
+                        photo.startsWith('/api/')
+                            ? `http://localhost:3001${photo}`
+                            : photo
+                    ),
+                    currentPlacePhoto
+                )"
+                @keydown.enter="openPhotoViewer(
+                    placePhotos.map(photo =>
+                        photo.startsWith('/api/')
+                            ? `http://localhost:3001${photo}`
+                            : photo
+                    ),
+                    currentPlacePhoto
+                )"
             />
 
             <button
@@ -431,7 +449,8 @@
 @media (max-width: 600px) { .photo-overlay { padding: 60px 12px; } .photo-prev, .photo-next { width: 36px; height: 36px; font-size: 20px; } }
 
 .place-header { margin-top: 24px; }
-.place-hero { display: block; width: 100%; height: 350px; object-fit: cover; border: 2px solid var(--ink); border-radius: 12px; margin-top: 20px; }
+.place-hero { display: block; width: 100%; height: 500px; object-fit: contain; background: black; border: 2px solid var(--ink); border-radius: 12px; margin-top: 20px; }
+.place-hero { cursor: zoom-in; }
 .place-placeholder { display: flex; align-items: center; justify-content: center; height: 220px; background: var(--sand); border: 2px dashed var(--ink); border-radius: 12px; color: var(--muted); }
 @media (max-width: 600px) { .place-hero { height: 220px; } }
 
