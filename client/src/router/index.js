@@ -70,6 +70,14 @@ const routes = [
     name: 'custom-place-tales',
     component: PlaceTalesView
   },
+
+  {
+  path: "/archives/:tripId?",
+  name: "archives",
+  component: () => import("@/views/ArchivesView.vue"),
+  meta: { requiresAuth: true, title: "Archives" },
+  },
+
 ];
 
 const router = createRouter({

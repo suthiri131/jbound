@@ -1,4 +1,4 @@
-import { onBeforeUnmount, watch } from 'vue';
+import { onBeforeUnmount, watch, ref} from 'vue';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -12,19 +12,24 @@ import { supabase } from '@/lib/supabase';
  * @param {string[]} tables e.g. ['itinerary_items', 'memories']
  * @param {(table: string, payload?: object) => void} onChange
  * @param {{ pollMs?: number }} [opts]
+ * @returns {{isLive: import('vue').Ref<boolean>}}
  */
+
 export function useTripRealtime(tripIdRef, tables, onChange, { pollMs = 15000 } = {}) {
   let channel = null;
   let poll = null;
+  const isLive= ref(false);
 
   function stop() {
     if (channel) supabase.removeChannel(channel);
     channel = null;
     clearInterval(poll);
     poll = null;
+    isLive.value = false;
   }
 
   function startPolling() {
+    isLive.value = false;
     clearInterval(poll);
     poll = setInterval(() => tables.forEach((t) => onChange(t)), pollMs);
   }
@@ -41,11 +46,13 @@ export function useTripRealtime(tripIdRef, tables, onChange, { pollMs = 15000 } 
       );
     });
     channel.subscribe((status) => {
-      // TODO(team): surface a small "live" / "offline" dot in the UI if you like
+      isLive.value = status === 'SUBSCRIBED' ;
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') startPolling();
     });
   }
 
   watch(tripIdRef, start, { immediate: true });
   onBeforeUnmount(stop);
+
+  return {isLive};
 }

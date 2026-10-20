@@ -14,6 +14,7 @@ import TripModal from "@/components/planner/TripModal.vue";
 import DeleteTripModal from "@/components/planner/DeleteTripModal.vue";
 import CampChat from "@/components/planner/CampChat.vue";
 
+let isLive;
 const route = useRoute();
 const router = useRouter();
 const trips = useTripsStore();
@@ -125,8 +126,8 @@ let t;
 function refreshSoon() {
   clearTimeout(t);
   t = setTimeout(refresh, 300);
-}
-useTripRealtime(tripId, ["itinerary_items"], refreshSoon);
+} 
+({isLive} =useTripRealtime(tripId, ["itinerary_items"], refreshSoon));
 
 /** Pick the trip to show, handle ?join= links, then load. */
 watch(
@@ -215,6 +216,10 @@ const canMemories = computed(() =>
         <strong>This trip is in the Archives.</strong>
         <RouterLink to="/archives">Open its drawer in the attic →</RouterLink>
       </div>
+      <p class="row" style="gap: 6px; font-size: 12px" :class="isLive ? 'muted' : 'error-text'">
+  <span :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: isLive ? 'var(--jungle)' : 'var(--brick)' }" aria-hidden="true"></span>
+  {{ isLive ? 'Live' : 'Offline — syncing every 15s' }}
+</p>
 
       <CrewBar :trip="trip" @changed="loadTrip" />
 
