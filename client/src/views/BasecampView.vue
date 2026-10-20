@@ -22,7 +22,7 @@ const explorerSub = ref('Find places by vibe');
 const rooms = [
   {
     where: "The car out front",
-    name: "Planner",
+    name: "Trips",
     job: "Plan a trip with your crew",
     to: "/planner",
   },

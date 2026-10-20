@@ -10,22 +10,22 @@ onMounted(() => tripsStore.fetch());
 
 <template>
   <div class="scrim" @click="emit('close')" />
-  <aside class="drawer" aria-label="Your satchel" @keydown.esc="emit('close')">
+  <aside class="drawer" aria-label="Your trips" @keydown.esc="emit('close')">
     <div class="row">
       <div>
-        <h2 class="display display-md">Your satchel</h2>
+        <h2 class="display display-md">Your trips</h2>
         <p class="hand muted" style="margin: 0">{{ tripsStore.trips.length }} trips packed</p>
       </div>
       <span class="spacer" />
-      <button type="button" class="btn btn-icon" aria-label="Close satchel" @click="emit('close')">✕</button>
+      <button type="button" class="btn btn-icon" aria-label="Close trips" @click="emit('close')">✕</button>
     </div>
 
-    <p v-if="tripsStore.loading" class="muted">Rummaging through the satchel…</p>
+    <p v-if="tripsStore.loading" class="muted">Loading your trips…</p>
     <div class="list">
       <RouterLink v-for="t in tripsStore.trips" :key="t.id" :to="`/planner/${t.id}`" class="cover-link" @click="emit('close')">
         <TripCover :trip="t" />
       </RouterLink>
-      <RouterLink to="/planner?new=1" class="btn btn-ghost" @click="emit('close')">+ Pack a new trip</RouterLink>
+      <RouterLink to="/planner?new=1" class="btn btn-ghost" @click="emit('close')">+ New trip</RouterLink>
     </div>
   </aside>
 </template>

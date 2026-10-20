@@ -35,10 +35,16 @@ const routes = [
   },
 
   {
-    path: "/planner/:tripId?",
+    path: "/planner",
     name: "planner",
     component: () => import("@/views/PlannerView.vue"),
-    meta: { requiresAuth: true, title: "Planner" },
+    meta: { requiresAuth: true, title: "Trips" },
+  },
+  {
+    path: "/planner/:tripId",
+    name: "trip-details",
+    component: () => import("@/views/PlannerDetailsView.vue"),
+    meta: { requiresAuth: true, title: "Trip details" },
   },
   {
     path: "/ledger",

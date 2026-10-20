@@ -64,6 +64,7 @@ async function logout() {
           :key="l.to"
           :to="l.to"
           class="link"
+          :class="{ 'is-active': l.to === '/planner' && route.path.startsWith('/planner/') }"
           :exact-active-class="l.exact ? 'is-active' : ''"
           :active-class="l.exact ? '' : 'is-active'"
           >{{ l.label }}</RouterLink
@@ -87,7 +88,7 @@ async function logout() {
             <path d="M9 8V6a3 3 0 0 1 6 0v2" />
             <path d="M5 12h14" />
           </svg>
-          Satchel
+          Your trips
         </button>
         <div v-if="auth.isLoggedIn" ref="menuRoot" class="account">
           <button
