@@ -185,6 +185,7 @@ export const createExpenseBody = z.object({
   description: z.string().trim().min(1).max(120),
   paidBy: uuid.optional(),
   splitAmong: z.array(uuid).max(50).optional(),
+  splitAmounts: z.array(z.object({ memberId: uuid, amount: z.coerce.number().min(0).multipleOf(0.01) })).max(50).optional(),
 });
 export const balancesQuery = z.object({ currency: currency.default('SGD') });
 export const settlementBody = z.object({ from: uuid, to: uuid, amountSgd: z.coerce.number().positive().max(1_000_000) });

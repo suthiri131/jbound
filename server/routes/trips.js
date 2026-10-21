@@ -10,6 +10,7 @@ import { badRequest } from "../utils/httpError.js";
 import { ALLOWED_IMAGE_TYPES } from "../services/storageService.js";
 import * as trips from "../controllers/tripsController.js";
 import * as itinerary from "../controllers/itineraryController.js";
+import * as expenses from "../controllers/expensesController.js";
 
 // TO DO
 import * as messages from "../controllers/messagesController.js";
@@ -39,6 +40,13 @@ const member = [validate({ params: s.tripParam }), requireTripMember];
 const memberWith = (params) => [validate({ params }), requireTripMember];
 
 r.get("/:tripId", member, trips.getTrip);
+
+// Ledger
+r.get('/:tripId/expenses', member, expenses.getExpenses);
+r.post('/:tripId/expenses', member, validate({ body: s.createExpenseBody }), expenses.createExpense);
+r.put('/:tripId/expenses/:expenseId', memberWith(s.tripExpenseParam), validate({ body: s.createExpenseBody }), expenses.updateExpense);
+r.get('/:tripId/expenses/balances', member, validate({ query: s.balancesQuery }), expenses.getBalances);
+r.post('/:tripId/expenses/settlements', member, validate({ body: s.settlementBody }), expenses.createSettlement);
 r.patch(
   "/:tripId",
   member,

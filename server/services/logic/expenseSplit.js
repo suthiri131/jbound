@@ -68,11 +68,22 @@ export function calculateExpenseSplit(expenses, rates) {
     const totalCents = amountInBaseCents(expense, rates);
     addBalance(paidBy, totalCents);
 
-    const baseShareCents = Math.floor(totalCents / memberIds.length);
-    const remainder = totalCents % memberIds.length;
-    memberIds.forEach((memberId, index) => {
-      addBalance(memberId, -(baseShareCents + (index < remainder ? 1 : 0)));
-    });
+    if (expense.splitAmounts) {
+      const shares = expense.splitAmounts;
+      if (!Array.isArray(shares) || shares.length !== memberIds.length
+        || shares.some(({ memberId, amountCents }) => !memberIds.includes(memberId) || !Number.isSafeInteger(amountCents) || amountCents < 0)
+        || new Set(shares.map(({ memberId }) => memberId)).size !== memberIds.length
+        || shares.reduce((sum, share) => sum + share.amountCents, 0) !== totalCents) {
+        throw new TypeError('Custom split amounts must cover all members and sum to the expense total');
+      }
+      for (const { memberId, amountCents } of shares) addBalance(memberId, -amountCents);
+    } else {
+      const baseShareCents = Math.floor(totalCents / memberIds.length);
+      const remainder = totalCents % memberIds.length;
+      memberIds.forEach((memberId, index) => {
+        addBalance(memberId, -(baseShareCents + (index < remainder ? 1 : 0)));
+      });
+    }
   }
 
   for (const [memberId, balanceCents] of balances) {

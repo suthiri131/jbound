@@ -13,6 +13,24 @@ function dollars(cents) {
   return Number((cents / 100).toFixed(2));
 }
 
+function normalizeSplitAmounts(splitAmounts, splitAmong, amount, rate) {
+  if (!splitAmounts) return null;
+  if (splitAmounts.length !== splitAmong.length
+    || splitAmounts.some(({ memberId }) => !splitAmong.includes(memberId))
+    || new Set(splitAmounts.map(({ memberId }) => memberId)).size !== splitAmong.length) {
+    throw badRequest('Custom split amounts must cover each selected member once');
+  }
+  const expenseCents = toCents(amount);
+  const sourceShares = splitAmounts.map(({ amount: share }) => toCents(share));
+  if (sourceShares.reduce((sum, cents) => sum + cents, 0) !== expenseCents) {
+    throw badRequest('Custom split amounts must add up to the expense amount');
+  }
+  const converted = sourceShares.map((cents) => Math.round(cents * rate));
+  const convertedExpense = Math.round(expenseCents * rate);
+  converted[0] += convertedExpense - converted.reduce((sum, cents) => sum + cents, 0);
+  return new Map(splitAmounts.map(({ memberId }, index) => [memberId, dollars(converted[index])]));
+}
+
 async function getTripMemberIds(tripId) {
   const { data, error } = await supabase.from('trip_members').select('user_id').eq('trip_id', tripId);
   return check({ data, error }).map(({ user_id }) => user_id);
@@ -53,13 +71,13 @@ async function loadExpenses(tripId) {
 
   const { data: splits, error: splitError } = await supabase
     .from('expense_splits')
-    .select('expense_id, user_id')
+    .select('expense_id, user_id, amount_sgd')
     .in('expense_id', expenses.map(({ id }) => id));
   check({ data: splits, error: splitError });
   const splitMembers = new Map();
   for (const split of splits) {
     const members = splitMembers.get(split.expense_id) ?? [];
-    members.push(split.user_id);
+    members.push({ id: split.user_id, amount_sgd: split.amount_sgd });
     splitMembers.set(split.expense_id, members);
   }
 
@@ -73,19 +91,32 @@ async function loadExpenses(tripId) {
   check({ data: profiles, error: profileError });
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
 
-  return (await normalizeExpenseRows(expenses)).map((expense) => ({
-    ...expense,
-    paid_by_profile: profileById.get(expense.paid_by) ?? null,
-    splitAmong: splitMembers.get(expense.id) ?? [],
-    splitMembers: (splitMembers.get(expense.id) ?? []).map((id) => profileById.get(id) ?? { id, name: id }),
-  }));
+  return (await normalizeExpenseRows(expenses)).map((expense) => {
+    const splitRows = splitMembers.get(expense.id) ?? [];
+    const totalCents = toCents(expense.amount_sgd);
+    const equalShare = Math.floor(totalCents / Math.max(splitRows.length, 1));
+    const remainder = totalCents % Math.max(splitRows.length, 1);
+    return {
+      ...expense,
+      paid_by_profile: profileById.get(expense.paid_by) ?? null,
+      splitAmong: splitRows.map(({ id }) => id),
+      splitAmounts: splitRows.every(({ amount_sgd }) => amount_sgd != null)
+        ? splitRows.map(({ id, amount_sgd }) => ({ memberId: id, amountCents: toCents(amount_sgd) }))
+        : null,
+      splitMembers: splitRows.map(({ id, amount_sgd }, index) => ({
+        ...(profileById.get(id) ?? { id, name: id }),
+        amountSgd: amount_sgd == null ? dollars(equalShare + (index < remainder ? 1 : 0)) : Number(amount_sgd),
+      })),
+    };
+  });
 }
 
 async function loadSettlements(tripId) {
   const { data, error } = await supabase
     .from('settlements')
-    .select('from_user, to_user, amount_sgd')
-    .eq('trip_id', tripId);
+    .select('id, from_user, to_user, amount_sgd, created_at')
+    .eq('trip_id', tripId)
+    .order('created_at', { ascending: false });
   return check({ data, error });
 }
 
@@ -96,6 +127,7 @@ function computeTripSplit(expenses, settlements, memberIds = []) {
       currency: 'SGD',
       paidBy: expense.paid_by,
       splitAmong: expense.splitAmong,
+      splitAmounts: expense.splitAmounts,
     })),
     SGD_RATES,
   );
@@ -139,12 +171,13 @@ export async function getExpenses(req, res) {
 
 export async function createExpense(req, res) {
   const { tripId } = req.params;
-  const { amount, currency, description, paidBy, splitAmong } = req.valid.body;
+  const { amount, currency, description, paidBy, splitAmong, splitAmounts } = req.valid.body;
   const memberIds = await getTripMemberIds(tripId);
   if (!memberIds.includes(paidBy) || splitAmong.some((memberId) => !memberIds.includes(memberId))) {
     throw badRequest('Payer and split members must belong to this trip');
   }
   const metadata = await resolveCurrencyMetadata(amount, currency);
+  const shares = normalizeSplitAmounts(splitAmounts, splitAmong, amount, metadata.exchange_rate);
   const { data: expense, error } = await supabase.from('expenses').insert({
     trip_id: tripId,
     paid_by: paidBy,
@@ -157,7 +190,7 @@ export async function createExpense(req, res) {
   check({ data: expense, error });
 
   const { error: splitError } = await supabase.from('expense_splits').insert(
-    splitAmong.map((userId) => ({ expense_id: expense.id, user_id: userId })),
+    splitAmong.map((userId) => ({ expense_id: expense.id, user_id: userId, amount_sgd: shares?.get(userId) ?? null })),
   );
   check({ data: null, error: splitError });
   res.status(201).json({ expense: { ...expense, splitAmong } });
@@ -177,12 +210,13 @@ export async function updateExpense(req, res) {
     throw forbidden('Only the expense creator or trip owner can edit this expense');
   }
 
-  const { amount, currency, description, paidBy, splitAmong } = req.valid.body;
+  const { amount, currency, description, paidBy, splitAmong, splitAmounts } = req.valid.body;
   const memberIds = await getTripMemberIds(tripId);
   if (!memberIds.includes(paidBy) || splitAmong.some((memberId) => !memberIds.includes(memberId))) {
     throw badRequest('Payer and split members must belong to this trip');
   }
   const metadata = await resolveCurrencyMetadata(amount, currency);
+  const shares = normalizeSplitAmounts(splitAmounts, splitAmong, amount, metadata.exchange_rate);
   const { data: expense, error } = await supabase
     .from('expenses')
     .update({ amount, currency, description, paid_by: paidBy, ...metadata })
@@ -195,7 +229,7 @@ export async function updateExpense(req, res) {
   const { error: deleteError } = await supabase.from('expense_splits').delete().eq('expense_id', expenseId);
   check({ data: null, error: deleteError });
   const { error: insertError } = await supabase.from('expense_splits').insert(
-    splitAmong.map((userId) => ({ expense_id: expenseId, user_id: userId })),
+    splitAmong.map((userId) => ({ expense_id: expenseId, user_id: userId, amount_sgd: shares?.get(userId) ?? null })),
   );
   check({ data: null, error: insertError });
   res.json({ expense: { ...expense, splitAmong } });
@@ -208,13 +242,14 @@ export async function getBalances(req, res) {
   ]);
   const memberIds = await getTripMemberIds(req.params.tripId);
   const result = computeTripSplit(expenses, settlements, memberIds);
-  res.json({ ...result, currency: 'SGD' });
+  res.json({ ...result, transactions: settlements, currency: 'SGD' });
 }
 
 export async function createSettlement(req, res) {
   const { tripId } = req.params;
   const { from, to, amountSgd } = req.valid.body;
   if (from === to) throw badRequest('A member cannot settle a balance with themselves');
+  if (to !== req.user.id) throw forbidden('Only the receiving member can confirm this settlement');
   const memberIds = await getTripMemberIds(tripId);
   if (!memberIds.includes(from) || !memberIds.includes(to)) {
     throw badRequest('Settlement members must belong to this trip');

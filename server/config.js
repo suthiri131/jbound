@@ -35,6 +35,6 @@ export const config = {
   frankfurterBaseUrl: process.env.FRANKFURTER_BASE_URL || 'https://api.frankfurter.dev',
   ors: {
     apiKey: process.env.ORS_API_KEY || '',
-    baseUrl: process.env.ORS_BASE_URL || 'https://api.openrouteservice.org',
+    baseUrl: process.env.ORS_BASE_URL || 'https://api.heigit.org/openrouteservice',
   },
 };
