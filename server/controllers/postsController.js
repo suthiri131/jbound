@@ -147,14 +147,31 @@ export async function toggleLike(req, res) {
 }
 
 export async function listComments(req, res) {
-  const data = check(
-    await supabase
-      .from('post_comments')
-      .select(`id, text, created_at, ${COMMENT_AUTHOR}`)
-      .eq('post_id', req.params.id)
-      .order('created_at', { ascending: true }),
-  );
-  res.json(data);
+  const limit = 10;
+  const before = req.query.before;
+
+  let query = supabase
+    .from('post_comments')
+    .select(`id, text, created_at, ${COMMENT_AUTHOR}`)
+    .eq('post_id', req.params.id)
+    .order('created_at', { ascending: false })
+    .limit(limit + 1);
+
+  if (before) {
+    query = query.lt('created_at', before);
+  }
+
+  const rows = check(await query);
+
+  const hasMore = rows.length > limit;
+  const items = rows.slice(0, limit);
+
+  res.json({
+    items,
+    nextCursor: hasMore
+      ? items.at(-1).created_at
+      : null
+  });
 }
 
 export async function addComment(req, res) {

@@ -22,7 +22,7 @@ const placeQuery = ref('');
 const suggestions = ref([]);
 const uploading = ref(false);
 const posting = ref(false);
-const composeError = ref('');
+const composeError = ref(''); 
 
 // comments per post id
 const openComments = reactive({});
@@ -40,7 +40,7 @@ async function load(more = false) {
         vibe: vibe.value || undefined,
         placeId: placeFilter.value || undefined,
         before: more ? feed.nextCursor : undefined,
-        limit: 20,
+        limit: 10,
       },
     });
     feed.items = more ? [...feed.items, ...data.items] : data.items;
@@ -130,15 +130,47 @@ async function like(p) {
 
 async function toggleComments(p) {
   try {
-  if (openComments[p.id]) {
-    delete openComments[p.id]
-    return
-  }
-  const { data } = await api.get(`/posts/${p.id}/comments`);
-  openComments[p.id] = data;
+    if (openComments[p.id]) {
+      delete openComments[p.id];
+      return;
+    }
+
+    const { data } = await api.get(`/posts/${p.id}/comments`);
+
+    openComments[p.id] = {
+      items: data.items,
+      nextCursor: data.nextCursor,
+      loading: false
+    };
+
   } catch (error) {
-    console.log(error)
-    alert(errorMessage(error))
+    console.log(error);
+    alert(errorMessage(error));
+  }
+}
+
+async function loadMoreComments(p) {
+  const state = openComments[p.id];
+
+  if (!state?.nextCursor || state.loading) return;
+
+  state.loading = true;
+
+  try {
+    const { data } = await api.get(`/posts/${p.id}/comments`, {
+      params: {
+        before: state.nextCursor
+      }
+    });
+
+    state.items.push(...data.items);
+    state.nextCursor = data.nextCursor;
+
+  } catch (error) {
+    console.log(error);
+    alert(errorMessage(error));
+  } finally {
+    state.loading = false;
   }
 }
 
@@ -146,7 +178,7 @@ async function comment(p) {
   const text = (commentDraft[p.id] || '').trim();
   if (!text) return;
   const { data } = await api.post(`/posts/${p.id}/comments`, { text });
-  (openComments[p.id] ||= []).push(data);
+  openComments[p.id].items.unshift(data);
   p.commentCount++;
   commentDraft[p.id] = '';
 }
@@ -301,11 +333,42 @@ function handlePhotoKeydown(event) {
           </footer>
 
           <div v-if="openComments[p.id]" class="comments">
-            <p v-for="c in openComments[p.id]" :key="c.id"><strong>{{ c.author?.name }}</strong> {{ c.text }}</p>
-            <form class="row" style="gap: 8px; flex-wrap: nowrap" @submit.prevent="comment(p)">
-              <input v-model="commentDraft[p.id]" class="input" maxlength="1000" placeholder="Add a comment…" :aria-label="`Comment on ${p.author?.name}'s tale`" />
-              <button type="submit" class="btn btn-sm btn-dark">Post</button>
+
+            <!-- Display loaded comments -->
+            <p v-for="c in openComments[p.id].items" :key="c.id">
+              <strong>{{ c.author?.name }}</strong> {{ c.text }}
+            </p>
+
+            <!-- Load more comments -->
+            <button
+              v-if="openComments[p.id].nextCursor"
+              type="button"
+              class="btn btn-ghost"
+              :disabled="openComments[p.id].loading"
+              @click="loadMoreComments(p)"
+            >
+              {{ openComments[p.id].loading ? 'Loading...' : 'Load More Comments' }}
+            </button>
+
+            <!-- Add a comment -->
+            <form
+              class="row"
+              style="gap: 8px; flex-wrap: nowrap"
+              @submit.prevent="comment(p)"
+            >
+              <input
+                v-model="commentDraft[p.id]"
+                class="input"
+                maxlength="1000"
+                placeholder="Add a comment…"
+                :aria-label="`Comment on ${p.author?.name}'s tale`"
+              />
+
+              <button type="submit" class="btn btn-sm btn-dark">
+                Post
+              </button>
             </form>
+
           </div>
 
         </article>
