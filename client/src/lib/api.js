@@ -16,9 +16,21 @@ api.interceptors.request.use(async (config) => {
 
 /** Turn any axios error into a short, human message for the UI. */
 export function errorMessage(err, fallback = 'Something went wrong. Try again.') {
-  if (err?.code === 'ECONNABORTED') return 'The server took too long. If it is on Render free tier, wait ~30s and retry.';
-  if (!err?.response) return 'Cannot reach the JBound server. Is it running?';
-  return err.response.data?.error || fallback;
+    console.error('Actual error:', err);
+
+    if (err?.code === 'ECONNABORTED') {
+        return 'The server took too long. Try again.';
+    }
+
+    if (axios.isAxiosError(err)) {
+        if (!err.response) {
+            return 'Cannot reach the JBound server. Is it running?';
+        }
+
+        return err.response.data?.error || fallback;
+    }
+
+    return err?.message || fallback;
 }
 
 /** Upload one image file for posts/avatars. Returns the public URL. */

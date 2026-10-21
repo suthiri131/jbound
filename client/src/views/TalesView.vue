@@ -114,16 +114,6 @@ async function post() {
     feed.items.unshift(data);
     Object.assign(draft, { caption: '', vibe: '', place: null, images: [] });
     placeQuery.value = '';
-    
-    Object.assign(customPlace, {
-        name: '',
-        description: '',
-        address: '',
-        lat: '',
-        lng: ''
-    });
-
-    placeQuery.value = '';
 
   } catch (err) {
     composeError.value = errorMessage(err);
