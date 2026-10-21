@@ -89,6 +89,7 @@ export const createPlaceBody = z.object({
 export const postsQuery = z.object({
   vibe: vibe.optional(),
   placeId: uuid.optional(),
+  customPlaceName: z.string().trim().min(1).max(100).optional(),
   scope: z.enum(['everyone', 'friends']).default('everyone'),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   before: z.string().datetime({ offset: true }).optional(),
@@ -96,6 +97,7 @@ export const postsQuery = z.object({
 export const createPostBody = z.object({
   caption: z.string().trim().min(1).max(2000),
   placeId: uuid.optional(),
+  customPlaceName: z.string().trim().min(1).max(100).optional(),
   vibe: vibe.optional(),
   images: imageUrls,
 });

@@ -22,7 +22,7 @@ const explorerSub = ref('Find places by vibe');
 const rooms = [
   {
     where: "The car out front",
-    name: "Planner",
+    name: "Trips",
     job: "Plan a trip with your crew",
     to: "/planner",
   },
@@ -70,11 +70,6 @@ const live = computed(() => trips.onTheRoad);
         <span class="accent">Basecamp.</span>
       </h1>
     </section>
-
-    <RouterLink v-if="live" :to="`/planner/${live.id}`" class="live-card">
-      <TripCover :trip="live" />
-      <span class="hand">You're on the road! Tap to tick off stops →</span>
-    </RouterLink>
 
     <section class="house-card" aria-label="Basecamp house: choose a door">
       <BasecampHouse

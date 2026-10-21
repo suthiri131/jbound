@@ -51,12 +51,20 @@ app.get("/api/health", (_req, res) =>
 
 app.use('/api/posts', postsRouter);
 app.use('/api/checkpoints', checkpointRouter);
+<<<<<<< HEAD
 app.use("/api/auth", authRoutes);
 app.use("/api", utilityRoutes);
 app.use("/api/routes", routesRouter);
 app.use("/api/trips", tripRoutes);
 app.use("/api/trips/:tripId/expenses", expensesRouter);
 app.use("/api/places", placeRoutes);
+=======
+app.use('/api/auth', authRoutes);
+app.use('/api/trips', tripRoutes);
+app.use('/api/trips/:tripId/expenses', expensesRouter);
+app.use('/api/places', placeRoutes);
+app.use('/api', utilityRoutes);
+>>>>>>> origin/main
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { api, errorMessage } from '@/lib/api';
 import { timeAgo } from '@/utils/format';
 
@@ -64,6 +64,27 @@ function resetNow() {
   q.day = n.day;
   q.hour = n.hour;
 }
+
+// zoom in for border images
+const selectedCamera = ref(null);
+const cameraDialog = ref(null);
+
+async function openCameraViewer(camera) {
+  selectedCamera.value = camera;
+
+  await nextTick();
+  cameraDialog.value?.focus();
+}
+
+function closeCameraViewer() {
+  selectedCamera.value = null;
+}
+
+function handleCameraKeydown(event) {
+  if (event.key === 'Escape') {
+    closeCameraViewer();
+  }
+}
 </script>
 
 <template>
@@ -121,21 +142,31 @@ function resetNow() {
 
       <section class="card card-pad" aria-label="Whole day">
         <h2 class="display display-sm">The whole day</h2>
-        <div class="bars" role="list">
-          <button
-            v-for="h in est?.hourly || []"
-            :key="h.hour"
-            type="button"
-            role="listitem"
-            class="bar"
-            :class="{ sel: h.hour === q.hour }"
-            :style="{ height: `${Math.max(6, h.score)}%`, background: LEVEL_COLOR[h.level] }"
-            :aria-label="`${hourLabel(h.hour)}: ${h.level}`"
-            :title="`${hourLabel(h.hour)} · ${h.level}`"
-            @click="q.hour = h.hour"
-          />
+        <p class="muted" style="font-size: 13px; margin-top: 6px;">Estimated congestion throughout the day (0–100)</p>
+        <div class="graph-legend">
+            <span><i style="background: var(--jungle)"></i> Low</span>
+            <span><i style="background: var(--mustard)"></i> Medium</span>
+            <span><i style="background: var(--ember)"></i> High</span>
         </div>
-        <div class="axis muted"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+
+        <div class="graph-container">
+            <span class="y-axis-label">Congestion score (0–100)</span>
+            <div class="bars" role="list">
+            <button
+                v-for="h in est?.hourly || []"
+                :key="h.hour"
+                type="button"
+                role="listitem"
+                class="bar"
+                :class="{ sel: h.hour === q.hour }"
+                :style="{ height: `${Math.max(6, h.score)}%`, background: LEVEL_COLOR[h.level] }"
+                :aria-label="`${hourLabel(h.hour)}: ${h.level}`"
+                :title="`${hourLabel(h.hour)} · ${h.level}`"
+                @click="q.hour = h.hour"
+            />
+            </div>
+        </div>
+        <div class="axis muted"><span>0000</span><span>0600</span><span>1200</span><span>1800</span><span>2300</span></div>
       </section>
     </div>
 
@@ -145,17 +176,51 @@ function resetNow() {
         <span v-if="cams" class="muted" style="font-size: 13px">Updated {{ timeAgo(cams.fetchedAt) }} · {{ cams.source }} · refreshes every minute</span>
       </div>
       <p v-if="camError" class="card-flat card-pad" role="status" style="margin-top: 12px">{{ camError }}</p>
+      <p class="muted" style="font-size: 12px; margin-top: 8px;">🔍 Click on a camera image to enlarge it</p>
       <div class="cam-grid">
         <figure v-for="c in cams?.cameras || []" :key="c.cameraId" class="card cam">
-          <img :src="c.imageUrl" :alt="`Live traffic camera: ${c.label}`" loading="lazy" />
+          <img :src="c.imageUrl" :alt="`Live traffic camera: ${c.label}`" loading="lazy" role="button" tabindex="0" @click="openCameraViewer(c)" @keydown.enter="openCameraViewer(c)" @keydown.space.prevent="openCameraViewer(c)"/>
           <figcaption>
             <strong>{{ c.label }}</strong>
             <span class="pill" :style="{ background: LEVEL_COLOR[c.estimate.level], color: c.estimate.level === 'Medium' ? 'var(--ink)' : 'var(--card)' }">usually {{ c.estimate.level }} now</span>
           </figcaption>
         </figure>
       </div>
-      <!-- TODO(team): optional — show GET /api/checkpoints/:id/snapshots as a "last few hours" strip -->
+    
     </section>
+
+    <!-- Fullscreen camera viewer -->
+        <div v-if="selectedCamera"
+            ref="cameraDialog"
+            class="camera-overlay"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="`Camera viewer: ${selectedCamera.label}`"
+            tabindex="-1"
+            @click.self="closeCameraViewer"
+            @keydown="handleCameraKeydown"
+            >
+            <button
+                type="button"
+                class="camera-close"
+                aria-label="Close camera viewer"
+                @click="closeCameraViewer"
+            >
+                ✕
+            </button>
+
+            <div class="camera-viewer-content">
+                <h3>{{ selectedCamera.label }}</h3>
+
+                <img
+                :src="selectedCamera.imageUrl"
+                :alt="`Enlarged traffic camera: ${selectedCamera.label}`"
+                />
+
+                <p>Live LTA traffic camera · refreshes every minute</p>
+            </div>
+        </div>
+
   </main>
 </template>
 
@@ -172,11 +237,31 @@ input[type='range'] { accent-color: var(--teal); min-height: 44px; }
 .bars { display: flex; align-items: flex-end; gap: 4px; height: 240px; margin-top: 18px; padding-bottom: 4px; border-bottom: 2px solid var(--ink); }
 .bar { flex: 1; min-width: 0; border: 1.5px solid var(--ink); border-bottom: 0; border-radius: 4px 4px 0 0; cursor: pointer; padding: 0; opacity: .75; }
 .bar.sel { opacity: 1; outline: 3px solid var(--ink); outline-offset: 1px; }
-.axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px; }
+.axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px; margin-left: 28px; }
 .cams { margin-top: 40px; }
-.cam-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 16px; }
+.cam-grid { display: grid;grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 20px; margin-top: 16px;}
 .cam { margin: 0; overflow: hidden; }
-.cam img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-bottom: 2px solid var(--ink); background: var(--mist); }
-.cam figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; }
+
+.cam img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; border-bottom: 2px solid var(--ink); background: var(--mist); }
+
+.cam figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; cursor: zoom-in; }
 @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+
+/* Fullscreen camera viewer */
+.camera-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; padding: 60px 24px; }
+.camera-viewer-content { width: 100%; max-width: 1200px; text-align: center; color: white; }
+.camera-viewer-content h3 { margin-bottom: 16px; color: white; }
+.camera-viewer-content img { display: block; width: 100%; max-height: 75vh; object-fit: contain; margin: auto; }
+.camera-viewer-content p { margin-top: 12px; font-size: 13px; color: #ddd; }
+.camera-close { position: absolute; top: 18px; right: 22px; background: none; border: none; color: white; font-size: 30px; cursor: pointer; }
+@media (max-width: 600px) {.camera-overlay { padding: 60px 12px; } .camera-viewer-content img { max-height: 65vh; } }
+
+.graph-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 13px; }
+.graph-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.graph-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.graph-container { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.graph-container .bars { flex: 1; min-width: 0; margin-top: 0; }
+.y-axis-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; color: var(--muted, #666); text-align: center; }
+.x-axis-label { text-align: center; margin-top: 8px; font-size: 12px; color: var(--muted, #666); }
 </style>
+

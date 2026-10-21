@@ -23,6 +23,14 @@ const props = defineProps({
 });
 const emit = defineEmits(['changed', 'error', 'edit', 'delete']);
 
+const ownershipLabel = computed(() => {
+  if (props.trip.myRole === 'owner') return '';
+  const owner = props.trip.members?.find((member) => member.id === props.trip.owner_id)
+    || props.trip.members?.find((member) => member.role === 'owner');
+  const name = owner?.name?.trim() || (owner?.username ? `@${owner.username}` : '');
+  return name ? `Owned by ${name}` : 'You’re a member of this trip';
+});
+
 const editable = computed(() => ['planning', 'on_the_road'].includes(props.trip.phase));
 const ended = computed(() => props.trip.phase === 'memory_box' || props.trip.phase === 'archived');
 const canTick = computed(() => props.trip.phase !== 'archived');
@@ -103,6 +111,7 @@ function move(group, idx, dir) {
         <div class="row" style="justify-content: space-between; align-items: center; flex-wrap: nowrap; gap: 8px">
           <h1 class="display display-lg" style="margin-top: 6px; overflow-wrap: anywhere" data-cy="trip-title">{{ trip.name }}</h1>
         </div>
+        <p v-if="ownershipLabel" class="ownership muted">{{ ownershipLabel }}</p>
         <p v-if="trip.mission" class="hand muted" style="margin: 6px 0 0; font-size: 24px">{{ trip.mission }}</p>
       </div>
       <div class="header-actions">
@@ -202,6 +211,7 @@ function move(group, idx, dir) {
 </template>
 
 <style scoped>
+.ownership { margin: 4px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .bucket { position: relative; border: 2px solid var(--ink); border-radius: 6px 16px 16px 6px; background: var(--card); box-shadow: 8px 8px 0 var(--ink); padding: 28px 24px 24px 40px; }
 .margin-line { position: absolute; top: 0; bottom: 0; left: 20px; width: 2px; background: #E2A08A; }
 .head { justify-content: space-between; align-items: flex-start; gap: 14px; }

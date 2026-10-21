@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed  } from 'vue';
 import { api, errorMessage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { initials } from '@/utils/format';
+import { useTripPresence } from '../../composables/useTripPresence';
 
 const props = defineProps({ trip: { type: Object, required: true } });
 const emit = defineEmits(['changed']);
@@ -16,6 +17,11 @@ const copied = ref(false);
 
 const inviteLink = computed(() => `${window.location.origin}/planner?join=${props.trip.invite_code}`);
 const isOwner = computed(() => props.trip.myRole === 'owner');
+const copyFailed = ref(false);
+const fallbackInput = ref(null);
+const tripIdRef = computed(()=> props.trip.id);
+const refMe= computed(() => auth.user);
+const {viewerIds } = useTripPresence(tripIdRef,refMe)
 
 async function invite() {
   const u = username.value.replace(/^@/, '').trim().toLowerCase();
@@ -34,12 +40,17 @@ async function invite() {
 }
 
 async function copyLink() {
+  copyFailed.value=false;
+
   try {
+    // throw new Error('test') // use to throw error to test validation 
     await navigator.clipboard.writeText(inviteLink.value);
     copied.value = true;
-    setTimeout(() => (copied.value = false), 2000);
+    setTimeout(()=> (copied.value = false), 3000)
+   
   } catch {
-    window.prompt('Copy this link', inviteLink.value); // TODO(team): replace with a nicer fallback
+    copyFailed.value= true;
+   setTimeout(() => fallbackInput.value?.select(),0)
   }
 }
 
@@ -57,17 +68,20 @@ async function newCode() {
     </div>
     <ul class="members">
       <li v-for="(m, i) in trip.members" :key="m.id">
-        <span class="avatar" :style="{ background: AVATAR_TINTS[i % AVATAR_TINTS.length] }" aria-hidden="true">{{ initials(m.name) }}</span>
+        <span class="avatar" :style="{ background: AVATAR_TINTS[i % AVATAR_TINTS.length] }"  :class="{ online: viewerIds.includes(m.id) }" aria-hidden="true">{{ initials(m.name) }}</span>
         <span class="name">{{ m.name }}<template v-if="m.id === auth.user?.id"> (you)</template></span>
       </li>
     </ul>
 
     <div class="tools">
-      <div class="row" style="gap: 8px">
+      <div class="row" style="gap: 8px; flex-wrap: wrap ">
         <span class="label">Invite code</span>
         <code class="code">{{ trip.invite_code }}</code>
         <button type="button" class="btn btn-sm" @click="copyLink">{{ copied ? 'Copied!' : 'Copy link' }}</button>
-        <button v-if="isOwner" type="button" class="btn btn-sm btn-ghost" title="Make a new code (old one stops working)" @click="newCode">↻</button>
+        <button v-if="isOwner" type="button" class="btn btn-sm btn-ghost"  @click="newCode">↻</button>
+        <input v-if="copyFailed" ref="fallbackInput" class="input" style="width: 220px" readonly :value="inviteLink" @click="$event.target.select()" aria-label="Invite link — select and copy"/>
+      <span v-if="copyFailed" class="hand muted" style="font-size: 13px">Error copying </span>
+      
       </div>
       <form class="row" style="gap: 8px" @submit.prevent="invite">
         <label class="label" for="invite-user">Invite</label>
@@ -84,6 +98,7 @@ async function newCode() {
 .members { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px 18px; }
 .members li { display: flex; align-items: center; gap: 8px; }
 .avatar { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 2px solid var(--ink); border-radius: 50%; font-size: 13px; font-weight: 800; }
+.avatar.online { box-shadow: 0 0 0 3px var(--jungle), 0 0 0 5px var(--sage); }
 .name { font-weight: 600; font-size: 15px; }
 .tools { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
 .label { font-size: 13px; font-weight: 700; }

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import WatcherView from '../views/WatcherView.vue';
+import PlaceTalesView from '../views/PlaceTalesView.vue';
 
 const routes = [
   {
@@ -34,10 +35,16 @@ const routes = [
   },
 
   {
-    path: "/planner/:tripId?",
+    path: "/planner",
     name: "planner",
     component: () => import("@/views/PlannerView.vue"),
-    meta: { requiresAuth: true, title: "Planner" },
+    meta: { requiresAuth: true, title: "Trips" },
+  },
+  {
+    path: "/planner/:tripId",
+    name: "trip-details",
+    component: () => import("@/views/PlannerDetailsView.vue"),
+    meta: { requiresAuth: true, title: "Trip details" },
   },
   {
     path: "/ledger",
@@ -45,7 +52,6 @@ const routes = [
     component: () => import("@/views/LedgerView.vue"),
     meta: { requiresAuth: true, title: "Ledger" },
   },
-
   {
     path: "/explorer",
     name: "explorer",
@@ -53,13 +59,32 @@ const routes = [
     meta: { title: "Explorer" },
   },
 
-  // watcher path
   {
     path: "/watcher",
     name: "watcher",
     component: WatcherView,
     meta: { title: "Watcher" },
   },
+
+  {
+  path: '/tales/place/:placeId',
+  name: 'place-tales',
+  component: PlaceTalesView,
+  },
+
+  {
+    path: '/tales/custom/:name',
+    name: 'custom-place-tales',
+    component: PlaceTalesView
+  },
+
+  {
+  path: "/archives/:tripId?",
+  name: "archives",
+  component: () => import("@/views/ArchivesView.vue"),
+  meta: { requiresAuth: true, title: "Archives" },
+  },
+
 ];
 
 const router = createRouter({
