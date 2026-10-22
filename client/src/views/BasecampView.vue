@@ -1,11 +1,12 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
+import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import { useTripsStore } from "@/stores/trips";
 import BasecampHouse from "@/components/basecamp/Basecamp.vue";
 import IdlingCar from "@/components/basecamp/IdlingCar.vue";
-
+import TripCover from "@/components/common/TripCover.vue";
 
 const auth = useAuthStore();
 const trips = useTripsStore();
@@ -16,8 +17,7 @@ const watcherSub = ref("Check the queue");
 const talesSub = ref("Read and share reviews");
 const ledgerSub = ref("Split costs in S$ and RM");
 const archivesSub = ref("Past trip scrapbooks");
-const explorerSub = ref('Find places by vibe');
-
+const explorerSub = "Live picks from Google Maps";
 
 const rooms = [
   {
@@ -59,6 +59,43 @@ const rooms = [
 ];
 
 const live = computed(() => trips.onTheRoad);
+
+onMounted(async () => {
+  await trips.fetch().catch(() => {});
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+
+  const [cong, posts, arch, bal] = await Promise.allSettled([
+    api.get("/checkpoints/woodlands/congestion", {
+      params: { direction: "to_jb" },
+    }),
+    api.get("/posts", { params: { limit: 50 } }),
+    api.get("/archives"),
+    trips.defaultTrip
+      ? api.get(`/trips/${trips.defaultTrip.id}/balances`)
+      : Promise.reject(),
+  ]);
+  if (cong.status === "fulfilled")
+    watcherSub.value = `Woodlands now: ${cong.value.data.selected.level}`;
+  if (posts.status === "fulfilled") {
+    const n = posts.value.data.items.filter(
+      (p) => p.created_at > weekAgo,
+    ).length;
+    talesSub.value = n
+      ? `${n} new tale${n === 1 ? "" : "s"} this week`
+      : "Be the first to share";
+  }
+  if (arch.status === "fulfilled") {
+    const { totalTrips, years } = arch.value.data;
+    archivesSub.value = totalTrips
+      ? `${totalTrips} trips · ${years.length} year${years.length === 1 ? "" : "s"}`
+      : "Empty for now";
+  }
+  if (bal.status === "fulfilled") {
+    const summary = bal.value.data.mySummary;
+    ledgerSub.value =
+      summary[0] || `All square · ${money(bal.value.data.totalSpent)} spent`;
+  }
+});
 </script>
 
 <template>
@@ -66,8 +103,7 @@ const live = computed(() => trips.onTheRoad);
     <section class="intro">
       <span class="tag-stamp">Your JB trip HQ</span>
       <h1 class="display display-xl" style="text-align: center;">
-        {{ auth.firstName ? `${auth.firstName}'s` : "Your" }}
-        <span class="accent">Basecamp.</span>
+        {{ auth.firstName || "Your" }}'s <span class="accent">Basecamp.</span>
       </h1>
     </section>
 
@@ -87,7 +123,10 @@ const live = computed(() => trips.onTheRoad);
         class="row"
         style="justify-content: space-between; align-items: baseline"
       >
-        <h2 class="display display-md" style="margin: auto;">Basecamp Navigation</h2>
+        <h2 class="display display-md">Room keys</h2>
+        <p class="hand muted" style="margin: 0">
+          same rooms, no knocking needed
+        </p>
       </div>
       <ul class="keys">
         <li v-for="r in rooms" :key="r.to">
