@@ -7,7 +7,7 @@ import { ref, computed, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import { api, errorMessage } from '@/lib/api';
 import { dateRange, dayLabel, longDate, hhmm } from '@/utils/format';
-import { VIBE_LABEL, PHASE_STAMP } from '@/utils/constants';
+import { PHASE_STAMP } from '@/utils/constants';
 import AddStopForm from './AddStopForm.vue';
 import TripActions from './TripActions.vue';
 import EditStopModal from './EditStopModal.vue';
@@ -179,7 +179,6 @@ function move(group, idx, dir) {
               />
             <div class="row stop-meta">
               <p class="title" :class="{ done: it.done }">{{ it.title }}</p>
-              <span v-if="it.vibe" class="pill">{{ VIBE_LABEL[it.vibe] }}</span>
               <span v-if="it.crossing" class="pill" style="background: var(--mist)">{{ it.crossing === 'tuas' ? 'Tuas' : 'Woodlands' }} {{ it.crossing_dir === 'to_sg' ? '→ SG' : '→ JB' }}</span>
             </div>
             <p v-if="!it.place && it.dwell_minutes != null" class="stay-duration">Stay · {{ it.dwell_minutes }} min</p>

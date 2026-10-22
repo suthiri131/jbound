@@ -128,7 +128,6 @@ export const tripsQuery = z.object({ include: z.enum(['active', 'all']).default(
 
 // ---------- itinerary ----------
 const stopFields = {
-  vibe: vibe.nullable().optional(),
   dwellMinutes: z.number().int().min(0).max(1440).nullable().optional(),
   lat: z.number().min(-90).max(90).nullable().optional(),
   lng: z.number().min(-180).max(180).nullable().optional(),

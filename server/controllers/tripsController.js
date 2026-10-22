@@ -81,7 +81,7 @@ export async function getTrip(req, res) {
     supabase.from('trip_members').select(`role, joined_at, user:profiles(${PROFILE})`).eq('trip_id', tripId),
     supabase
       .from('itinerary_items')
-      .select('id, title, day, time, position, notes, vibe, dwell_minutes, lat, lng, crossing, crossing_dir, done, place:places(id, name, lat, lng, vibes, photos)')
+      .select('id, title, day, time, position, notes, dwell_minutes, lat, lng, crossing, crossing_dir, done, place:places(id, name, lat, lng, vibes, photos)')
       .eq('trip_id', tripId)
       .order('day', { ascending: true, nullsFirst: true })
       .order('position', { ascending: true }),
