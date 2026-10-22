@@ -1,6 +1,7 @@
 <script setup>
 /**
- * Explorer: find places by vibe and pin them to a trip's bucket list.
+ * Explorer: find places by vibe and pin them to a trip's bucket list
+ * GET /api/places?vibes=&hiddenGem=&maxDistanceKm=&maxPrice=&checkpoint=&q=
  * GET /api/places/google/search?q=&vibe=&…  → live Google Places results (key stays on the server)
  * ?pinTo=<tripId> preselects the trip in the pin modal (from Planner "+ Add from Explorer").
  */
@@ -16,15 +17,16 @@ import ToastMessage from "@/components/common/ToastMessage.vue";
 const route = useRoute();
 const trips = useTripsStore();
 
-// Google search takes one vibe at a time, so `vibe` is a single id ('' = any).
 const filters = reactive({
-  vibe: "",
+  vibes: [],
   hiddenGem: false,
   maxDistanceKm: 40,
   maxPrice: "",
   checkpoint: "woodlands",
   q: "",
 });
+// 'jbound' = our curated + community places (database); 'google' = live Google Places search
+const source = ref(route.query.source === "google" ? "google" : "jbound");
 const places = ref([]);
 const loading = ref(false);
 const error = ref("");
@@ -54,7 +56,8 @@ const pinDates = computed(() => {
 });
 
 function toggleVibe(id) {
-  filters.vibe = filters.vibe === id ? "" : id;
+  const i = filters.vibes.indexOf(id);
+  i === -1 ? filters.vibes.push(id) : filters.vibes.splice(i, 1);
 }
 
 let debounce;
@@ -62,30 +65,41 @@ async function search() {
   loading.value = true;
   error.value = "";
   try {
-    const { data } = await api.get("/places/google/search", {
-      params: {
-        vibe: filters.vibe || undefined,
-        hiddenGem: filters.hiddenGem || undefined,
-        maxDistanceKm:
-          filters.maxDistanceKm < 60 ? filters.maxDistanceKm : undefined,
-        maxPrice: filters.maxPrice || undefined,
-        checkpoint: filters.checkpoint,
-        q: filters.q.trim() || undefined,
-      },
-    });
-    places.value = data;
+    const params = {
+      vibes: filters.vibes.join(",") || undefined,
+      hiddenGem: filters.hiddenGem || undefined,
+      maxDistanceKm:
+        filters.maxDistanceKm < 60 ? filters.maxDistanceKm : undefined,
+      maxPrice: filters.maxPrice || undefined,
+      checkpoint: filters.checkpoint,
+      q: filters.q.trim() || undefined,
+    };
+    if (source.value === "google") {
+      // Google search takes one vibe at a time; with several chips on, use the first.
+      const { data } = await api.get("/places/google/search", {
+        params: {
+          ...params,
+          vibes: undefined,
+          vibe: filters.vibes[0] || undefined,
+        },
+      });
+      places.value = data;
+    } else {
+      const { data } = await api.get("/places", { params });
+      places.value = data;
+    }
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
     loading.value = false;
   }
 }
-// Google is billed per request, so wait a little before searching while typing.
+// Google is billed per request, so wait a little longer before searching it while typing.
 watch(
-  filters,
+  [filters, source],
   () => {
     clearTimeout(debounce);
-    debounce = setTimeout(search, 600);
+    debounce = setTimeout(search, source.value === "google" ? 600 : 250);
   },
   { deep: true },
 );
@@ -93,7 +107,22 @@ watch(
 onMounted(async () => {
   search();
   await trips.fetch().catch(() => {});
+  // "+ Pin to trip" on a place page sends people here with ?pin=<googlePlaceId>
+  if (route.query.pin) {
+    try {
+      const { data } = await api.get(`/places/google/details/${encodeURIComponent(route.query.pin)}`);
+      openPin({ id: data.id, googlePlaceId: data.googlePlaceId, name: data.name });
+    } catch (err) {
+      toast.value = { message: errorMessage(err) };
+    }
+  }
 });
+
+/** Place page link. Google results have googlePlaceId; our own rows keep it in google_place_id. */
+const placeLink = (p) => {
+  const id = p.googlePlaceId || p.google_place_id;
+  return id ? `/explorer/place/${encodeURIComponent(id)}` : null;
+};
 
 function openPin(place) {
   pinning.value = place;
@@ -143,24 +172,44 @@ const price = (n) => (n ? "$".repeat(n) : "");
   <main class="container page">
     <span class="tag-stamp">Explorer</span>
     <h1 class="display display-lg" style="margin-top: 16px">
-      Find a place by vibe.
+      What's the vibe?
     </h1>
     <p class="lead">
       Pick the terrain, set how far you'll drive from the checkpoint, and pin
-      the good ones to a trip.
+      the good ones worth a trip
     </p>
 
     <section class="filters card-flat card-pad" aria-label="Filters">
-      <p class="muted" style="margin: 0 0 12px; font-size: 13px">
-        Live results from Google Maps · one vibe at a time
-      </p>
+      <div class="row" style="margin-bottom: 14px">
+        <div class="segmented" role="group" aria-label="Where to search">
+          <button
+            type="button"
+            :aria-pressed="source === 'jbound'"
+            data-cy="source-jbound"
+            @click="source = 'jbound'"
+          >
+            JBound's Handpicks 
+          </button>
+          <button
+            type="button"
+            :aria-pressed="source === 'google'"
+            data-cy="source-google"
+            @click="source = 'google'"
+          >
+            All Places
+          </button>
+        </div>
+        <span v-if="source === 'google'" class="muted" style="font-size: 13px"
+          >Live results from Google Maps</span
+        >
+      </div>
       <div class="row" role="group" aria-label="Vibes">
         <button
           v-for="v in VIBES"
           :key="v.id"
           type="button"
           class="chip"
-          :aria-pressed="filters.vibe === v.id"
+          :aria-pressed="filters.vibes.includes(v.id)"
           :data-cy="`vibe-${v.id}`"
           @click="toggleVibe(v.id)"
         >
@@ -222,7 +271,9 @@ const price = (n) => (n ? "$".repeat(n) : "");
     </p>
     <!-- Google requires attribution when showing Places data outside a Google map.
          TODO(team): also show each photo's authorAttributions (see Places API photo policies). -->
-    <p v-if="places.length" class="attribution">Places data © Google</p>
+    <p v-if="source === 'google' && places.length" class="attribution">
+      Places data © Google
+    </p>
     <p v-if="error" class="error-text" role="alert">{{ error }}</p>
 
     <ul class="grid">
@@ -263,7 +314,8 @@ const price = (n) => (n ? "$".repeat(n) : "");
             >
           </div>
           <h2 class="display display-sm" style="margin-top: 8px">
-            {{ p.name }}
+            <RouterLink v-if="placeLink(p)" :to="placeLink(p)" class="place-link" data-cy="place-link">{{ p.name }}</RouterLink>
+            <template v-else>{{ p.name }}</template>
           </h2>
           <p v-if="p.rating" class="meta">
             <strong>★ {{ p.rating }}</strong>
@@ -286,6 +338,7 @@ const price = (n) => (n ? "$".repeat(n) : "");
           </blockquote>
           <div class="spacer" />
           <div class="row" style="gap: 8px; margin-top: 12px">
+            <RouterLink v-if="placeLink(p)" :to="placeLink(p)" class="btn btn-sm btn-ghost">View place</RouterLink>
             <button
               type="button"
               class="btn btn-primary btn-sm"
@@ -438,4 +491,6 @@ input[type="range"] {
   font-size: 12px;
   color: var(--ink-mute);
 }
+.place-link { color: inherit; text-decoration: none; }
+.place-link:hover { text-decoration: underline; }
 </style>

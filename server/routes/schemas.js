@@ -72,6 +72,8 @@ export const googlePhotoQuery = z.object({
   name: z.string().regex(/^places\/[^/]+\/photos\/[^/]+$/, 'Invalid photo name'),
   w: z.coerce.number().int().min(100).max(1600).default(600),
 });
+// Google place ids look like "ChIJ…": letters, digits, - and _
+export const googlePlaceParam = z.object({ googlePlaceId: z.string().regex(/^[A-Za-z0-9_-]{5,300}$/, 'Invalid Google place id') });
 export const googleImportBody = z.object({ googlePlaceId: z.string().trim().min(5).max(300) });
 export const autocompleteQuery = z.object({ q: z.string().trim().min(1).max(60) });
 export const createPlaceBody = z.object({
@@ -89,6 +91,7 @@ export const createPlaceBody = z.object({
 export const postsQuery = z.object({
   vibe: vibe.optional(),
   placeId: uuid.optional(),
+  customPlaceName: z.string().trim().min(1).max(100).optional(),
   scope: z.enum(['everyone', 'friends']).default('everyone'),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   before: z.string().datetime({ offset: true }).optional(),
@@ -96,6 +99,7 @@ export const postsQuery = z.object({
 export const createPostBody = z.object({
   caption: z.string().trim().min(1).max(2000),
   placeId: uuid.optional(),
+  customPlaceName: z.string().trim().min(1).max(100).optional(),
   vibe: vibe.optional(),
   images: imageUrls,
 });
@@ -202,6 +206,7 @@ export const snapshotsQuery = z.object({ limit: z.coerce.number().int().min(1).m
 export const rateQuery = z.object({
   from: z.string().toUpperCase().pipe(currency).default('SGD'),
   to: z.string().toUpperCase().pipe(currency).default('MYR'),
+  date: z.union([z.literal('latest'), z.string().regex(/^\d{4}-\d{2}-\d{2}$/)]).optional(),
 });
 export const convertQuery = rateQuery.extend({ amount: z.coerce.number().nonnegative().max(1_000_000) });
 export const routingBody = z.object({

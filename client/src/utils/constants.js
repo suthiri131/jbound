@@ -1,5 +1,4 @@
 export const VIBES = [
-  { id: "cozy", label: "Cozy" },
   { id: "adventure", label: "Adventurous" },
   { id: "culture", label: "Regional" },
   { id: "eating", label: "Foodie" },

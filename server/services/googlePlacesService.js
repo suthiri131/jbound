@@ -1,6 +1,4 @@
 /**
- * Google Places API (New) — https://developers.google.com/maps/documentation/places/web-service/op-overview
- *
  * Used by the Explorer to search real JB places, and to import a Google place into our
  * `places` table when someone pins it to a trip (so itinerary items can reference it).
  *
@@ -45,7 +43,7 @@ const JB_CENTRE = { latitude: 1.4927, longitude: 103.7414 };
  */
 export const TYPE_TO_VIBE = {
   eating: ['restaurant', 'cafe', 'bakery', 'food', 'meal_takeaway', 'coffee_shop', 'dessert_shop', 'food_court', 'bar', 'night_club'],
-  culture: ['museum', 'art_gallery', 'hindu_temple', 'church', 'mosque', 'place_of_worship', 'historical_landmark', 'cultural_landmark', 'monument', 'library', 'tourist_attraction'],
+  culture: ['art_museum', 'museum', 'art_gallery', 'art_studio', 'hindu_temple', 'church', 'mosque', 'place_of_worship', 'historical_landmark', 'cultural_landmark', 'monument', 'library', 'tourist_attraction', 'sculpture'],
   activities: ['shopping_mall', 'amusement_park', 'water_park', 'spa', 'bowling_alley', 'movie_theater', 'market', 'store', 'aquarium', 'tourist_attraction'],
   adventure: ['park', 'national_park', 'hiking_area', 'beach', 'zoo', 'campground', 'marina', 'state_park', 'garden'],
 };
@@ -149,5 +147,62 @@ export async function getPhotoUri(photoName, width = 600) {
     const data = await fetchJson(url, { headers: { 'X-Goog-Api-Key': config.google.placesKey } });
     if (!data.photoUri) throw new HttpError(502, 'Google did not return a photo');
     return data.photoUri;
+  });
+}
+
+const PROFILE_MASK = [
+  ...FIELDS,
+  'shortFormattedAddress',
+  'regularOpeningHours',
+  'nationalPhoneNumber',
+  'websiteUri',
+  'reviews',
+].join(',');
+
+const MAX_PROFILE_PHOTOS = 10;
+
+/** Google review → what the place page shows. Google requires the author's name + link to be displayed. */
+export function mapGoogleReview(r) {
+  return {
+    author: r.authorAttribution?.displayName ?? 'Google user',
+    authorUrl: r.authorAttribution?.uri ?? null,
+    authorPhoto: r.authorAttribution?.photoUri ?? null,
+    rating: r.rating ?? null,
+    text: r.text?.text ?? r.originalText?.text ?? '',
+    when: r.relativePublishTimeDescription ?? null,
+    publishedAt: r.publishTime ?? null,
+  };
+}
+
+
+/** Everything the place page needs about one Google place. */
+export async function getPlaceProfile(googlePlaceId) {
+  return cached(`gplaces:profile:${googlePlaceId}`, SEARCH_CACHE_MS, async () => {
+    const data = await fetchJson(`${config.google.placesBaseUrl}/places/${encodeURIComponent(googlePlaceId)}`, {
+      headers: headers(PROFILE_MASK),
+      timeoutMs: 10000,
+    });
+    const base = mapGooglePlace(data);
+    return {
+      ...base,
+      shortAddress: data.shortFormattedAddress ?? null,
+      // "chinese_restaurant" → "Chinese restaurant"
+      kind: data.primaryType ? data.primaryType.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : null,
+      types: data.types ?? [],
+      primaryType: data.primaryType ?? null,
+      // bigger photos for the hero + gallery (the cards use 600px)
+      photos: (data.photos || []).slice(0, MAX_PROFILE_PHOTOS).map((ph) => ({
+        url: photoProxyPath(ph.name, 1200),
+        thumb: photoProxyPath(ph.name, 400),
+        // Google asks apps to credit the photographer
+        credit: ph.authorAttributions?.[0]?.displayName ?? null,
+        creditUrl: ph.authorAttributions?.[0]?.uri ?? null,
+      })),
+      openNow: data.regularOpeningHours?.openNow ?? null,
+      hours: data.regularOpeningHours?.weekdayDescriptions ?? [],
+      phone: data.nationalPhoneNumber ?? null,
+      website: data.websiteUri ?? null,
+      reviews: (data.reviews || []).map(mapGoogleReview),
+    };
   });
 }

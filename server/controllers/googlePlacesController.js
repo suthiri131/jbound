@@ -1,6 +1,6 @@
 import { supabase } from '../db/supabase.js';
 import { check } from '../utils/httpError.js';
-import { searchPlaces, getPlaceDetails, getPhotoUri } from '../services/googlePlacesService.js';
+import { searchPlaces, getPlaceDetails, getPhotoUri, getPlaceProfile } from '../services/googlePlacesService.js';
 import { distanceFromCheckpointKm } from '../services/logic/geo.js';
 
 // Fewer Google reviews than this → shown as a hidden gem
@@ -34,6 +34,27 @@ export async function googleSearch(req, res) {
 
   res.json(list);
 }
+
+// GET /api/places/google/details/:googlePlaceId
+// Place page with Google details, reviews, our own ID and 'Tales' count
+export async function googlePlaceDetails(req, res) {
+  const { googlePlaceId } = req.valid.params;
+  const [ profile, {data: ours }] = await Promise.all([
+    getPlaceProfile(googlePlaceId),
+    supabase.from('places').select('id, posts{count').eq('google_place_id', googlePlaceId).maybeSingle(),
+  ]);
+  res.json({
+    ...profile,
+    id: ours?.id ?? null,
+    postCount: ours?.posts?.[0]?.count ?? 0,
+    distanceKm: {
+      woodlands: Math.round(distanceFromCheckpointKm(profile, 'woodlands') * 10 ) / 10,
+      tuas: Math.round(distanceFromCheckpointKm(profile, 'tuas') * 10 ) / 10,
+      
+    }
+  })
+}
+
 
 /** GET /api/places/google/photo?name=places/…/photos/…&w=600 → 302 to a short-lived Google image URL */
 export async function googlePhoto(req, res) {

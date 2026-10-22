@@ -45,6 +45,12 @@ const routes = [
     component: () => import("@/views/ExplorerView.vue"),
     meta: { title: "Explorer" },
   },
+  {
+    path: "/explorer/place/:googlePlaceId",
+    name: "place",
+    component: () => import("@/views/PlaceView.vue"),
+    meta: { title: "Place" },
+  }
 ];
 
 const router = createRouter({
