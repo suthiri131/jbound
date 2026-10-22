@@ -8,6 +8,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useTripsStore } from '@/stores/trips';
 import { api, errorMessage } from '@/lib/api';
 import TripCover from '@/components/common/TripCover.vue';
+import Pagination from '@/components/common/Pagination.vue';
 import TripModal from './TripModal.vue';
 
 const props = defineProps({
@@ -149,11 +150,7 @@ function created(trip) {
 
     </div>
 
-    <nav v-if="!loading && !loadError && total > 0 && totalPages > 1" class="pagination" aria-label="Trip pages">
-      <button type="button" class="btn btn-sm" :disabled="page === 1" @click="setPage(page - 1)">Previous</button>
-      <span class="muted" role="status">Page {{ page }} of {{ totalPages }}</span>
-      <button type="button" class="btn btn-sm" :disabled="page === totalPages" @click="setPage(page + 1)">Next</button>
-    </nav>
+    <Pagination v-if="!loading && !loadError && total > 0" class="trip-pagination" :page="page" :total-pages="totalPages" label="Trip pages" @page-change="setPage" />
 
     <TripModal v-if="showNew" @close="showNew = false" @created="created" />
   </section>
@@ -161,7 +158,7 @@ function created(trip) {
 
 <style scoped>
 .satchel { display: flex; flex-direction: column; gap: 28px; }
-.pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: auto; }
+.trip-pagination { margin-top: auto; }
 .head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 24px; }
 .heading h1 { display: flex; align-items: center; gap: 14px; margin: 8px 0 10px; }
 .heading-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
