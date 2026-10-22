@@ -1,7 +1,7 @@
 import { supabase } from '../db/supabase.js';
 import { badRequest, check, conflict, forbidden, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
-import { tripPhase, sgToday } from '../services/logic/memoryWindow.js';
+import { tripPhase, sgToday, addDays, MEMORY_WINDOW_DAYS } from '../services/logic/memoryWindow.js';
 
 const PROFILE = 'id, username, name, avatar_url';
 const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
@@ -24,8 +24,50 @@ async function withPhase(trip, today = sgToday()) {
   return { ...trip, ...info };
 }
 
+/** Planner-only database pagination. The unpaged endpoint remains available to shared selectors. */
+async function listTripPage(req, res) {
+  const { page: requestedPage, pageSize, search, phase } = req.valid.query;
+  const today = sgToday();
+  const cutoff = addDays(today, -MEMORY_WINDOW_DAYS);
+  function query(head = false) {
+    let q = supabase.from('trips')
+      .select(`${TRIP_FIELDS}, membership:trip_members!inner(user_id, role), members:trip_members(count), items:itinerary_items(done)`, { count: 'exact', head })
+      .eq('membership.user_id', req.user.id)
+      .is('archived_at', null);
+    // Match the computed phase before counting and limiting rows.
+    if (phase === 'planning') q = q.or(`start_date.is.null,start_date.gt.${today}`);
+    else if (phase === 'on_the_road') q = q.lte('start_date', today)
+      .or(`end_date.gte.${today},and(end_date.is.null,start_date.eq.${today})`);
+    else if (phase === 'memory_box') q = q.lte('start_date', today)
+      .or(`and(end_date.lt.${today},end_date.gte.${cutoff}),and(end_date.is.null,start_date.lt.${today},start_date.gte.${cutoff})`);
+    else q = q.or(`start_date.is.null,start_date.gt.${today},end_date.gte.${cutoff},and(end_date.is.null,start_date.gte.${cutoff})`);
+    if (search) {
+      // Escape LIKE wildcards so searches retain literal substring behaviour.
+      const literal = search.replace(/[\\%_]/g, '\\$&');
+      q = q.ilike('name', `%${literal}%`);
+    }
+    return q.order('created_at', { ascending: false }).order('id', { ascending: true });
+  }
+  const countResult = await query(true);
+  check(countResult);
+  const total = countResult.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const result = total ? await query().range((page - 1) * pageSize, page * pageSize - 1) : { data: [] };
+  check(result);
+  const items = result.data.map(({ membership, members, items, ...trip }) => ({
+    ...trip, ...tripPhase(trip, today),
+    myRole: membership[0]?.role,
+    memberCount: members?.[0]?.count ?? 0,
+    stopCount: items?.length ?? 0,
+    doneCount: items?.filter((item) => item.done).length ?? 0,
+  }));
+  res.json({ items, page, pageSize, total, totalPages });
+}
+
 /** GET /api/trips?include=active|all — "active" = the satchel (everything not archived) */
 export async function listMyTrips(req, res) {
+  if (req.valid.query.page !== undefined) return listTripPage(req, res);
   const rows = check(
     await supabase
       .from('trip_members')
@@ -45,7 +87,7 @@ export async function listMyTrips(req, res) {
       })),
   );
   const list = req.valid.query.include === 'all' ? trips : trips.filter((t) => t.phase !== 'archived');
-  list.sort((a, b) => (a.start_date || '9999').localeCompare(b.start_date || '9999'));
+  list.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
   res.json(list);
 }
 

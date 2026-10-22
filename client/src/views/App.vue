@@ -27,6 +27,8 @@ const showChrome = computed(() => route.name && !['login', 'sign-in', 'sign-up']
 </template>
 
 <style scoped>
+.app { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+.app > :deep(.container) { width: 100%; }
 .setup-banner { margin: 0; padding: 10px 16px; background: var(--clay); border-bottom: 2px solid var(--ink); font-size: 14px; text-align: center; }
-.footer { border-top: 2px solid var(--ink); padding: 26px 24px; text-align: center; color: var(--ink-soft); font-size: 24px; }
+.footer { margin-top: auto; border-top: 2px solid var(--ink); padding: 26px 24px; text-align: center; color: var(--ink-soft); font-size: 24px; }
 </style>

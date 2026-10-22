@@ -3,10 +3,10 @@
  * Trip grid for the Planner: one cover per trip,
  * "+ New trip" (opens TripModal) and a join-by-code box.
  */
-import { computed, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useTripsStore } from '@/stores/trips';
-import { errorMessage } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
 import TripCover from '@/components/common/TripCover.vue';
 import TripModal from './TripModal.vue';
 
@@ -18,13 +18,58 @@ const props = defineProps({
 
 const trips = useTripsStore();
 const router = useRouter();
-const filteredTrips = computed(() => trips.trips.filter((trip) =>
-  (!props.phase || trip.phase === props.phase) &&
-  trip.name.toLowerCase().includes(props.search.trim().toLowerCase())
-));
+const route = useRoute();
+const pageSize = 12;
+const pageTrips = ref([]);
+const total = ref(0);
+const totalPages = ref(1);
+const loading = ref(true);
+const loadError = ref('');
+const requestedPage = computed(() => {
+  const value = Number(route.query.page);
+  return Number.isSafeInteger(value) && value > 0 && value <= 1000000 ? value : 1;
+});
+const page = ref(requestedPage.value);
+function setPage(value) {
+  const query = { ...route.query };
+  if (value > 1) query.page = String(value);
+  else delete query.page;
+  return router.replace({ query });
+}
+let requestVersion = 0;
+onBeforeUnmount(() => { requestVersion++; });
+async function loadPage() {
+  const version = ++requestVersion;
+  loading.value = true;
+  loadError.value = '';
+  try {
+    const { data } = await api.get('/trips', { params: {
+      page: requestedPage.value, pageSize,
+      search: props.search.trim() || undefined, phase: props.phase || undefined,
+    } });
+    if (version !== requestVersion) return;
+    if (Array.isArray(data)) {
+      throw new Error('The server is still using the old trip API. Restart the backend to load pagination, then retry.');
+    }
+    if (!Array.isArray(data?.items) || !Number.isInteger(data.total) || !Number.isInteger(data.page) || !Number.isInteger(data.totalPages)) {
+      throw new Error('The server returned an invalid trip page. Please retry.');
+    }
+    pageTrips.value = data.items;
+    total.value = data.total;
+    totalPages.value = data.totalPages;
+    page.value = data.page;
+    if (route.query.page !== undefined && String(data.page) !== route.query.page) await setPage(data.page);
+  } catch (err) {
+    if (version === requestVersion) loadError.value = errorMessage(err, 'Could not load your trips');
+  } finally {
+    if (version === requestVersion) loading.value = false;
+  }
+}
+watch(() => [route.query.page, props.search, props.phase], loadPage, { immediate: true });
 const listQuery = computed(() => ({
   ...(props.search ? { search: props.search } : {}),
   ...(props.phase ? { phase: props.phase } : {}),
+  ...(page.value > 1 ? { page: String(page.value) } : {}),
 }));
 const showNew = ref(props.startOpen);
 watch(() => props.startOpen, (v) => { if (v) showNew.value = true; });
@@ -57,7 +102,10 @@ function created(trip) {
   <section class="satchel" aria-label="Your trips">
     <header class="head">
       <div class="heading">
-        <h1 class="display display-md">Your trips</h1>
+        <div class="heading-title">
+          <h1 class="display display-md">Your trips</h1>
+          <span v-if="!loading && !loadError" class="trip-count muted" role="status">· {{ total }} {{ search.trim() || phase ? 'matching ' : '' }}trip{{ total === 1 ? '' : 's' }}</span>
+        </div>
         <p class="muted">Your next adventure starts here. Pick a trip to keep planning.</p>
       </div>
       <div class="actions">
@@ -78,15 +126,19 @@ function created(trip) {
 
     </div>
 
-    <p v-if="trips.loading" role="status" class="muted">Loading your trips…</p>
-    <div v-else-if="!trips.trips.length" class="empty">
+    <p v-if="loading" role="status" class="muted">Loading your trips…</p>
+    <div v-else-if="loadError" role="alert">
+      <p class="error-text">{{ loadError }}</p>
+      <button type="button" class="btn btn-sm" @click="loadPage">Retry loading trips</button>
+    </div>
+    <div v-else-if="!total && !search && !phase" class="empty">
       <h3 class="display display-sm">No trips yet</h3>
       <p>Create a new trip above, or join a friend's crew with an invite code.</p>
     </div>
-    <p v-else-if="!filteredTrips.length" role="status">No trips match your search and status filter.</p>
+    <p v-else-if="!total" role="status">No trips match your search and status filter.</p>
     <div v-else class="shelf">
       <RouterLink
-        v-for="t in filteredTrips"
+        v-for="t in pageTrips"
         :key="t.id"
         :to="{ path: `/planner/${t.id}`, query: listQuery }"
         class="slot"
@@ -97,14 +149,23 @@ function created(trip) {
 
     </div>
 
+    <nav v-if="!loading && !loadError && total > 0 && totalPages > 1" class="pagination" aria-label="Trip pages">
+      <button type="button" class="btn btn-sm" :disabled="page === 1" @click="setPage(page - 1)">Previous</button>
+      <span class="muted" role="status">Page {{ page }} of {{ totalPages }}</span>
+      <button type="button" class="btn btn-sm" :disabled="page === totalPages" @click="setPage(page + 1)">Next</button>
+    </nav>
+
     <TripModal v-if="showNew" @close="showNew = false" @created="created" />
   </section>
 </template>
 
 <style scoped>
 .satchel { display: flex; flex-direction: column; gap: 28px; }
+.pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: auto; }
 .head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 24px; }
 .heading h1 { display: flex; align-items: center; gap: 14px; margin: 8px 0 10px; }
+.heading-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
+.trip-count { font-size: 15px; }
 .heading p { margin: 0; font-size: 15px; }
 .actions { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
 .actions .btn { min-height: 46px; white-space: nowrap; }
