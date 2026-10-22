@@ -90,7 +90,7 @@ export const postsQuery = z.object({
   vibe: vibe.optional(),
   placeId: uuid.optional(),
   customPlaceName: z.string().trim().min(1).max(100).optional(),
-  scope: z.enum(['everyone', 'friends']).default('everyone'),
+  scope: z.enum(['everyone', 'friends', 'mine']).default('everyone'),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   before: z.string().datetime({ offset: true }).optional(),
 });
