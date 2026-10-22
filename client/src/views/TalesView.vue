@@ -136,10 +136,11 @@ async function toggleComments(p) {
     }
 
     const { data } = await api.get(`/posts/${p.id}/comments`);
+    console.table(data.map(c => ({ id: c.id, text: JSON.stringify(c.text), length: c.text?.length })));
 
     openComments[p.id] = {
-      items: data.items,
-      nextCursor: data.nextCursor,
+      items: Array.isArray(data) ? data : data.items ?? [],
+      nextCursor: Array.isArray(data) ? null : data.nextCursor ?? null,
       loading: false
     };
 
@@ -148,6 +149,7 @@ async function toggleComments(p) {
     alert(errorMessage(error));
   }
 }
+
 
 async function loadMoreComments(p) {
   const state = openComments[p.id];
@@ -185,9 +187,37 @@ async function comment(p) {
 
 async function removePost(p) {
   if (!window.confirm('Delete this tale?')) return;
-  await api.delete(`/posts/${p.id}`);
-  feed.items = feed.items.filter((x) => x.id !== p.id);
+
+  try {
+    await api.delete(`/posts/${p.id}`);
+
+    feed.items = feed.items.filter(x => x.id !== p.id);
+
+    delete openComments[p.id];
+  } catch (error) {
+    alert(errorMessage(error));
+  }
 }
+
+
+async function removeComment(p, c) {
+  if (!window.confirm('Delete this comment?')) return;
+
+  try {
+    await api.delete(`/posts/${p.id}/comments/${c.id}`);
+
+    openComments[p.id].items =
+      openComments[p.id].items.filter(
+        comment => comment.id !== c.id
+      );
+
+    p.commentCount = Math.max(0, p.commentCount - 1);
+
+  } catch (error) {
+    alert(errorMessage(error));
+  }
+}
+
 
 // click-to-enlarge section
 const selectedPhotos = ref([]);
@@ -273,6 +303,7 @@ function handlePhotoKeydown(event) {
           <div class="segmented" role="group" aria-label="Whose tales">
             <button type="button" :aria-pressed="scope === 'everyone'" @click="scope = 'everyone'">Everyone</button>
             <button type="button" :aria-pressed="scope === 'friends'" @click="scope = 'friends'">My crews</button>
+            <button type="button" :aria-pressed="scope === 'mine'" @click="scope = 'mine'">My Tales</button>
           </div>
           <select v-model="vibe" class="select" style="width: auto" aria-label="Filter by vibe">
             <option value="">All vibes</option>
@@ -335,19 +366,20 @@ function handlePhotoKeydown(event) {
           <div v-if="openComments[p.id]" class="comments">
 
             <!-- Display loaded comments -->
-            <p v-for="c in openComments[p.id].items" :key="c.id">
-              <strong>{{ c.author?.name }}</strong> {{ c.text }}
-            </p>
+              <div v-for="c in openComments[p.id]?.items ?? []" :key="c.id" class="comment-row">
+                <span><strong>{{ c.author?.name }}:</strong> {{ c.text }}</span>
+                <button v-if="c.author?.id === auth.user?.id" type="button" class="btn btn-sm btn-ghost" @click="removeComment(p, c)">Delete</button>
+              </div>
 
             <!-- Load more comments -->
             <button
-              v-if="openComments[p.id].nextCursor"
+              v-if="openComments[p.id]?.nextCursor"
               type="button"
               class="btn btn-ghost"
-              :disabled="openComments[p.id].loading"
+              :disabled="openComments[p.id]?.loading"
               @click="loadMoreComments(p)"
             >
-              {{ openComments[p.id].loading ? 'Loading...' : 'Load More Comments' }}
+              {{ openComments[p.id]?.loading ? 'Loading...' : 'Load More Comments' }}
             </button>
 
             <!-- Add a comment -->
@@ -368,7 +400,6 @@ function handlePhotoKeydown(event) {
                 Post
               </button>
             </form>
-
           </div>
 
         </article>
@@ -446,8 +477,6 @@ function handlePhotoKeydown(event) {
 .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
 .photos img { width: 100%; height: 140px; object-fit: contain; border: 2px solid var(--ink); border-radius: 8px; }
 .liked { background: var(--clay); }
-.comments { margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); font-size: 14px; }
-.comments p { margin: 0 0 8px; }
 @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .composer { position: static; } }
 
 /* Make Tale photos clickable */
@@ -465,4 +494,20 @@ function handlePhotoKeydown(event) {
 .photo-counter { position: absolute; bottom: 20px; color: white; font-size: 14px; }
 /* Mobile responsiveness */
 @media (max-width: 600px) { .photo-overlay { padding: 60px 12px; } .photo-prev, .photo-next { width: 36px; height: 36px; font-size: 20px; } }
+
+
+.comments { margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); font-size: 14px; }
+.comment-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.comment-item p { margin: 0; padding: 0; flex: 1; min-width: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.comment-item button { flex-shrink: 0; }
+.comment-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 2px 0; }
+.comment-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.comment-row button { flex-shrink: 0; min-height: 0; height: auto; padding: 2px 8px; line-height: 1.2; font-size: 12px; }
+
+
+
+
+.segmented { display: inline-flex; align-items: stretch; }
+.segmented button + button { border-left: 2px solid var(--ink); }
 </style>
+

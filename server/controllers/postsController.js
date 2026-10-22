@@ -72,6 +72,14 @@ export async function listPosts(req, res) {
         
     }
 
+    if (scope === 'mine') {
+        if (!req.user) {
+            throw unauthorized('Sign in to see your own tales');
+        }
+
+        query = query.eq('user_id', req.user.id);
+    }
+
     const posts = check(await query)
     const liked = await likedSet(req.user?.id, posts.map((p) => p.id))
     const items = posts.map((p) => shape(p, liked))
