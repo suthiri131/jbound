@@ -19,6 +19,8 @@ const router = useRouter();
 const trips = useTripsStore();
 
 const tripId = computed(() => route.params.tripId || null);
+const crewNotice = ref("");
+watch(tripId, () => { crewNotice.value = ""; });
 const trip = ref(null);
 const loading = ref(true);
 const editing = ref(false);
@@ -192,8 +194,9 @@ const canMemories = computed(() =>
   <span :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: isLive ? 'var(--jungle)' : 'var(--brick)' }" aria-hidden="true"></span>
   {{ isLive ? 'Live' : 'Offline — syncing every 15s' }}
 </p>
+      <p v-if="crewNotice" class="hand" role="status">{{ crewNotice }}</p>
 
-      <CrewBar :trip="trip" @changed="loadTrip" />
+      <CrewBar :trip="trip" @changed="loadTrip" @joined="crewNotice = $event" />
 
       <div class="split">
         <BucketList

@@ -1,6 +1,6 @@
 <script setup>
 /**
- * The trip's bucket list: stops grouped by day, tick boxes, times, drag/arrow reorder.
+ * The trip's bucket list: stops grouped by day, tick boxes, times, drag reorder.
  * Every change goes straight to the API; the parent reloads (and Realtime syncs the crew).
  */
 import { ref, computed, watch } from 'vue';
@@ -93,12 +93,6 @@ function saveOrder() {
   if (items.length) run(() => api.put(`/trips/${props.trip.id}/itinerary/order`, { items }));
 }
 
-function move(group, idx, dir) {
-  const next = idx + dir;
-  if (next < 0 || next >= group.items.length) return;
-  [group.items[idx], group.items[next]] = [group.items[next], group.items[idx]];
-  saveOrder();
-}
 </script>
 
 <template>
@@ -153,7 +147,7 @@ function move(group, idx, dir) {
         :disabled="!editable"
         @end="saveOrder"
       >
-        <li v-for="(it, idx) in g.items" :key="it.id" class="stop" data-cy="stop">
+        <li v-for="it in g.items" :key="it.id" class="stop" data-cy="stop">
           <span v-if="editable" class="grip" title="Drag to reorder" aria-hidden="true">⠿</span>
           <button
             type="button"
@@ -188,10 +182,13 @@ function move(group, idx, dir) {
           </div>
 
           <div v-if="editable" class="stop-actions">
-            <button v-if="!it.place" type="button" class="edit-stop" :aria-label="`Edit ${it.title}`" @click="editTarget = it">Edit</button>
-            <button type="button" class="arrow" :aria-label="`Move ${it.title} up`" :disabled="idx === 0" @click="move(g, idx, -1)">▲</button>
-            <button type="button" class="arrow" :aria-label="`Move ${it.title} down`" :disabled="idx === g.items.length - 1" @click="move(g, idx, 1)">▼</button>
-            <button type="button" class="arrow" :aria-label="`Remove ${it.title}`" title="Remove stop" @click="remove(it)">✕</button>
+            <button v-if="!it.place" type="button" class="edit-stop" :aria-label="`Edit ${it.title}`" title="Edit stop" @click="editTarget = it">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-7" />
+                <path d="m16 3 5 5M10 17l-4 1 1-4L18 3a2.12 2.12 0 0 1 3 3Z" />
+              </svg>
+            </button>
+            <button type="button" class="remove-stop" :aria-label="`Remove ${it.title}`" title="Remove stop" @click="remove(it)">✕</button>
           </div>
         </li>
       </VueDraggable>
@@ -204,7 +201,7 @@ function move(group, idx, dir) {
         <RouterLink :to="`/explorer?pinTo=${trip.id}`" class="btn btn-primary">+ Add from Explorer</RouterLink>
       </div>
       <AddStopForm :key="trip.id" :trip="trip" :dates="tripDates" @added="emit('changed')" @error="emit('error', $event)" />
-      <p class="muted" style="margin: 14px 0 0; font-size: 13px">Drag the ⠿ handle or use the arrows to reorder. The map redraws the route in the new order.</p>
+      <p class="muted" style="margin: 14px 0 0; font-size: 13px">Drag the ⠿ handle to reorder. The map redraws the route in the new order.</p>
     </template>
   </section>
 </template>
@@ -243,8 +240,7 @@ function move(group, idx, dir) {
 .badge.tight { background: var(--sand); }
 .badge.over { background: var(--clay); border-color: var(--brick); color: #7A2D14; }
 .stop-actions { flex: none; display: flex; flex-direction: column; gap: 4px; }
-.edit-stop { min-height: 30px; padding: 0 5px; border: 0; border-radius: 5px; background: transparent; color: var(--jungle); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-.arrow { width: 44px; height: 34px; border: 1.5px solid var(--line-strong); border-radius: 8px; background: transparent; color: var(--ink); cursor: pointer; }
-.arrow:disabled { opacity: .35; cursor: default; }
+.edit-stop { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 34px; padding: 0; border: 1.5px solid var(--line-strong); border-radius: 8px; background: transparent; color: var(--jungle); cursor: pointer; }
+.remove-stop { width: 44px; height: 34px; border: 1.5px solid var(--line-strong); border-radius: 8px; background: transparent; color: var(--ink); cursor: pointer; }
 .empty { margin: 10px 0 0; font-size: 14px; }
 </style>
