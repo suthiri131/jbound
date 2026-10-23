@@ -13,7 +13,10 @@ export function getDrivingRoute(coordinates) {
       Authorization: config.ors.apiKey,
       Accept: 'application/geo+json',
     },
-    body: { coordinates },
+    body: {
+      coordinates,
+      radiuses: coordinates.map(() => 1000),
+    },
     timeoutMs: 15000,
   });
 }

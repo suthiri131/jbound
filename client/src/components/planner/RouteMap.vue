@@ -158,8 +158,8 @@ const caption = computed(() => {
           From
           <select v-model="fromCheckpoint" class="select" style="width: auto; min-height: 40px">
             <option value="">first stop</option>
-            <option value="woodlands">Woodlands (SG)</option>
-            <option value="tuas">Tuas (SG)</option>
+            <option value="woodlands">Woodlands Causeway approach</option>
+            <option value="tuas">Tuas Second Link approach</option>
           </select>
         </label>
         <slot name="actions" />

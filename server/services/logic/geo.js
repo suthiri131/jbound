@@ -23,6 +23,17 @@ export const CHECKPOINTS = {
   },
 };
 
+export function getCheckpointRouteStart(checkpointId) {
+  const checkpoint = CHECKPOINTS[checkpointId];
+  if (!checkpoint) return null;
+
+  return {
+    id: `checkpoint-${checkpoint.id}`,
+    title: `${checkpoint.name} approach`,
+    ...(checkpointId === 'woodlands' ? checkpoint.sgSide : checkpoint.jbSide),
+  };
+}
+
 /** Great-circle distance in km. */
 export function haversineKm(a, b) {
   const R = 6371;

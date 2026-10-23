@@ -8,10 +8,12 @@ import { getDrivingRoute } from '../services/ors.js';
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = config.ors.apiKey;
+const originalBaseUrl = config.ors.baseUrl;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
   config.ors.apiKey = originalApiKey;
+  config.ors.baseUrl = originalBaseUrl;
 });
 
 async function postRoute(body) {
@@ -60,6 +62,7 @@ test('route requests require two valid longitude/latitude pairs', () => {
 
 test('driving route requests call ORS with the server key and return GeoJSON', async () => {
   config.ors.apiKey = 'test-ors-key';
+  config.ors.baseUrl = 'https://api.openrouteservice.org';
   const coordinates = [[103.8198, 1.3521], [103.7618, 1.4927]];
   const geojson = { type: 'FeatureCollection', features: [] };
   let request;
@@ -77,7 +80,10 @@ test('driving route requests call ORS with the server key and return GeoJSON', a
   assert.equal(request.options.method, 'POST');
   assert.equal(request.options.headers.Authorization, 'test-ors-key');
   assert.equal(request.options.headers.Accept, 'application/geo+json');
-  assert.deepEqual(JSON.parse(request.options.body), { coordinates });
+  assert.deepEqual(JSON.parse(request.options.body), {
+    coordinates,
+    radiuses: [1000, 1000],
+  });
 });
 
 test('POST /api/routes returns ORS GeoJSON and rejects invalid coordinates', async () => {

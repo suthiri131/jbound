@@ -1,8 +1,10 @@
 import { supabase } from '../db/supabase.js';
 import { badRequest, check, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
-import { getDrivingRoute } from '../services/routingService.js';
-import { CHECKPOINTS } from '../services/logic/geo.js';
+import {
+  getDrivingRoute,
+} from '../services/routingService.js';
+import { getCheckpointRouteStart } from '../services/logic/geo.js';
 import { validateStopDay } from '../utils/stopDay.js';
 import { assessTrip } from '../services/logic/feasibility.js';
 
@@ -206,10 +208,12 @@ export async function getDayRoute(req, res) {
   const stops = items
     .map((i) => ({ id: i.id, title: i.title, lat: i.lat ?? i.place?.lat, lng: i.lng ?? i.place?.lng }))
     .filter((s) => s.lat != null && s.lng != null);
-  if (fromCheckpoint) {
-    const cp = CHECKPOINTS[fromCheckpoint];
-    stops.unshift({ id: `checkpoint-${cp.id}`, title: cp.name, ...cp.sgSide });
+  if (stops.length < (fromCheckpoint ? 1 : 2)) {
+    return res.json({ stops, route: null, message: 'Add at least 2 stops with a location to see a route' });
   }
-  if (stops.length < 2) return res.json({ stops, route: null, message: 'Add at least 2 stops with a location to see a route' });
-  res.json({ stops, route: await getDrivingRoute(stops) });
+  if (fromCheckpoint) stops.unshift(getCheckpointRouteStart(fromCheckpoint));
+  res.json({
+    stops,
+    route: await getDrivingRoute(stops, { checkpointId: fromCheckpoint }),
+  });
 }
