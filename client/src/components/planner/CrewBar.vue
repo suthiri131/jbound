@@ -6,7 +6,7 @@ import { initials } from '@/utils/format';
 import { useTripPresence } from '../../composables/useTripPresence';
 
 const props = defineProps({ trip: { type: Object, required: true } });
-const emit = defineEmits(['changed']);
+const emit = defineEmits(['changed', 'joined']);
 const auth = useAuthStore();
 
 const AVATAR_TINTS = ['#E0A43B', '#DCE5CF', '#F2CDB8', '#CFE0D9', '#F6E2B3'];
@@ -29,7 +29,7 @@ async function invite() {
   msg.value = '';
   try {
     const { data } = await api.post(`/trips/${props.trip.id}/members`, { username: u });
-    msg.value = `${data.name} joined the crew`;
+    emit('joined', `${data.name} joined the crew`);
     isError.value = false;
     username.value = '';
     emit('changed');

@@ -2,7 +2,6 @@
 /** Scribble a stop - add a custom stop (no place from the Explorer). */
 import { reactive, ref, watch, onBeforeUnmount } from "vue";
 import { api, errorMessage } from "@/lib/api";
-import { VIBES } from "@/utils/constants";
 import { dayLabel } from "@/utils/format";
 
 const props = defineProps({
@@ -77,7 +76,6 @@ const blank = () => ({
   title: "",
   day: props.dates[0] || "",
   time: "",
-  vibe: "eating",
   notes: "",
   dwellMinutes: "",
   crossing: "",
@@ -87,7 +85,6 @@ const form = reactive(props.item ? {
   title: props.item.title,
   day: props.item.day || "",
   time: props.item.time?.slice(0, 5) || "",
-  vibe: props.item.vibe || "",
   notes: props.item.notes || "",
   dwellMinutes: props.item.dwell_minutes ?? "",
   crossing: props.item.crossing || "",
@@ -120,7 +117,6 @@ async function submit() {
       title: form.title,
       day: form.day || empty,
       time: form.time || empty,
-      vibe: form.vibe || empty,
       notes: form.notes || empty,
       dwellMinutes:
         form.dwellMinutes === "" ? empty : Number(form.dwellMinutes),
@@ -228,15 +224,6 @@ async function submit() {
               class="input"
               data-cy="stop-time-new"
           /></label>
-          <label class="field"
-            >Vibe
-            <select v-model="form.vibe" class="select">
-              <option v-if="item" value="">No vibe</option>
-              <option v-for="v in VIBES" :key="v.id" :value="v.id">
-                {{ v.label }}
-              </option>
-            </select>
-          </label>
           <label class="field"
             >Stay (min)<input
               v-model="form.dwellMinutes"

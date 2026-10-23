@@ -16,18 +16,10 @@ const phase = computed(() => phases.includes(route.query.phase) ? route.query.ph
 
 function setFilter(key, value) {
   const query = { ...route.query };
+  delete query.page;
   if (value) query[key] = value;
   else delete query[key];
   router.replace({ path: '/planner', query });
-}
-
-async function load() {
-  loadError.value = '';
-  try {
-    await trips.fetch(true);
-  } catch (err) {
-    loadError.value = errorMessage(err, 'Could not load your trips');
-  }
 }
 
 watch(() => route.query.join, async (code) => {
@@ -44,14 +36,12 @@ watch(() => route.query.join, async (code) => {
   }
 }, { immediate: true });
 
-load();
 </script>
 
 <template>
   <main class="container page trips-page">
     <div v-if="loadError" class="card-flat card-pad" role="alert">
       <p class="error-text">{{ loadError }}</p>
-      <button class="btn btn-dark btn-sm" type="button" @click="load">Retry loading trips</button>
     </div>
     <p v-if="joining" class="muted" role="status">Joining your crew…</p>
     <SatchelBar :search="search" :phase="phase" :start-open="Boolean(route.query.new)">
@@ -77,7 +67,8 @@ load();
 </template>
 
 <style scoped>
-.trips-page { display: flex; flex-direction: column; gap: 20px; padding-top: 36px; }
+.trips-page { display: flex; flex: 1; flex-direction: column; gap: 20px; padding-top: 36px; padding-bottom: 32px; }
+.trips-page > :deep(.satchel) { flex: 1; }
 .filters { display: flex; flex: 2 1 440px; min-width: 0; align-items: center; gap: 12px; }
 .filters .field:first-child { flex: 1 1 240px; min-width: 0; }
 .filters .field:last-child { flex: 0 0 170px; }

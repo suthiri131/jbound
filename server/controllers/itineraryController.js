@@ -9,7 +9,7 @@ import { validateStopDay } from '../utils/stopDay.js';
 import { assessTrip } from '../services/logic/feasibility.js';
 
 const ITEM_FIELDS =
-  'id, trip_id, title, day, time, position, notes, vibe, dwell_minutes, lat, lng, crossing, crossing_dir, done, done_at, created_at, place:places(id, name, lat, lng, vibes, photos)';
+  'id, trip_id, title, day, time, position, notes, dwell_minutes, lat, lng, crossing, crossing_dir, done, done_at, created_at, place:places(id, name, lat, lng, vibes, photos)';
 
 function dayLabel(trip, day) {
   if (!day) return 'the itinerary';
@@ -27,7 +27,7 @@ async function nextPosition(tripId, day) {
 
 /** camelCase body → snake_case columns for the optional stop fields */
 function stopPatch(body) {
-  const map = { vibe: 'vibe', dwellMinutes: 'dwell_minutes', lat: 'lat', lng: 'lng', crossing: 'crossing', crossingDir: 'crossing_dir' };
+  const map = { dwellMinutes: 'dwell_minutes', lat: 'lat', lng: 'lng', crossing: 'crossing', crossingDir: 'crossing_dir' };
   const patch = {};
   for (const [k, col] of Object.entries(map)) if (body[k] !== undefined) patch[col] = body[k];
   return patch;
@@ -49,16 +49,14 @@ export async function listItems(req, res) {
   res.json(await listOrdered(req.params.tripId));
 }
 
-/** POST /api/trips/:tripId/itinerary  { placeId? | title?, day?, time?, notes?, vibe?, dwellMinutes?, lat?, lng?, crossing?, crossingDir? } */
+/** POST /api/trips/:tripId/itinerary  { placeId? | title?, day?, time?, notes?, dwellMinutes?, lat?, lng?, crossing?, crossingDir? } */
 export async function addItem(req, res) {
   const { placeId, title, day, time, notes } = req.valid.body;
   validateStopDay(req.trip, day);
   let finalTitle = title;
-  let vibe = req.valid.body.vibe;
   if (placeId) {
-    const place = check(await supabase.from('places').select('name, vibes').eq('id', placeId).single(), 'Place not found');
+    const place = check(await supabase.from('places').select('name').eq('id', placeId).single(), 'Place not found');
     finalTitle = title || place.name;
-    vibe = vibe ?? place.vibes?.[0] ?? null;
   }
   if (!finalTitle) throw badRequest('Provide a placeId or a title');
 
@@ -73,7 +71,6 @@ export async function addItem(req, res) {
         time: time ?? null,
         notes: notes ?? null,
         ...stopPatch(req.valid.body),
-        vibe: vibe ?? null,
         position: await nextPosition(req.params.tripId, day),
         created_by: req.user.id,
       })
@@ -182,7 +179,7 @@ export async function getFeasibility(req, res) {
       id: it.id,
       title: it.title,
       time: it.time,
-      vibe: it.vibe,
+      vibe: it.place?.vibes?.[0],
       dwellMinutes: it.dwell_minutes,
       lat: it.lat ?? it.place?.lat ?? null,
       lng: it.lng ?? it.place?.lng ?? null,

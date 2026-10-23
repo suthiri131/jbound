@@ -1,7 +1,6 @@
 <script setup>
 /**
- * Explorer: find places by vibe and pin them to a trip's bucket list
- * GET /api/places?vibes=&hiddenGem=&maxDistanceKm=&maxPrice=&checkpoint=&q=
+ * Explorer: find places by vibe and pin them to a trip's bucket list.
  * GET /api/places/google/search?q=&vibe=&…  → live Google Places results (key stays on the server)
  * ?pinTo=<tripId> preselects the trip in the pin modal (from Planner "+ Add from Explorer").
  */
@@ -17,16 +16,15 @@ import ToastMessage from "@/components/common/ToastMessage.vue";
 const route = useRoute();
 const trips = useTripsStore();
 
+// Google search takes one vibe at a time, so `vibe` is a single id ('' = any).
 const filters = reactive({
-  vibes: [],
+  vibe: "",
   hiddenGem: false,
   maxDistanceKm: 40,
   maxPrice: "",
   checkpoint: "woodlands",
   q: "",
 });
-// 'jbound' = our curated + community places (database); 'google' = live Google Places search
-const source = ref(route.query.source === "google" ? "google" : "jbound");
 const places = ref([]);
 const loading = ref(false);
 const error = ref("");
@@ -56,8 +54,7 @@ const pinDates = computed(() => {
 });
 
 function toggleVibe(id) {
-  const i = filters.vibes.indexOf(id);
-  i === -1 ? filters.vibes.push(id) : filters.vibes.splice(i, 1);
+  filters.vibe = filters.vibe === id ? "" : id;
 }
 
 let debounce;
@@ -65,41 +62,30 @@ async function search() {
   loading.value = true;
   error.value = "";
   try {
-    const params = {
-      vibes: filters.vibes.join(",") || undefined,
-      hiddenGem: filters.hiddenGem || undefined,
-      maxDistanceKm:
-        filters.maxDistanceKm < 60 ? filters.maxDistanceKm : undefined,
-      maxPrice: filters.maxPrice || undefined,
-      checkpoint: filters.checkpoint,
-      q: filters.q.trim() || undefined,
-    };
-    if (source.value === "google") {
-      // Google search takes one vibe at a time; with several chips on, use the first.
-      const { data } = await api.get("/places/google/search", {
-        params: {
-          ...params,
-          vibes: undefined,
-          vibe: filters.vibes[0] || undefined,
-        },
-      });
-      places.value = data;
-    } else {
-      const { data } = await api.get("/places", { params });
-      places.value = data;
-    }
+    const { data } = await api.get("/places/google/search", {
+      params: {
+        vibe: filters.vibe || undefined,
+        hiddenGem: filters.hiddenGem || undefined,
+        maxDistanceKm:
+          filters.maxDistanceKm < 60 ? filters.maxDistanceKm : undefined,
+        maxPrice: filters.maxPrice || undefined,
+        checkpoint: filters.checkpoint,
+        q: filters.q.trim() || undefined,
+      },
+    });
+    places.value = data;
   } catch (err) {
     error.value = errorMessage(err);
   } finally {
     loading.value = false;
   }
 }
-// Google is billed per request, so wait a little longer before searching it while typing.
+// Google is billed per request, so wait a little before searching while typing.
 watch(
-  [filters, source],
+  filters,
   () => {
     clearTimeout(debounce);
-    debounce = setTimeout(search, source.value === "google" ? 600 : 250);
+    debounce = setTimeout(search, 600);
   },
   { deep: true },
 );
@@ -165,36 +151,16 @@ const price = (n) => (n ? "$".repeat(n) : "");
     </p>
 
     <section class="filters card-flat card-pad" aria-label="Filters">
-      <div class="row" style="margin-bottom: 14px">
-        <div class="segmented" role="group" aria-label="Where to search">
-          <button
-            type="button"
-            :aria-pressed="source === 'jbound'"
-            data-cy="source-jbound"
-            @click="source = 'jbound'"
-          >
-            JBound picks
-          </button>
-          <button
-            type="button"
-            :aria-pressed="source === 'google'"
-            data-cy="source-google"
-            @click="source = 'google'"
-          >
-            Google Places
-          </button>
-        </div>
-        <span v-if="source === 'google'" class="muted" style="font-size: 13px"
-          >Live results from Google Maps · one vibe at a time</span
-        >
-      </div>
+      <p class="muted" style="margin: 0 0 12px; font-size: 13px">
+        Live results from Google Maps · one vibe at a time
+      </p>
       <div class="row" role="group" aria-label="Vibes">
         <button
           v-for="v in VIBES"
           :key="v.id"
           type="button"
           class="chip"
-          :aria-pressed="filters.vibes.includes(v.id)"
+          :aria-pressed="filters.vibe === v.id"
           :data-cy="`vibe-${v.id}`"
           @click="toggleVibe(v.id)"
         >
@@ -256,9 +222,7 @@ const price = (n) => (n ? "$".repeat(n) : "");
     </p>
     <!-- Google requires attribution when showing Places data outside a Google map.
          TODO(team): also show each photo's authorAttributions (see Places API photo policies). -->
-    <p v-if="source === 'google' && places.length" class="attribution">
-      Places data © Google
-    </p>
+    <p v-if="places.length" class="attribution">Places data © Google</p>
     <p v-if="error" class="error-text" role="alert">{{ error }}</p>
 
     <ul class="grid">
