@@ -136,10 +136,13 @@ async function toggleComments(p) {
     }
 
     const { data } = await api.get(`/posts/${p.id}/comments`);
-    console.table(data.map(c => ({ id: c.id, text: JSON.stringify(c.text), length: c.text?.length })));
+
+    const items = Array.isArray(data) ? data : data.items ?? [];
+
+    console.table(items.map(c => ({ id: c.id, text: JSON.stringify(c.text), length: c.text?.length })));
 
     openComments[p.id] = {
-      items: Array.isArray(data) ? data : data.items ?? [],
+      items: items,
       nextCursor: Array.isArray(data) ? null : data.nextCursor ?? null,
       loading: false
     };
