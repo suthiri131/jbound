@@ -104,6 +104,7 @@ async function logout() {
             <p class="menu-name">{{ auth.profile?.name }}</p>
             <p v-if="auth.profile?.username" class="menu-meta">@{{ auth.profile.username }}</p>
             <p v-if="auth.user?.email" class="menu-meta">{{ auth.user.email }}</p>
+            <RouterLink to="/profile" class="btn btn-sm menu-link" role="menuitem">Profile</RouterLink>
             <button type="button" class="btn btn-sm menu-out" role="menuitem" @click="logout">Sign out</button>
           </div>
         </div>
@@ -218,6 +219,7 @@ async function logout() {
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
+.menu-link,
 .menu-out {
   width: 100%;
   margin-top: 12px;

@@ -45,6 +45,20 @@ const routes = [
     component: () => import("@/views/ExplorerView.vue"),
     meta: { title: "Explorer" },
   },
+
+  {
+    path: "/profile",
+    name: "profile",
+    component: () => import("@/views/ProfileView.vue"),
+    meta: { requiresAuth: true, title: "Profile" },
+  },
+  // public on purpose: this is where people land right after their account is gone
+  {
+    path: "/account-deleted",
+    name: "account-deleted",
+    component: () => import("@/views/AccountDeletedView.vue"),
+    meta: { title: "Account deleted" },
+  },
 ];
 
 const router = createRouter({

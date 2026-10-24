@@ -1,5 +1,7 @@
 import { createAnonClient, supabase } from '../db/supabase.js';
-import { HttpError, conflict, unauthorized } from '../utils/httpError.js';
+import { HttpError, check, conflict, forbidden, unauthorized } from '../utils/httpError.js';
+import { displayName, postSystemMessage } from '../services/systemMessages.js';
+import { removeUserFiles } from '../services/storageService.js';
 
 const PROFILE_COLUMNS = 'id, username, name, avatar_url';
 
@@ -135,4 +137,58 @@ export async function me(req, res) {
   // req.user only holds { id, email }; the sign-up metadata (first/last name) lives on the auth user.
   const { data } = await supabase.auth.admin.getUserById(req.user.id);
   res.json({ user: req.user, profile: withNames(profile, data?.user) });
+}
+
+// POST /api/auth/delete-account  { password }
+export async function deleteAccount(req, res) {
+  const { id, email } = req.user;
+  const { password } = req.valid.body;
+
+  // 1. Re-check the password. 403, not 401: the client signs people out on any 401, and this session is fine.
+  const reauth = await createAnonClient().auth.signInWithPassword({ email, password });
+  if (reauth.error || !reauth.data.session) {
+    if (reauth.error?.status === 429) throw new HttpError(429, 'Too many attempts. Please wait a minute and try again.');
+    throw forbidden('That password is not correct.');
+  }
+
+  // 2. Deleting the auth user cascades through the database: trips.owner_id is ON DELETE CASCADE, so an owner
+  //    who leaves would wipe the trip (itinerary, memories, ...) for everyone else in it. Same rule as the
+  //    trips API ("the owner cannot leave; delete the trip instead"): sort those trips out first.
+  const owned = check(await supabase.from('trips').select('id, name').eq('owner_id', id));
+  if (owned.length) {
+    const others = check(
+      await supabase.from('trip_members').select('trip_id').in('trip_id', owned.map((t) => t.id)).neq('user_id', id),
+    );
+    const shared = new Set(others.map((row) => row.trip_id));
+    const blocking = owned.filter((t) => shared.has(t.id));
+    if (blocking.length) {
+      throw new HttpError(
+        409,
+        'You still own trips that other people are in. Delete those trips, or remove the other members, then try again.',
+        { trips: blocking.map(({ id: tripId, name }) => ({ id: tripId, name })) },
+      );
+    }
+  }
+
+  // 3. Remember what we need for the clean-up; it is gone once the account is.
+  const name = await displayName(id);
+  const memberships = check(await supabase.from('trip_members').select('trip_id, role').eq('user_id', id));
+  const tripIds = memberships.map((m) => m.trip_id);
+  const leftTripIds = memberships.filter((m) => m.role !== 'owner').map((m) => m.trip_id);
+
+  // 4. Delete the auth user. profiles (and, via it, their tales, memories, memberships and any trip only they
+  //    were in) are removed by the database cascade; their messages stay, with the author cleared.
+  const deleted = await supabase.auth.admin.deleteUser(id);
+  if (deleted.error) {
+    console.error('[deleteAccount] deleteUser failed:', deleted.error.message);
+    throw new HttpError(500, 'We could not delete your account. Please try again.');
+  }
+
+  // 5. Best-effort tidy-up: tell the crews they left, and remove uploaded files. Neither can fail the request.
+  await Promise.allSettled([
+    ...leftTripIds.map((tripId) => postSystemMessage(tripId, `${name} left the crew`)),
+    removeUserFiles(id, tripIds),
+  ]);
+
+  res.json({ deleted: true });
 }

@@ -41,6 +41,10 @@ export const signupBody = z.object({
   lastName: z.string().trim().min(1, 'Last name is required').max(30, 'Last name is too long'),
 });
 export const loginBody = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1) });
+// Deleting an account re-checks the password, so a session left open on a shared computer cannot erase it.
+export const deleteAccountBody = z.object({
+  password: z.string({ required_error: 'Enter your password to confirm' }).min(1, 'Enter your password to confirm').max(200),
+});
 export const refreshBody = z.object({ refresh_token: z.string().min(1) });
 export const userSearchQuery = z.object({ q: z.string().trim().min(1).max(30) });
 export const updateMeBody = z

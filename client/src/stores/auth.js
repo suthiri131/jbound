@@ -66,6 +66,16 @@ export const useAuthStore = defineStore('auth', {
       const { data } = await api.post('/auth/signup', form);
       await this.applySession(data);
     },
+    /**
+     * Permanently deletes the signed-in account (the API re-checks the password and throws if it cannot).
+     * `beforeSignOut` lets the page move to a public screen first; otherwise the auth guard would bounce the
+     * person to /sign-in the moment they are signed out of a protected page.
+     */
+    async deleteAccount(password, beforeSignOut) {
+      await api.post('/auth/delete-account', { password });
+      await beforeSignOut?.();
+      await this.logout(); // the account is gone, so wipe the stored session and cached trips
+    },
     async logout() {
       this.setUser(null); // also clears the trips store (setUser sees the account change)
       if (!hasSupabase) return;
