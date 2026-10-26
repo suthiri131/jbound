@@ -112,25 +112,28 @@ function draw() {
 
   const path = (result.value?.route?.latlngs || []).map(([lat, lng]) => ({ lat, lng }));
   if (path.length) {
-    lines.push(new gm.Polyline({ map, path, strokeColor: '#3C2A21', strokeOpacity: 0.2, strokeWeight: 8 }));
+    // navigation-style route: a dark rust casing under a solid rust line, with white chevrons for direction
+    lines.push(new gm.Polyline({ map, path, strokeColor: '#6B2611', strokeOpacity: 1, strokeWeight: 9, zIndex: 1, clickable: false }));
     lines.push(
       new gm.Polyline({
         map,
         path,
-        strokeOpacity: 0,
+        strokeColor: '#9E3B1B',
+        strokeOpacity: 1,
+        strokeWeight: 6,
+        zIndex: 2,
+        clickable: false,
         icons: [
-          { icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#3C2A21', scale: 2.5 }, offset: '0', repeat: '12px' },
           {
             icon: {
-              path: gm.SymbolPath.FORWARD_CLOSED_ARROW,
-              fillColor: '#3C2A21',
-              fillOpacity: 1,
-              strokeColor: '#3C2A21',
+              path: gm.SymbolPath.FORWARD_OPEN_ARROW,
+              strokeColor: '#FFFFFF',
               strokeOpacity: 1,
-              scale: 3,
+              strokeWeight: 2,
+              scale: 1.6,
             },
-            offset: '50px',
-            repeat: '110px',
+            offset: '40px',
+            repeat: '90px',
           },
         ],
       }),

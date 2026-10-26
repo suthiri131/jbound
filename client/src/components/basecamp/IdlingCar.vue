@@ -277,6 +277,12 @@ onBeforeUnmount(() => clearTimeout(timer));
   transform: rotate(-3deg);
   transition: opacity 0.2s;
 }
+/* on a phone it runs into the Trips button */
+@media (max-width: 600px) {
+  .hint {
+    display: none;
+  }
+}
 .planner-link {
   position: absolute;
   right: 3%;

@@ -58,6 +58,10 @@ button { font: inherit; }
 /* ---------- layout ---------- */
 .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
 .page { padding: 28px 0 80px; }
+/* .page zeroes .container's side padding, so give phones and small tablets a gutter back */
+@media (max-width: 768px) {
+  .page { padding-right: 16px; padding-left: 16px; }
+}
 .stack { display: flex; flex-direction: column; gap: 20px; }
 .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 .spacer { flex: 1; }

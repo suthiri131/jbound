@@ -17,7 +17,8 @@ let loader;
 export async function loadGoogleMaps() {
   if (!hasGoogleMaps) throw new Error('VITE_GOOGLE_MAPS_API_KEY is not set');
   loader ||= new Loader({ apiKey, version: 'weekly', region: 'SG', language: 'en' });
-  const [{ Map, Polyline, InfoWindow, SymbolPath }, { AdvancedMarkerElement }, { LatLngBounds }] = await Promise.all([
+  // SymbolPath lives in 'core', not 'maps'
+  const [{ Map, Polyline, InfoWindow }, { AdvancedMarkerElement }, { LatLngBounds, SymbolPath }] = await Promise.all([
     loader.importLibrary('maps'),
     loader.importLibrary('marker'),
     loader.importLibrary('core'),

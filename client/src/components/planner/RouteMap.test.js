@@ -71,7 +71,7 @@ beforeEach(() => {
         this.closeCalls = (this.closeCalls || 0) + 1;
       }
     },
-    SymbolPath: { FORWARD_CLOSED_ARROW: 'forward-closed-arrow' },
+    SymbolPath: { FORWARD_CLOSED_ARROW: 'forward-closed-arrow', FORWARD_OPEN_ARROW: 'forward-open-arrow' },
   });
   api.get.mockResolvedValue({
     data: {
@@ -102,10 +102,13 @@ describe('RouteMap itinerary', () => {
     expect(wrapper.text()).toContain('Drive · 3 min');
     expect(wrapper.text()).toContain('Stop buffers · 55 min');
 
-    const arrow = maps.polylines[1].options.icons.find(
-      ({ icon }) => icon.path === 'forward-closed-arrow',
-    );
-    expect(arrow).toMatchObject({ offset: '50px', repeat: '110px' });
+    // a solid route line on a darker casing, with direction chevrons on top
+    const [casing, route] = maps.polylines.slice(-2);
+    expect(casing.options).toMatchObject({ strokeColor: '#6B2611', strokeOpacity: 1, strokeWeight: 9 });
+    expect(route.options).toMatchObject({ strokeColor: '#9E3B1B', strokeOpacity: 1, strokeWeight: 6 });
+    expect(route.options.zIndex).toBeGreaterThan(casing.options.zIndex);
+    const arrow = route.options.icons.find(({ icon }) => icon.path === 'forward-open-arrow');
+    expect(arrow).toMatchObject({ offset: '40px', repeat: '90px' });
 
     maps.markers[1].content.dispatchEvent(new Event('mouseenter'));
     expect(maps.infoWindows[0].content.textContent).toContain('Leg 1: 3 min driving (2.5 km)');
