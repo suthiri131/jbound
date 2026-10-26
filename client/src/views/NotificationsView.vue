@@ -67,9 +67,10 @@ function openTrip(item) {
   const dest = item.trip.phase === 'archived' ? `/archives/${item.trip.id}` : `/planner/${item.trip.id}`;
   router.push(dest);
 }
-
-onMounted(load);
-
+onMounted(() => {
+  load();
+  loadInvites();
+})
 const invites = ref([]);
 
 async function loadInvites() {

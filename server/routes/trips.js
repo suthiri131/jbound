@@ -39,7 +39,7 @@ const member = [validate({ params: s.tripParam }), requireTripMember];
 const memberWith = (params) => [validate({ params }), requireTripMember];
 r.get("/invites", trips.listMyInvites);
 r.post("/:tripId/invites/accept", trips.acceptInvite);
-r.post("/:tripId/invites/reject", trips.declineInvite);
+r.post("/:tripId/invites/decline", trips.declineInvite);
 r.get("/:tripId", member, trips.getTrip);
 r.patch(
   "/:tripId",
