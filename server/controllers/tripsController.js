@@ -6,8 +6,8 @@ import { tripPhase, sgToday, addDays, MEMORY_WINDOW_DAYS } from '../services/log
 const PROFILE = 'id, username, name, avatar_url';
 const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
 
-async function addMember(tripId, userId, role = 'member') {
-  const { error } = await supabase.from('trip_members').insert({ trip_id: tripId, user_id: userId, role });
+async function addMember(tripId, userId, role = 'member' , status = 'accepted') {
+  const { error } = await supabase.from('trip_members').insert({ trip_id: tripId, user_id: userId, role, status });
   if (error?.code === '23505') throw conflict('Already a member of this trip');
   if (error) throw new Error(error.message);
 }
@@ -120,7 +120,7 @@ export async function getTrip(req, res) {
   const tripId = req.params.tripId;
   const [trip, members, itinerary] = await Promise.all([
     supabase.from('trips').select(TRIP_FIELDS).eq('id', tripId).single(),
-    supabase.from('trip_members').select(`role, joined_at, user:profiles(${PROFILE})`).eq('trip_id', tripId),
+    supabase.from('trip_members').select(`role, status,joined_at, user:profiles(${PROFILE})`).eq('trip_id', tripId),
     supabase
       .from('itinerary_items')
       .select('id, title, day, time, position, notes, dwell_minutes, lat, lng, crossing, crossing_dir, done, place:places(id, name, lat, lng, vibes, photos)')
@@ -179,7 +179,7 @@ export async function inviteMember(req, res) {
     await supabase.from('profiles').select(PROFILE).eq('username', req.valid.body.username).single(),
     'No user with that username',
   );
-  await addMember(req.params.tripId, profile.id);
+  await addMember(req.params.tripId, profile.id, 'member', 'pending');
   await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} added ${profile.name} to the crew`);
   res.status(201).json(profile);
 }
@@ -226,3 +226,50 @@ export async function regenerateInviteCode(req, res) {
   );
   res.json(data);
 }
+
+/** GET /api/trips/invites  Trips where the current user has a pending invite */
+ export async function listMyInvites(req,res) {
+  const rows = check(
+    await supabase
+    .from('trip_members')
+    .select(`trip:trips(${TRIP_FIELDS})`)
+    .eq('user_id',req.user.id)
+    .eq('status','pending'),
+
+  );
+  res.json(rows.filter((r) => r.trip).map((r) => r.trip))
+ }
+
+
+ /** POST /api/trips/:tripID/invite/accept */
+ export async function acceptInvite(req,res) {
+  const {data, error } = await supabase
+  .from('trip_members')
+  .update({status: 'accepted'})
+  .eq('trip_id', req.params.tripId)
+  .eq('status', 'pending')
+  .select('role')
+  .maybeSingle();
+  
+  if (error) throw new Error(error.message)
+  if (!data) throw notFound('No pending invites found!');
+  await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} Joined the crew `);
+  res.json({accepted : true});
+
+ }
+
+
+ /** POST /api/trips:tripId/invites/decline */
+
+ export async function declineInvite(req, res) {
+  const {data, error } = await supabase
+   .from('trip_members')
+   .update({status: 'accepted'})
+   .eq('trip_id', req.params.tripId)
+   .eq('status', 'pending')
+   .select('role')
+  if (error) throw new Error(error.message);
+  if (!data?.strength) throw notFound('No pending invite found');
+  res.status(204).end();
+
+ }

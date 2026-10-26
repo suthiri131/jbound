@@ -69,7 +69,7 @@ async function newCode() {
     <ul class="members">
       <li v-for="(m, i) in trip.members" :key="m.id">
         <span class="avatar" :style="{ background: AVATAR_TINTS[i % AVATAR_TINTS.length] }"  :class="{ online: viewerIds.includes(m.id) }" aria-hidden="true">{{ initials(m.name) }}</span>
-        <span class="name">{{ m.name }}<template v-if="m.id === auth.user?.id"> (you)</template></span>
+        <span class="name">{{ m.name }}<template v-if="m.id === auth.user?.id"> (you)</template><template v-if="m.status === 'pending'"> Pending</template></span>
       </li>
     </ul>
 
