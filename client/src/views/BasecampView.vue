@@ -103,7 +103,7 @@ onMounted(async () => {
     <section class="intro">
       <span class="tag-stamp">Your JB trip HQ</span>
       <h1 class="display display-xl" style="text-align: center;">
-        {{ auth.firstName || "Your" }}'s <span class="accent">Basecamp.</span>
+        {{ auth.firstName ? `${auth.firstName}'s` : "Your" }} <span class="accent">Basecamp.</span>
       </h1>
     </section>
 
