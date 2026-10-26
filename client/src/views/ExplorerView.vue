@@ -1,9 +1,5 @@
 <script setup>
-/**
- * Explorer: find places by vibe and pin them to a trip's bucket list.
- * GET /api/places/google/search?q=&vibe=&…  → live Google Places results (key stays on the server)
- * ?pinTo=<tripId> preselects the trip in the pin modal (from Planner "+ Add from Explorer").
- */
+
 import { ref, reactive, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { api, errorMessage, assetUrl } from "@/lib/api";

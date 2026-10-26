@@ -1,9 +1,14 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { api, errorMessage, assetUrl } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
 import TripCover from '@/components/common/TripCover.vue';
-import { shortDate } from '@/utils/format';
+import ScrapbookBook from '@/components/archives/ScrapbookBook.vue';
+import ScrapbookPage from '@/components/archives/ScrapbookPage.vue';
+import { buildScrapbookPages } from '@/utils/scrapbookLayout';
+
+// phases in which the server still accepts memory uploads
+const UPLOAD_PHASES = ['on_the_road', 'memory_box'];
 
 const route = useRoute();
 const router = useRouter();
@@ -16,34 +21,52 @@ const loadError = ref('');
 const archivedTrips = ref([]);
 const openTrip = ref(null);
 const memories = ref([]);
+const expenses = ref([]);
+const memoryWindow = ref(null);
+let request = 0;
+
+const canUpload = computed(() => UPLOAD_PHASES.includes(memoryWindow.value?.phase));
+const pages = computed(() => buildScrapbookPages({
+  trip: openTrip.value,
+  memories: memories.value,
+  expenses: expenses.value,
+  canUpload: canUpload.value,
+}));
 
 async function loadList() {
+  const id = ++request;
   loading.value = true;
   loadError.value = '';
   try {
     const { data } = await api.get('/trips', { params: { include: 'all' } });
-    archivedTrips.value = data.filter((t) => t.phase === 'archived');
+    if (id === request) archivedTrips.value = data.filter((t) => t.phase === 'archived');
   } catch (err) {
-    loadError.value = errorMessage(err);
+    if (id === request) loadError.value = errorMessage(err);
   } finally {
-    loading.value = false;
+    if (id === request) loading.value = false;
   }
 }
 
-async function loadTripScrapbook(id) {
+async function loadTripScrapbook(tripIdToLoad) {
+  const id = ++request;
   loading.value = true;
   loadError.value = '';
+  openTrip.value = null;
   try {
-    const [tripRes, memoriesRes] = await Promise.all([
-      api.get(`/trips/${id}`),
-      api.get(`/trips/${id}/memories`),
+    const [tripRes, memoriesRes, expensesRes] = await Promise.all([
+      api.get(`/trips/${tripIdToLoad}`),
+      api.get(`/trips/${tripIdToLoad}/memories`),
+      api.get(`/trips/${tripIdToLoad}/expenses`),
     ]);
+    if (id !== request) return; // a newer trip was opened while this one loaded
+    memories.value = memoriesRes.data.memories || [];
+    memoryWindow.value = memoriesRes.data.window || null;
+    expenses.value = expensesRes.data.expenses || [];
     openTrip.value = tripRes.data;
-    memories.value = memoriesRes.data.memories;
   } catch (err) {
-    loadError.value = errorMessage(err);
+    if (id === request) loadError.value = errorMessage(err, 'Could not load this scrapbook');
   } finally {
-    loading.value = false;
+    if (id === request) loading.value = false;
   }
 }
 
@@ -68,7 +91,7 @@ function backToList() {
     </div>
 
     <p v-if="loadError" class="error-text card-flat card-pad" role="alert">{{ loadError }}</p>
-    <p v-if="loading" class="hand muted">Loading…</p>
+    <p v-if="loading" class="hand muted" role="status">Loading…</p>
 
     <template v-if="!tripId">
       <h1 class="display display-lg">Past trips, packed away.</h1>
@@ -89,33 +112,28 @@ function backToList() {
       <button type="button" class="btn btn-ghost btn-sm" @click="backToList">← Back to Archives</button>
 
       <template v-if="openTrip">
-        <h1 class="display display-lg">{{ openTrip.name }}</h1>
-        <p class="lead">{{ shortDate(openTrip.start_date) }} – {{ shortDate(openTrip.end_date) }}</p>
+        <ScrapbookBook :key="openTrip.id" :pages="pages" :label="`${openTrip.name} scrapbook`">
+          <template #page="{ page }">
+            <ScrapbookPage :page="page" />
+          </template>
+        </ScrapbookBook>
 
-        <p v-if="!loading && !memories.length" class="hand muted">No photos were packed for this trip.</p>
-
-        <div v-else class="grid">
-          <figure v-for="m in memories" :key="m.id" class="polaroid">
-            <img v-if="m.image_url" :src="assetUrl(m.image_url)" :alt="m.caption || `Photo by ${m.author?.name}`" loading="lazy" />
-            <div v-else class="placeholder-photo" style="height: 130px">[photo · {{ m.author?.name }}]</div>
-            <figcaption>
-              <p v-if="m.caption" class="cap">{{ m.caption }}</p>
-              <span class="by">by {{ m.author?.name }}</span>
-            </figcaption>
-          </figure>
-        </div>
+        <p v-if="canUpload" class="upload">
+          <RouterLink :to="`/planner/${openTrip.id}`" class="btn btn-sm">Add photos in the Memory Box →</RouterLink>
+        </p>
       </template>
     </template>
   </main>
 </template>
 
 <style scoped>
+/* .page resets .container's side padding, so put the gutter back */
+.archives { padding-right: 24px; padding-left: 24px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px; margin-top: 20px; }
 .cover-link { display: block; text-decoration: none; }
 .empty { margin-top: 20px; }
-.polaroid { background: var(--card); border: 2px solid var(--ink); border-radius: 10px; padding: 10px 10px 14px; box-shadow: var(--shadow-sm); }
-.polaroid img { width: 100%; height: 160px; object-fit: cover; border-radius: 6px; }
-.polaroid figcaption { margin-top: 8px; }
-.polaroid .cap { margin: 0 0 4px; font-size: 14px; }
-.polaroid .by { font-size: 12px; color: var(--ink-mute); }
+.upload { margin: 14px 0 0; text-align: center; }
+@media (max-width: 600px) {
+  .archives { padding-right: 16px; padding-left: 16px; }
+}
 </style>

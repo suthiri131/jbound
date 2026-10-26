@@ -12,7 +12,9 @@ import { dayLabel } from '@/utils/format';
 const props = defineProps({
   trip: { type: Object, required: true },
   version: { type: Number, default: 0 }, // bump to force a refetch after itinerary changes
+  activeStopId: { type: [String, Number], default: null },
 });
+const emit = defineEmits(['select-stop']);
 
 const el = ref(null);
 const days = computed(() => [...new Set(props.trip.itinerary.map((i) => i.day).filter(Boolean))].sort());
@@ -26,7 +28,10 @@ const loading = ref(false);
 let gm = null; // loaded Google Maps libraries
 let map = null;
 let markers = [];
+let markerElements = [];
 let lines = [];
+let infoWindow = null;
+let pinnedInfoWindow = false;
 
 const JB_CENTER = { lat: 1.4655, lng: 103.7578 };
 
@@ -35,13 +40,18 @@ function pinElement(label, color) {
   pin.className = 'map-pin';
   pin.style.background = color;
   pin.textContent = label;
+  pin.setAttribute('role', 'button');
+  pin.tabIndex = 0;
   return pin;
 }
 
 function clear() {
   markers.forEach((m) => (m.map = null)); // AdvancedMarkerElement is removed by clearing .map
   lines.forEach((l) => l.setMap(null));
+  infoWindow?.close();
+  pinnedInfoWindow = false;
   markers = [];
+  markerElements = [];
   lines = [];
 }
 
@@ -61,19 +71,68 @@ function draw() {
       content: pinElement(label, isCp ? '#1F4E5A' : '#E0A43B'),
     });
     markers.push(marker);
+    const element = marker.content;
+    element.setAttribute('aria-label', `Show route details for ${s.title}`);
+    element.classList.toggle('active', String(s.id) === String(props.activeStopId));
+    markerElements.push(element);
+    const leg = result.value?.route?.legs?.[i - 1];
+    const showLeg = (pin = false) => {
+      pinnedInfoWindow = pin;
+      emit('select-stop', isCp ? null : s.id);
+      const content = document.createElement('div');
+      content.className = 'route-info';
+      const heading = document.createElement('strong');
+      heading.textContent = s.title;
+      content.append(heading);
+      if (leg) {
+        const details = document.createElement('p');
+        details.textContent = `Leg ${i}: ${leg.durationMin} min driving (${leg.distanceKm} km)`;
+        content.append(details);
+      }
+      infoWindow.setContent(content);
+      infoWindow.open({ map, anchor: marker });
+    };
+    element.addEventListener('mouseenter', () => showLeg());
+    element.addEventListener('focus', () => showLeg());
+    element.addEventListener('click', () => showLeg(true));
+    element.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        showLeg(true);
+      }
+    });
+    element.addEventListener('mouseleave', () => {
+      if (!pinnedInfoWindow) {
+        infoWindow.close();
+        emit('select-stop', null);
+      }
+    });
     bounds.extend({ lat: s.lat, lng: s.lng });
   });
 
   const path = (result.value?.route?.latlngs || []).map(([lat, lng]) => ({ lat, lng }));
   if (path.length) {
-    // soft shadow + dashed ember line (Google draws dashes with repeated line symbols)
-    lines.push(new gm.Polyline({ map, path, strokeColor: '#2A2117', strokeOpacity: 0.15, strokeWeight: 8 }));
+    lines.push(new gm.Polyline({ map, path, strokeColor: '#3C2A21', strokeOpacity: 0.2, strokeWeight: 8 }));
     lines.push(
       new gm.Polyline({
         map,
         path,
         strokeOpacity: 0,
-        icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#C2502A', scale: 3 }, offset: '0', repeat: '14px' }],
+        icons: [
+          { icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#3C2A21', scale: 2.5 }, offset: '0', repeat: '12px' },
+          {
+            icon: {
+              path: gm.SymbolPath.FORWARD_CLOSED_ARROW,
+              fillColor: '#3C2A21',
+              fillOpacity: 1,
+              strokeColor: '#3C2A21',
+              strokeOpacity: 1,
+              scale: 3,
+            },
+            offset: '50px',
+            repeat: '110px',
+          },
+        ],
       }),
     );
     path.forEach((p) => bounds.extend(p));
@@ -108,6 +167,7 @@ onMounted(async () => {
   try {
     gm = await loadGoogleMaps();
     if (!el.value) return; // unmounted while loading
+    infoWindow = new gm.InfoWindow();
     map = new gm.Map(el.value, {
       center: JB_CENTER,
       zoom: 12,
@@ -135,11 +195,24 @@ watch(
   { immediate: true },
 );
 watch(() => [props.trip.id, day.value, fromCheckpoint.value, props.version], load, { immediate: true });
+watch(() => props.activeStopId, (id) => {
+  markerElements.forEach((element, i) => {
+    element.classList.toggle('active', String(result.value?.stops?.[i]?.id) === String(id));
+  });
+});
 
 const caption = computed(() => {
   const r = result.value?.route;
   if (r) return `${r.distanceKm} km · about ${r.durationMin} min driving · ${r.note}`;
   return result.value?.message || 'Add a location to your stops to see them on the map.';
+});
+const stopBufferMinutes = computed(() => {
+  const stopIds = new Set((result.value?.stops || [])
+    .filter((stop) => !String(stop.id).startsWith('checkpoint-'))
+    .map((stop) => String(stop.id)));
+  return props.trip.itinerary
+    .filter((item) => stopIds.has(String(item.id)))
+    .reduce((total, item) => total + (Number(item.dwell_minutes) || 0), 0);
 });
 </script>
 
@@ -149,6 +222,10 @@ const caption = computed(() => {
       <div>
         <h2 class="display display-sm">Route map</h2>
         <p class="muted cap">{{ loading ? 'Plotting the route…' : caption }}</p>
+        <p v-if="result?.route" class="timing-badge">
+          <span>Drive · {{ result.route.durationMin }} min</span>
+          <span>Stop buffers · {{ stopBufferMinutes }} min</span>
+        </p>
       </div>
       <div class="row" style="gap: 10px">
         <div v-if="days.length > 1" class="segmented" role="group" aria-label="Map day">
@@ -172,15 +249,21 @@ const caption = computed(() => {
     </div>
     <p v-if="error" class="error-text" role="alert" style="margin: 0; padding: 8px 18px">{{ error }}</p>
 
-    <ol v-if="result?.stops?.length" class="legend">
-      <li v-for="(s, i) in result.stops" :key="s.id">
-        <span class="dot">{{ String(s.id).startsWith('checkpoint-') ? '◆' : i + (fromCheckpoint ? 0 : 1) }}</span>
-        <span>
-          <span class="name">{{ s.title }}</span>
-          <span v-if="i > 0 && result.route?.legs?.[i - 1]" class="leg">{{ result.route.legs[i - 1].distanceKm }} km · {{ result.route.legs[i - 1].durationMin }} min drive</span>
-        </span>
-      </li>
-    </ol>
+    <div v-if="result?.stops?.length" class="legend" aria-label="Step-by-step itinerary">
+      <template v-for="(s, i) in result.stops" :key="s.id">
+        <div v-if="i > 0 && result.route?.legs?.[i - 1]" class="leg-row" aria-label="Driving leg">
+          <span class="leg-arrow" aria-hidden="true">⬇ 🚗</span>
+          <span class="leg-badge">{{ result.route.legs[i - 1].distanceKm }} km · {{ result.route.legs[i - 1].durationMin }} min driving</span>
+        </div>
+        <div class="itinerary-stop" :class="{ selected: String(activeStopId) === String(s.id) }">
+          <span class="dot">{{ String(s.id).startsWith('checkpoint-') ? '◆' : i + (fromCheckpoint ? 0 : 1) }}</span>
+          <span class="stop-copy">
+            <span class="stop-order">{{ i === 0 ? 'Origin' : `Stop ${i}` }}</span>
+            <span class="name">{{ s.title }}</span>
+          </span>
+        </div>
+      </template>
+    </div>
   </section>
 </template>
 
@@ -188,13 +271,29 @@ const caption = computed(() => {
 .map-card { display: flex; flex-direction: column; height: 100%; border: 2px solid var(--ink); border-radius: 16px; background: var(--map); overflow: hidden; box-shadow: 8px 8px 0 var(--ink); }
 .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: var(--card); border-bottom: 2px solid var(--ink); }
 .cap { margin: 2px 0 0; font-size: 13px; }
+.timing-badge { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.timing-badge span { padding: 3px 9px; border: 1.5px dashed #3C2A21; border-radius: 999px; background: #FDFBF7; font-size: 12px; font-weight: 800; }
 .map-wrap { position: relative; flex: 1; min-height: 440px; display: flex; }
 .map { flex: 1; min-height: 440px; }
 .map-msg { position: absolute; inset: 0; margin: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-weight: 700; color: var(--ink-soft); background: var(--map); }
-.legend { list-style: none; margin: 0; padding: 12px 18px 16px; background: var(--card); border-top: 2px solid var(--ink); display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 18px; }
-.legend li { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.legend { margin: 0; padding: 16px 18px 20px; background: #FDFBF7; border-top: 2px solid #3C2A21; display: flex; flex-direction: column; gap: 0; }
+.itinerary-stop { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 5px 8px; border: 1.5px dashed transparent; border-radius: 10px; }
+.itinerary-stop.selected { border-color: #3C2A21; background: #F3EAD3; }
 .dot { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--ink); background: var(--mustard); font-size: 12px; font-weight: 800; }
-.name { display: block; font-weight: 700; font-size: 14px; line-height: 1.25; }
-.leg { display: block; font-size: 12px; color: var(--ink-mute); }
-:global(.map-pin) { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 3px solid #2A2117; border-radius: 50%; font: 800 14px Archivo, sans-serif; color: #2A2117; }
+.stop-copy { min-width: 0; }
+.stop-order { display: block; color: #5A4A36; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.name { display: block; overflow-wrap: anywhere; font-weight: 700; font-size: 14px; line-height: 1.25; }
+.leg-row { display: flex; align-items: center; gap: 10px; min-height: 40px; padding-left: 14px; border-left: 2px dashed #3C2A21; margin-left: 20px; }
+.leg-arrow { flex: none; font-size: 14px; }
+.leg-badge { max-width: 100%; padding: 3px 9px; border: 1.5px dashed #3C2A21; border-radius: 8px; background: #FDFBF7; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+:global(.map-pin) { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 3px solid #3C2A21; border-radius: 50%; font: 800 14px Archivo, sans-serif; color: #3C2A21; cursor: pointer; }
+:global(.map-pin.active) { outline: 4px solid #FDFBF7; box-shadow: 0 0 0 7px #3C2A21; transform: scale(1.1); }
+:global(.route-info p) { margin: 5px 0 0; }
+@media (max-width: 420px) {
+  .bar { padding: 12px; }
+  .bar > .row { flex-wrap: wrap; width: 100%; }
+  .bar .field { max-width: 100%; flex-wrap: wrap; }
+  .bar select { max-width: 100%; }
+  .legend { padding: 12px; }
+}
 </style>

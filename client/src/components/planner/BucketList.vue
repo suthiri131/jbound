@@ -20,8 +20,13 @@ function onStopSaved() {
 const props = defineProps({
   trip: { type: Object, required: true },
   legs: { type: Object, default: () => ({}) }, // itemId → 'tight' | 'overloaded'
+  activeStopId: { type: [String, Number], default: null },
 });
-const emit = defineEmits(['changed', 'error', 'edit', 'delete']);
+const emit = defineEmits(['changed', 'error', 'edit', 'delete', 'select-stop']);
+
+function clearStopSelection(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) emit('select-stop', null);
+}
 
 const ownershipLabel = computed(() => {
   if (props.trip.myRole === 'owner') return '';
@@ -147,7 +152,17 @@ function saveOrder() {
         :disabled="!editable"
         @end="saveOrder"
       >
-        <li v-for="it in g.items" :key="it.id" class="stop" data-cy="stop">
+        <li
+          v-for="it in g.items"
+          :key="it.id"
+          class="stop"
+          :class="{ selected: String(activeStopId) === String(it.id) }"
+          data-cy="stop"
+          @mouseenter="emit('select-stop', it.id)"
+          @mouseleave="emit('select-stop', null)"
+          @focusin="emit('select-stop', it.id)"
+          @focusout="clearStopSelection"
+        >
           <span v-if="editable" class="grip" title="Drag to reorder" aria-hidden="true">⠿</span>
           <button
             type="button"
@@ -172,7 +187,13 @@ function saveOrder() {
                 @change="setTime(it, $event.target.value)"
               />
             <div class="row stop-meta">
-              <p class="title" :class="{ done: it.done }">{{ it.title }}</p>
+              <button
+                type="button"
+                class="title stop-title"
+                :class="{ done: it.done }"
+                :aria-pressed="String(activeStopId) === String(it.id)"
+                @click="emit('select-stop', it.id)"
+              >{{ it.title }}</button>
               <span v-if="it.crossing" class="pill" style="background: var(--mist)">{{ it.crossing === 'tuas' ? 'Tuas' : 'Woodlands' }} {{ it.crossing_dir === 'to_sg' ? '→ SG' : '→ JB' }}</span>
             </div>
             <p v-if="!it.place && it.dwell_minutes != null" class="stay-duration">Stay · {{ it.dwell_minutes }} min</p>
@@ -226,6 +247,7 @@ function saveOrder() {
 .date { font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--ink-mute); }
 .stops { list-style: none; margin: 0; padding: 0; min-height: 12px; }
 .stop { display: flex; align-items: flex-start; gap: 8px; padding: 16px 0; border-bottom: 1.5px dashed var(--line); background: var(--card); }
+.stop.selected { background: #FDFBF7; box-shadow: inset 3px 0 #3C2A21; }
 .tick { flex: none; width: 28px; height: 28px; margin-top: 1px; border: 2px solid var(--ink); border-radius: 8px; background: var(--paper); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
 .tick[aria-pressed='true'] { background: var(--sand); }
 .body { flex: 1; min-width: 0; }
@@ -233,6 +255,7 @@ function saveOrder() {
 .time { width: 124px; min-height: 32px; padding: 0 6px; border: 1.5px solid var(--line-strong); border-radius: 6px; background: var(--paper); font-family: var(--font-body); font-weight: 800; font-size: 14px; }
 .stop-meta { gap: 8px; margin-top: 8px; }
 .title { margin: 0; overflow-wrap: anywhere; font-weight: 700; font-size: 17px; }
+.stop-title { max-width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .title.done { text-decoration: line-through; text-decoration-color: var(--ember); text-decoration-thickness: 2px; color: var(--ink-mute); }
 .stay-duration { margin: 6px 0 0; color: var(--ink-soft); font-size: 13px; }
 .note-line { margin: 1px 0 0; font-size: 20px; }

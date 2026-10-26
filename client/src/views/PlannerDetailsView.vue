@@ -22,6 +22,7 @@ const tripId = computed(() => route.params.tripId || null);
 const crewNotice = ref("");
 watch(tripId, () => { crewNotice.value = ""; });
 const trip = ref(null);
+const activeStopId = ref(null);
 const loading = ref(true);
 const editing = ref(false);
 const deleting = ref(false);
@@ -135,6 +136,7 @@ function refreshSoon() {
 watch(
   tripId,
   async () => {
+    activeStopId.value = null;
     loading.value = true;
     trip.value = null;
     feas.value = null;
@@ -202,9 +204,11 @@ const canMemories = computed(() =>
         <BucketList
           :trip="trip"
           :legs="feas?.legs || {}"
+          :active-stop-id="activeStopId"
           class="left"
           @changed="refresh"
           @error="notify"
+          @select-stop="activeStopId = $event"
           @edit="editing = true"
           @delete="requestDelete"
         />
@@ -217,7 +221,13 @@ const canMemories = computed(() =>
             @archived="onArchived"
             @error="notify"
           />
-          <RouteMap v-else :trip="trip" :version="mapVersion">
+          <RouteMap
+            v-else
+            :trip="trip"
+            :version="mapVersion"
+            :active-stop-id="activeStopId"
+            @select-stop="activeStopId = $event"
+          >
             <template #actions>
               <button
                 v-if="canMemories"

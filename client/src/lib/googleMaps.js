@@ -12,15 +12,15 @@ let loader;
 
 /**
  * Load the Maps JavaScript API once and return the libraries we use.
- * @returns {Promise<{ Map: typeof google.maps.Map, AdvancedMarkerElement: typeof google.maps.marker.AdvancedMarkerElement, LatLngBounds: typeof google.maps.LatLngBounds, Polyline: typeof google.maps.Polyline }>}
+ * @returns {Promise<{ Map: typeof google.maps.Map, AdvancedMarkerElement: typeof google.maps.marker.AdvancedMarkerElement, LatLngBounds: typeof google.maps.LatLngBounds, Polyline: typeof google.maps.Polyline, InfoWindow: typeof google.maps.InfoWindow, SymbolPath: typeof google.maps.SymbolPath }>}
  */
 export async function loadGoogleMaps() {
   if (!hasGoogleMaps) throw new Error('VITE_GOOGLE_MAPS_API_KEY is not set');
   loader ||= new Loader({ apiKey, version: 'weekly', region: 'SG', language: 'en' });
-  const [{ Map, Polyline }, { AdvancedMarkerElement }, { LatLngBounds }] = await Promise.all([
+  const [{ Map, Polyline, InfoWindow, SymbolPath }, { AdvancedMarkerElement }, { LatLngBounds }] = await Promise.all([
     loader.importLibrary('maps'),
     loader.importLibrary('marker'),
     loader.importLibrary('core'),
   ]);
-  return { Map, Polyline, AdvancedMarkerElement, LatLngBounds };
+  return { Map, Polyline, AdvancedMarkerElement, LatLngBounds, InfoWindow, SymbolPath };
 }
