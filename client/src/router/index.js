@@ -58,40 +58,12 @@ const routes = [
     component: () => import("@/views/ExplorerView.vue"),
     meta: { title: "Explorer" },
   },
-
   {
-    path: "/watcher",
-    name: "watcher",
-    component: WatcherView,
-    meta: { title: "Watcher" },
-  },
-
-  {
-  path: '/tales/place/:placeId',
-  name: 'place-tales',
-  component: PlaceTalesView,
-  },
-
-  {
-    path: '/tales/custom/:name',
-    name: 'custom-place-tales',
-    component: PlaceTalesView
-  },
-
-  {
-  path: "/archives/:tripId?",
-  name: "archives",
-  component: () => import("@/views/ArchivesView.vue"),
-  meta: { requiresAuth: true, title: "Archives" },
-  },
-
-  {
-    path: "/notifications",
-    name: "notifications",
-    component: () => import("@/views/NotificationsView.vue"),
-    meta: { requiresAuth: true, title: "Notifications"},
+    path: "/explorer/place/:googlePlaceId",
+    name: "place",
+    component: () => import("@/views/PlaceView.vue"),
+    meta: { title: "Place" },
   }
-
 ];
 
 const router = createRouter({

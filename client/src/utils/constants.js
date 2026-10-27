@@ -16,6 +16,21 @@ export const VIBE_ICON = {
   activities: 'M5 10a7 7 0 1 0 14 0a7 7 0 1 0-14 0ZM12 3v14M5 10h14M7 5l10 10M17 5 7 15M9 21l3-4 3 4',
   culture: 'M3 9 12 4l9 5M5 9v9M19 9v9M9.5 9v9M14.5 9v9M3 20h18',
   adventure: 'm2 20 7-12 4 6 3-4 6 10ZM16 5a2 2 0 1 0 4 0a2 2 0 1 0-4 0Z',
+ 
+  cozy: 'M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5ZM17 11h2a2 2 0 0 1 0 4h-2M8 3c0 1.5 1 1.5 1 3M12 3c0 1.5 1 1.5 1 3',
+  peaceful: 'M12 20c-4-2-7-5-7-10 3 0 5 2 7 5 2-3 4-5 7-5 0 5-3 8-7 10ZM12 15c-1-3-1-7 0-10 1 3 1 7 0 10Z',
+  chaotic: 'M13 2 4 14h7l-1 8 9-12h-7Z',
+};
+
+
+export const VIBE_FLYER = {
+  cozy: 'Cafés, bookshops, slow mornings',
+  adventure: 'Hikes, beaches, the great outdoors',
+  culture: 'Temples, heritage streets, museums',
+  eating: 'Bak kut teh, laksa, kopi',
+  activities: 'Malls, theme parks, spas',
+  peaceful: 'Gardens and quiet corners',
+  chaotic: 'Night markets, crowds, buzz',
 };
 
 

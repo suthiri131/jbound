@@ -41,7 +41,6 @@ const JB_CENTRE = { latitude: 1.4927, longitude: 103.7414 };
 
 /**
  * Google place types → our four vibes.
- * TODO(team): tune this mapping. Full type list: https://developers.google.com/maps/documentation/places/web-service/place-types
  */
 export const TYPE_TO_VIBE = {
   eating: ['restaurant', 'cafe', 'bakery', 'food', 'meal_takeaway', 'coffee_shop', 'dessert_shop', 'food_court', 'bar', 'night_club'],
@@ -56,6 +55,9 @@ export const VIBE_QUERY = {
   culture: 'heritage temples museums',
   activities: 'things to do',
   adventure: 'nature parks beaches',
+  cozy: 'cozy cafes and bookshops',
+  peaceful: 'quiet gardens and peaceful spots',
+  chaotic: 'night markets and busy street food',
 };
 
 const PRICE = { PRICE_LEVEL_FREE: 1, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2, PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4 };
@@ -149,5 +151,65 @@ export async function getPhotoUri(photoName, width = 600) {
     const data = await fetchJson(url, { headers: { 'X-Goog-Api-Key': config.google.placesKey } });
     if (!data.photoUri) throw new HttpError(502, 'Google did not return a photo');
     return data.photoUri;
+  });
+}
+
+/**
+ * Extra fields for the place page. Asking for `reviews` puts this call in Google's most expensive
+ * Place Details tier, so it only runs when someone opens a place, and it's cached for a day.
+ */
+const PROFILE_MASK = [
+  ...FIELDS,
+  'shortFormattedAddress',
+  'regularOpeningHours',
+  'nationalPhoneNumber',
+  'websiteUri',
+  'reviews',
+].join(',');
+
+const MAX_PROFILE_PHOTOS = 10;
+
+/** Google review → what the place page shows. Google requires the author's name + link to be displayed. */
+export function mapGoogleReview(r) {
+  return {
+    author: r.authorAttribution?.displayName ?? 'Google user',
+    authorUrl: r.authorAttribution?.uri ?? null,
+    authorPhoto: r.authorAttribution?.photoUri ?? null,
+    rating: r.rating ?? null,
+    text: r.text?.text ?? r.originalText?.text ?? '',
+    when: r.relativePublishTimeDescription ?? null,
+    publishedAt: r.publishTime ?? null,
+  };
+}
+
+/** Everything the place page needs about one Google place. */
+export async function getPlaceProfile(googlePlaceId) {
+  return cached(`gplaces:profile:${googlePlaceId}`, SEARCH_CACHE_MS, async () => {
+    const data = await fetchJson(`${config.google.placesBaseUrl}/places/${encodeURIComponent(googlePlaceId)}`, {
+      headers: headers(PROFILE_MASK),
+      timeoutMs: 10000,
+    });
+    const base = mapGooglePlace(data);
+    return {
+      ...base,
+      shortAddress: data.shortFormattedAddress ?? null,
+      // "chinese_restaurant" → "Chinese restaurant"
+      kind: data.primaryType ? data.primaryType.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : null,
+      types: data.types ?? [],
+      primaryType: data.primaryType ?? null,
+      // bigger photos for the hero + gallery (the cards use 600px)
+      photos: (data.photos || []).slice(0, MAX_PROFILE_PHOTOS).map((ph) => ({
+        url: photoProxyPath(ph.name, 1200),
+        thumb: photoProxyPath(ph.name, 400),
+        // Google asks apps to credit the photographer
+        credit: ph.authorAttributions?.[0]?.displayName ?? null,
+        creditUrl: ph.authorAttributions?.[0]?.uri ?? null,
+      })),
+      openNow: data.regularOpeningHours?.openNow ?? null,
+      hours: data.regularOpeningHours?.weekdayDescriptions ?? [],
+      phone: data.nationalPhoneNumber ?? null,
+      website: data.websiteUri ?? null,
+      reviews: (data.reviews || []).map(mapGoogleReview),
+    };
   });
 }
