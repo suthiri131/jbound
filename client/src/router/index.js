@@ -38,6 +38,7 @@ const routes = [
     path: "/watcher",
     name: "watcher",
     component: WatcherView,
+    meta: { title: "Watcher" },
   },
 
   // Place Tales (from Version 1)
@@ -81,7 +82,19 @@ const routes = [
     name: "place",
     component: () => import("@/views/PlaceView.vue"),
     meta: { title: "Place" },
-  }
+  },
+  {
+    path: "/archives/:tripId?",
+    name: "archives",
+    component: () => import("@/views/ArchivesView.vue"),
+    meta: { requiresAuth: true, title: "Archives" },
+  },
+  {
+    path: "/notifications",
+    name: "notifications",
+    component: () => import("@/views/NotificationsView.vue"),
+    meta: { requiresAuth: true, title: "Notifications" },
+  },
 ];
 
 const router = createRouter({
