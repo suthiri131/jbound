@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
-import { api, errorMessage } from '@/lib/api';
+import { api, API_URL, errorMessage } from '@/lib/api';
 import { timeAgo } from '@/utils/format';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -12,6 +12,7 @@ const sgNow = () => {
 };
 
 const now = sgNow();
+console.log('[Watcher] setup', { page: window.location.href, apiUrl: API_URL, singaporeTime: now });
 const q = reactive({ checkpoint: 'woodlands', direction: 'to_jb', day: now.day, hour: now.hour, holiday: false });
 const est = ref(null);
 const cams = ref(null);
@@ -28,22 +29,28 @@ const needle = computed(() => -90 + (score.value / 100) * 180);
 
 async function loadEstimate() {
   estError.value = '';
+  console.log('[Watcher] loading congestion', { ...q });
   try {
     const { data } = await api.get(`/checkpoints/${q.checkpoint}/congestion`, {
       params: { direction: q.direction, day: q.day, hour: q.hour, holiday: q.holiday || undefined },
     });
     est.value = data;
+    console.log('[Watcher] congestion loaded', { selected: data?.selected, hourlyCount: data?.hourly?.length });
   } catch (err) {
+    console.error('[Watcher] congestion failed', { message: err.message, status: err.response?.status, code: err.code });
     estError.value = errorMessage(err);
   }
 }
 
 async function loadCameras() {
+  console.log('[Watcher] loading cameras', { checkpoint: q.checkpoint });
   try {
     const { data } = await api.get(`/checkpoints/${q.checkpoint}/cameras`);
     cams.value = data;
     camError.value = '';
+    console.log('[Watcher] cameras loaded', { checkpoint: data?.checkpoint?.id, count: data?.cameras?.length, fetchedAt: data?.fetchedAt });
   } catch (err) {
+    console.error('[Watcher] cameras failed', { message: err.message, status: err.response?.status, code: err.code });
     cams.value = null;
     camError.value = err?.response?.status === 503
       ? 'Live cameras need an LTA DataMall key on the server (LTA_ACCOUNT_KEY). The estimate above still works.'
@@ -54,10 +61,14 @@ async function loadCameras() {
 watch(q, loadEstimate, { deep: true, immediate: true });
 watch(() => q.checkpoint, loadCameras);
 onMounted(() => {
+  console.log('[Watcher] mounted');
   loadCameras();
   camTimer = setInterval(loadCameras, 60_000); // LTA image links expire after ~5 min
 });
-onBeforeUnmount(() => clearInterval(camTimer));
+onBeforeUnmount(() => {
+  console.log('[Watcher] unmounting');
+  clearInterval(camTimer);
+});
 
 function resetNow() {
   const n = sgNow();
