@@ -60,3 +60,6 @@ app.use("/api/places", placeRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+// Vercel's Express entry requires a default export; keep the named export for local startup and tests.
+export default app;
