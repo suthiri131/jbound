@@ -35,6 +35,24 @@ const routes = [
   },
 
   {
+    path: "/watcher",
+    name: "watcher",
+    component: WatcherView,
+  },
+
+  // Place Tales (from Version 1)
+  {
+    path: "/tales/place/:placeId",
+    name: "place-tales",
+    component: PlaceTalesView,
+  },
+  {
+    path: "/tales/custom/:name",
+    name: "custom-place-tales",
+    component: PlaceTalesView,
+  },
+  
+  {
     path: "/planner",
     name: "planner",
     component: () => import("@/views/PlannerView.vue"),
