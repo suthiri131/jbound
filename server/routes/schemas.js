@@ -63,6 +63,8 @@ export const placesQuery = z.object({
 export const googleSearchQuery = z.object({
   q: z.string().trim().max(80).optional(),
   vibe: vibe.optional(),
+  // CHANGES FOR EXPLORER: several categories at once, e.g. ?vibes=eating,cozy (from the vibe board)
+  vibes: csvVibes,
   checkpoint: z.enum(['woodlands', 'tuas']).optional(),
   maxDistanceKm: z.coerce.number().positive().optional(),
   maxPrice: z.coerce.number().int().min(1).max(4).optional(),
@@ -92,7 +94,7 @@ export const postsQuery = z.object({
   vibe: vibe.optional(),
   placeId: uuid.optional(),
   customPlaceName: z.string().trim().min(1).max(100).optional(),
-  scope: z.enum(['everyone', 'friends']).default('everyone'),
+  scope: z.enum(['everyone', 'friends', 'mine']).default('everyone'),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   before: z.string().datetime({ offset: true }).optional(),
 });
@@ -126,11 +128,16 @@ export const updateTripBody = z.object({
 });
 export const inviteBody = z.object({ username });
 export const joinBody = z.object({ inviteCode: z.string().trim().min(4).max(32) });
-export const tripsQuery = z.object({ include: z.enum(['active', 'all']).default('active') });
+export const tripsQuery = z.object({
+  include: z.enum(['active', 'all']).default('active'),
+  page: z.coerce.number().int().min(1).max(1000000).optional(),
+  pageSize: z.coerce.number().int().min(1).max(50).default(12),
+  search: z.string().trim().max(120).default(''),
+  phase: z.enum(['planning', 'on_the_road', 'memory_box']).optional(),
+});
 
 // ---------- itinerary ----------
 const stopFields = {
-  vibe: vibe.nullable().optional(),
   dwellMinutes: z.number().int().min(0).max(1440).nullable().optional(),
   lat: z.number().min(-90).max(90).nullable().optional(),
   lng: z.number().min(-180).max(180).nullable().optional(),

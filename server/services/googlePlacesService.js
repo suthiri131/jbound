@@ -1,4 +1,6 @@
 /**
+ * Google Places API (New) — https://developers.google.com/maps/documentation/places/web-service/op-overview
+ *
  * Used by the Explorer to search real JB places, and to import a Google place into our
  * `places` table when someone pins it to a trip (so itinerary items can reference it).
  *
@@ -39,11 +41,10 @@ const JB_CENTRE = { latitude: 1.4927, longitude: 103.7414 };
 
 /**
  * Google place types → our four vibes.
- * TODO(team): tune this mapping. Full type list: https://developers.google.com/maps/documentation/places/web-service/place-types
  */
 export const TYPE_TO_VIBE = {
   eating: ['restaurant', 'cafe', 'bakery', 'food', 'meal_takeaway', 'coffee_shop', 'dessert_shop', 'food_court', 'bar', 'night_club'],
-  culture: ['art_museum', 'museum', 'art_gallery', 'art_studio', 'hindu_temple', 'church', 'mosque', 'place_of_worship', 'historical_landmark', 'cultural_landmark', 'monument', 'library', 'tourist_attraction', 'sculpture'],
+  culture: ['museum', 'art_gallery', 'hindu_temple', 'church', 'mosque', 'place_of_worship', 'historical_landmark', 'cultural_landmark', 'monument', 'library', 'tourist_attraction'],
   activities: ['shopping_mall', 'amusement_park', 'water_park', 'spa', 'bowling_alley', 'movie_theater', 'market', 'store', 'aquarium', 'tourist_attraction'],
   adventure: ['park', 'national_park', 'hiking_area', 'beach', 'zoo', 'campground', 'marina', 'state_park', 'garden'],
 };
@@ -54,6 +55,9 @@ export const VIBE_QUERY = {
   culture: 'heritage temples museums',
   activities: 'things to do',
   adventure: 'nature parks beaches',
+  cozy: 'cozy cafes and bookshops',
+  peaceful: 'quiet gardens and peaceful spots',
+  chaotic: 'night markets and busy street food',
 };
 
 const PRICE = { PRICE_LEVEL_FREE: 1, PRICE_LEVEL_INEXPENSIVE: 1, PRICE_LEVEL_MODERATE: 2, PRICE_LEVEL_EXPENSIVE: 3, PRICE_LEVEL_VERY_EXPENSIVE: 4 };
@@ -150,6 +154,10 @@ export async function getPhotoUri(photoName, width = 600) {
   });
 }
 
+/**
+ * Extra fields for the place page. Asking for `reviews` puts this call in Google's most expensive
+ * Place Details tier, so it only runs when someone opens a place, and it's cached for a day.
+ */
 const PROFILE_MASK = [
   ...FIELDS,
   'shortFormattedAddress',
@@ -173,7 +181,6 @@ export function mapGoogleReview(r) {
     publishedAt: r.publishTime ?? null,
   };
 }
-
 
 /** Everything the place page needs about one Google place. */
 export async function getPlaceProfile(googlePlaceId) {
