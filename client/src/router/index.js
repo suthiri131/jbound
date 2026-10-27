@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
+import WatcherView from '../views/WatcherView.vue';
+import PlaceTalesView from '../views/PlaceTalesView.vue';
 
 const routes = [
   {
@@ -33,12 +35,23 @@ const routes = [
   },
 
   {
-    path: "/planner/:tripId?",
+    path: "/planner",
     name: "planner",
     component: () => import("@/views/PlannerView.vue"),
-    meta: { requiresAuth: true, title: "Planner" },
+    meta: { requiresAuth: true, title: "Trips" },
   },
-
+  {
+    path: "/planner/:tripId",
+    name: "trip-details",
+    component: () => import("@/views/PlannerDetailsView.vue"),
+    meta: { requiresAuth: true, title: "Trip details" },
+  },
+  {
+    path: "/ledger",
+    name: "ledger",
+    component: () => import("@/views/LedgerView.vue"),
+    meta: { requiresAuth: true, title: "Ledger" },
+  },
   {
     path: "/explorer",
     name: "explorer",

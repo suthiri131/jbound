@@ -1,12 +1,15 @@
 import { supabase } from '../db/supabase.js';
 import { badRequest, check, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
-import { getDrivingRoute } from '../services/routingService.js';
-import { CHECKPOINTS } from '../services/logic/geo.js';
+import {
+  getDrivingRoute,
+} from '../services/routingService.js';
+import { getCheckpointRouteStart } from '../services/logic/geo.js';
+import { validateStopDay } from '../utils/stopDay.js';
 import { assessTrip } from '../services/logic/feasibility.js';
 
 const ITEM_FIELDS =
-  'id, trip_id, title, day, time, position, notes, vibe, dwell_minutes, lat, lng, crossing, crossing_dir, done, done_at, created_at, place:places(id, name, lat, lng, vibes, photos)';
+  'id, trip_id, title, day, time, position, notes, dwell_minutes, lat, lng, crossing, crossing_dir, done, done_at, created_at, place:places(id, name, lat, lng, vibes, photos)';
 
 function dayLabel(trip, day) {
   if (!day) return 'the itinerary';
@@ -24,7 +27,7 @@ async function nextPosition(tripId, day) {
 
 /** camelCase body → snake_case columns for the optional stop fields */
 function stopPatch(body) {
-  const map = { vibe: 'vibe', dwellMinutes: 'dwell_minutes', lat: 'lat', lng: 'lng', crossing: 'crossing', crossingDir: 'crossing_dir' };
+  const map = { dwellMinutes: 'dwell_minutes', lat: 'lat', lng: 'lng', crossing: 'crossing', crossingDir: 'crossing_dir' };
   const patch = {};
   for (const [k, col] of Object.entries(map)) if (body[k] !== undefined) patch[col] = body[k];
   return patch;
@@ -46,15 +49,14 @@ export async function listItems(req, res) {
   res.json(await listOrdered(req.params.tripId));
 }
 
-/** POST /api/trips/:tripId/itinerary  { placeId? | title?, day?, time?, notes?, vibe?, dwellMinutes?, lat?, lng?, crossing?, crossingDir? } */
+/** POST /api/trips/:tripId/itinerary  { placeId? | title?, day?, time?, notes?, dwellMinutes?, lat?, lng?, crossing?, crossingDir? } */
 export async function addItem(req, res) {
   const { placeId, title, day, time, notes } = req.valid.body;
+  validateStopDay(req.trip, day);
   let finalTitle = title;
-  let vibe = req.valid.body.vibe;
   if (placeId) {
-    const place = check(await supabase.from('places').select('name, vibes').eq('id', placeId).single(), 'Place not found');
+    const place = check(await supabase.from('places').select('name').eq('id', placeId).single(), 'Place not found');
     finalTitle = title || place.name;
-    vibe = vibe ?? place.vibes?.[0] ?? null;
   }
   if (!finalTitle) throw badRequest('Provide a placeId or a title');
 
@@ -69,7 +71,6 @@ export async function addItem(req, res) {
         time: time ?? null,
         notes: notes ?? null,
         ...stopPatch(req.valid.body),
-        vibe: vibe ?? null,
         position: await nextPosition(req.params.tripId, day),
         created_by: req.user.id,
       })
@@ -84,9 +85,16 @@ export async function addItem(req, res) {
 /** PATCH /api/trips/:tripId/itinerary/:itemId — edit fields, or tick off with { done: true } */
 export async function updateItem(req, res) {
   const { title, day, time, notes, done } = req.valid.body;
+  validateStopDay(req.trip, day);
+  let movedDay = false;
   const patch = stopPatch(req.valid.body);
   if (title !== undefined) patch.title = title;
-  if (day !== undefined) patch.day = day;
+  if (day !== undefined) {
+    const existing = check(await supabase.from('itinerary_items').select('day').eq('id', req.params.itemId).eq('trip_id', req.params.tripId).single(), 'Itinerary item not found');
+    patch.day = day;
+    movedDay = day !== existing.day;
+    if (movedDay) patch.position = await nextPosition(req.params.tripId, day);
+  }
   if (time !== undefined) patch.time = time;
   if (notes !== undefined) patch.notes = notes;
   if (done !== undefined) {
@@ -104,6 +112,10 @@ export async function updateItem(req, res) {
       .single(),
     'Itinerary item not found',
   );
+  if (movedDay) {
+    const destination = day ? dayLabel(req.trip, day) : 'Unscheduled';
+    await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} moved ${data.title} to ${destination}`);
+  }
   if (done === true) await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} ticked off ${data.title}`);
   res.json(data);
 }
@@ -113,7 +125,9 @@ export async function reorderItems(req, res) {
   const { items } = req.valid.body;
   const tripId = req.params.tripId;
 
-  const existing = check(await supabase.from('itinerary_items').select('id').eq('trip_id', tripId));
+  for (const item of items) validateStopDay(req.trip, item.day);
+
+  const existing = check(await supabase.from('itinerary_items').select('id, title, day').eq('trip_id', tripId));
   const valid = new Set(existing.map((r) => r.id));
   const foreign = items.filter((i) => !valid.has(i.id));
   if (foreign.length) throw badRequest('Some items do not belong to this trip', foreign.map((i) => i.id));
@@ -125,6 +139,15 @@ export async function reorderItems(req, res) {
   );
   const failed = results.find((r) => r.error);
   if (failed) check(failed);
+  const previous = new Map(existing.map((item) => [item.id, item]));
+  const moved = items.filter((item) => previous.get(item.id).day !== (item.day ?? null));
+  if (moved.length) {
+    const name = await displayName(req.user.id);
+    for (const item of moved) {
+      const destination = item.day ? dayLabel(req.trip, item.day) : 'Unscheduled';
+      await postSystemMessage(tripId, `${name} moved ${previous.get(item.id).title} to ${destination}`);
+    }
+  }
   res.json(await listOrdered(tripId));
 }
 
@@ -156,7 +179,7 @@ export async function getFeasibility(req, res) {
       id: it.id,
       title: it.title,
       time: it.time,
-      vibe: it.vibe,
+      vibe: it.place?.vibes?.[0],
       dwellMinutes: it.dwell_minutes,
       lat: it.lat ?? it.place?.lat ?? null,
       lng: it.lng ?? it.place?.lng ?? null,
@@ -182,10 +205,12 @@ export async function getDayRoute(req, res) {
   const stops = items
     .map((i) => ({ id: i.id, title: i.title, lat: i.lat ?? i.place?.lat, lng: i.lng ?? i.place?.lng }))
     .filter((s) => s.lat != null && s.lng != null);
-  if (fromCheckpoint) {
-    const cp = CHECKPOINTS[fromCheckpoint];
-    stops.unshift({ id: `checkpoint-${cp.id}`, title: cp.name, ...cp.sgSide });
+  if (stops.length < (fromCheckpoint ? 1 : 2)) {
+    return res.json({ stops, route: null, message: 'Add at least 2 stops with a location to see a route' });
   }
-  if (stops.length < 2) return res.json({ stops, route: null, message: 'Add at least 2 stops with a location to see a route' });
-  res.json({ stops, route: await getDrivingRoute(stops) });
+  if (fromCheckpoint) stops.unshift(getCheckpointRouteStart(fromCheckpoint));
+  res.json({
+    stops,
+    route: await getDrivingRoute(stops, { checkpointId: fromCheckpoint }),
+  });
 }

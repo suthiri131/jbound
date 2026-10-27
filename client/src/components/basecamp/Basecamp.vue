@@ -140,7 +140,6 @@ defineProps({
         points="66,442 500,68 934,442"
         fill="#B4471F"
         stroke="#2A2117"
-        `
         stroke-width="5"
         stroke-linejoin="round"
       />
@@ -338,7 +337,7 @@ defineProps({
       data-cy="door-watcher"
     >
       <span class="plaque watcher-plaque" style="height: 15.3%"
-        ><span class="plaque-title">Border Watcher</span
+        ><span class="plaque-title"><span class="plaque-title-extra">Border </span>Watcher</span
         ><span class="plaque-sub">{{ watcherSub }}</span></span
       >
       <span class="door-frame" style="height: 80.5%">
@@ -815,6 +814,34 @@ defineProps({
   color: var(--ink-soft);
   margin-top: 0.2em;
 }
+/* on a small house the subtitles hit their minimum size and crowd the plaques,
+   so show just the short room names (the full text stays in each door's aria-label) */
+@container (max-width: 600px) {
+  .plaque-sub,
+  .plaque-title-extra {
+    display: none;
+  }
+  /* the fixed plaque height is shorter than the name here, which pushed the text into
+     the top border; let the plaque fit its name with even padding instead */
+  .plaque {
+    height: auto !important;
+    /* the font keeps descender room under the letters, so pad a little more on top */
+    padding: 3px 3px 1px;
+    border-width: 1.5px;
+  }
+  .plaque-title {
+    line-height: 1;
+  }
+}
+/* the smallest phones: the 8px minimum is still a touch wider than the plaques */
+@container (max-width: 320px) {
+  .plaque {
+    padding: 2px 3px;
+  }
+  .plaque-title {
+    font-size: 7px;
+  }
+}
 .door:hover .plaque,
 .door:focus-visible .plaque {
   transform: translateY(-3px) rotate(-1.5deg);
@@ -976,6 +1003,12 @@ defineProps({
   color: var(--ember);
   transform: rotate(-4deg);
   pointer-events: none;
+}
+/* too cramped next to the birdhouse on a phone */
+@media (max-width: 600px) {
+  .hint {
+    display: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .tree-door .plaque.tree-sign,

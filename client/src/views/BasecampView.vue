@@ -22,7 +22,7 @@ const explorerSub = "Live picks from Google Maps";
 const rooms = [
   {
     where: "The car out front",
-    name: "Planner",
+    name: "Trips",
     job: "Plan a trip with your crew",
     to: "/planner",
   },
@@ -103,14 +103,9 @@ onMounted(async () => {
     <section class="intro">
       <span class="tag-stamp">Your JB trip HQ</span>
       <h1 class="display display-xl" style="text-align: center;">
-        {{ auth.firstName || "Your" }}'s <span class="accent">Basecamp.</span>
+        {{ auth.firstName ? `${auth.firstName}'s` : "Your" }} <span class="accent">Basecamp.</span>
       </h1>
     </section>
-
-    <RouterLink v-if="live" :to="`/planner/${live.id}`" class="live-card">
-      <TripCover :trip="live" />
-      <span class="hand">You're on the road! Tap to tick off stops →</span>
-    </RouterLink>
 
     <section class="house-card" aria-label="Basecamp house: choose a door">
       <BasecampHouse

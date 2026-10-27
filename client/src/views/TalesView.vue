@@ -1,10 +1,11 @@
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue';
+import { ref, reactive, watch, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage, uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { VIBES, VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
 import { timeAgo, initials } from '@/utils/format';
+
 
 const route = useRoute();
 const router = useRouter();
@@ -21,11 +22,13 @@ const placeQuery = ref('');
 const suggestions = ref([]);
 const uploading = ref(false);
 const posting = ref(false);
-const composeError = ref('');
+const composeError = ref(''); 
 
 // comments per post id
 const openComments = reactive({});
 const commentDraft = reactive({});
+
+const photoDialog = ref(null);
 
 async function load(more = false) {
   feed.loading = true;
@@ -37,7 +40,7 @@ async function load(more = false) {
         vibe: vibe.value || undefined,
         placeId: placeFilter.value || undefined,
         before: more ? feed.nextCursor : undefined,
-        limit: 20,
+        limit: 10,
       },
     });
     feed.items = more ? [...feed.items, ...data.items] : data.items;
@@ -64,7 +67,8 @@ watch(placeQuery, (q) => {
     try {
       const { data } = await api.get('/places/autocomplete', { params: { q } });
       suggestions.value = data;
-    } catch {
+    } catch (error) {
+      console.log(error)
       suggestions.value = [];
     }
   }, 200);
@@ -75,6 +79,13 @@ function pickPlace(p) {
   if (!draft.vibe) draft.vibe = p.vibes?.[0] || '';
   suggestions.value = [];
 }
+
+watch(placeQuery, (q) => {
+    if (draft.place && q !== draft.place.name) {
+        draft.place = null;
+    }
+});
+
 
 async function addImages(files) {
   uploading.value = true;
@@ -96,11 +107,14 @@ async function post() {
       caption: draft.caption,
       vibe: draft.vibe || undefined,
       placeId: draft.place?.id,
+      customPlaceName: draft.place ? undefined : (placeQuery.value.trim() || undefined),
       images: draft.images,
     });
+
     feed.items.unshift(data);
     Object.assign(draft, { caption: '', vibe: '', place: null, images: [] });
     placeQuery.value = '';
+
   } catch (err) {
     composeError.value = errorMessage(err);
   } finally {
@@ -115,24 +129,133 @@ async function like(p) {
 }
 
 async function toggleComments(p) {
-  if (openComments[p.id]) return delete openComments[p.id];
-  const { data } = await api.get(`/posts/${p.id}/comments`);
-  openComments[p.id] = data;
+  try {
+    if (openComments[p.id]) {
+      delete openComments[p.id];
+      return;
+    }
+
+    const { data } = await api.get(`/posts/${p.id}/comments`);
+
+    const items = Array.isArray(data) ? data : data.items ?? [];
+
+    console.table(items.map(c => ({ id: c.id, text: JSON.stringify(c.text), length: c.text?.length })));
+
+    openComments[p.id] = {
+      items: items,
+      nextCursor: Array.isArray(data) ? null : data.nextCursor ?? null,
+      loading: false
+    };
+
+  } catch (error) {
+    console.log(error);
+    alert(errorMessage(error));
+  }
+}
+
+
+async function loadMoreComments(p) {
+  const state = openComments[p.id];
+
+  if (!state?.nextCursor || state.loading) return;
+
+  state.loading = true;
+
+  try {
+    const { data } = await api.get(`/posts/${p.id}/comments`, {
+      params: {
+        before: state.nextCursor
+      }
+    });
+
+    state.items.push(...data.items);
+    state.nextCursor = data.nextCursor;
+
+  } catch (error) {
+    console.log(error);
+    alert(errorMessage(error));
+  } finally {
+    state.loading = false;
+  }
 }
 
 async function comment(p) {
   const text = (commentDraft[p.id] || '').trim();
   if (!text) return;
   const { data } = await api.post(`/posts/${p.id}/comments`, { text });
-  (openComments[p.id] ||= []).push(data);
+  openComments[p.id].items.unshift(data);
   p.commentCount++;
   commentDraft[p.id] = '';
 }
 
 async function removePost(p) {
   if (!window.confirm('Delete this tale?')) return;
-  await api.delete(`/posts/${p.id}`);
-  feed.items = feed.items.filter((x) => x.id !== p.id);
+
+  try {
+    await api.delete(`/posts/${p.id}`);
+
+    feed.items = feed.items.filter(x => x.id !== p.id);
+
+    delete openComments[p.id];
+  } catch (error) {
+    alert(errorMessage(error));
+  }
+}
+
+
+async function removeComment(p, c) {
+  if (!window.confirm('Delete this comment?')) return;
+
+  try {
+    await api.delete(`/posts/${p.id}/comments/${c.id}`);
+
+    openComments[p.id].items =
+      openComments[p.id].items.filter(
+        comment => comment.id !== c.id
+      );
+
+    p.commentCount = Math.max(0, p.commentCount - 1);
+
+  } catch (error) {
+    alert(errorMessage(error));
+  }
+}
+
+
+// click-to-enlarge section
+const selectedPhotos = ref([]);
+const selectedPhotoIndex = ref(0);
+
+async function openPhotoViewer(images, index) {
+  selectedPhotos.value = images;
+  selectedPhotoIndex.value = index;
+
+  await nextTick();
+  photoDialog.value?.focus();
+}
+
+function closePhotoViewer() {
+  selectedPhotos.value = [];
+  selectedPhotoIndex.value = 0;
+}
+
+function nextPhoto() {
+  selectedPhotoIndex.value =
+    (selectedPhotoIndex.value + 1) % selectedPhotos.value.length;
+}
+
+function previousPhoto() {
+  selectedPhotoIndex.value =
+    (selectedPhotoIndex.value - 1 + selectedPhotos.value.length)
+    % selectedPhotos.value.length;
+}
+
+function handlePhotoKeydown(event) {
+  if (!selectedPhotos.value.length) return;
+
+  if (event.key === 'Escape') closePhotoViewer();
+  if (event.key === 'ArrowRight') nextPhoto();
+  if (event.key === 'ArrowLeft') previousPhoto();
 }
 </script>
 
@@ -159,6 +282,7 @@ async function removePost(p) {
               </li>
             </ul>
           </div>
+
           <label class="field">Vibe
             <select v-model="draft.vibe" class="select">
               <option value="">None</option>
@@ -182,6 +306,7 @@ async function removePost(p) {
           <div class="segmented" role="group" aria-label="Whose tales">
             <button type="button" :aria-pressed="scope === 'everyone'" @click="scope = 'everyone'">Everyone</button>
             <button type="button" :aria-pressed="scope === 'friends'" @click="scope = 'friends'">My crews</button>
+            <button type="button" :aria-pressed="scope === 'mine'" @click="scope = 'mine'">My Tales</button>
           </div>
           <select v-model="vibe" class="select" style="width: auto" aria-label="Filter by vibe">
             <option value="">All vibes</option>
@@ -198,33 +323,145 @@ async function removePost(p) {
             <div style="flex: 1">
               <strong>{{ p.author?.name }}</strong>
               <span class="muted" style="font-size: 13px"> · {{ timeAgo(p.created_at) }}</span>
-              <p v-if="p.place" style="margin: 0; font-size: 13px">at <RouterLink :to="`/tales?placeId=${p.place.id}`" @click="placeFilter = p.place.id">{{ p.place.name }}</RouterLink></p>
-            </div>
-            <span v-if="p.vibe" class="pill" :style="{ background: VIBE_TINT[p.vibe] }">{{ VIBE_LABEL[p.vibe] }}</span>
+              <p v-if="p.place || p.custom_place_name" style="margin: 0; font-size: 13px">
+                at
+                <RouterLink
+                    v-if="p.place"
+                    :to="`/tales/place/${p.place.id}`"
+                >
+                    {{ p.place.name }}
+                </RouterLink>
+
+                <RouterLink
+                    v-else
+                    :to="`/tales/custom/${encodeURIComponent(p.custom_place_name)}`"
+                >
+                    {{ p.custom_place_name }}
+                </RouterLink>
+            </p>
+          </div>
+          <span v-if="p.vibe" class="pill" :style="{ background: VIBE_TINT[p.vibe] }">{{ VIBE_LABEL[p.vibe] }}</span>
           </header>
           <p class="caption">{{ p.caption }}</p>
+
           <div v-if="p.images?.length" class="photos">
-            <img v-for="u in p.images" :key="u" :src="u" alt="" loading="lazy" />
+            <img
+              v-for="(u, index) in p.images"
+              :key="u"
+              :src="u"
+              :alt="`Tale photo ${index + 1}`"
+              loading="lazy"
+              tabindex="0"
+              role="button"
+              @click="openPhotoViewer(p.images, index)"
+              @keydown.enter="openPhotoViewer(p.images, index)"
+              @keydown.space.prevent="openPhotoViewer(p.images, index)"
+            />
           </div>
+
           <footer class="row" style="gap: 8px; margin-top: 12px">
             <button type="button" class="btn btn-sm" :aria-pressed="p.likedByMe" :class="{ liked: p.likedByMe }" @click="like(p)">♥ {{ p.likeCount }}</button>
             <button type="button" class="btn btn-sm btn-ghost" :aria-expanded="Boolean(openComments[p.id])" @click="toggleComments(p)">Comments {{ p.commentCount }}</button>
             <span class="spacer" />
             <button v-if="p.author?.id === auth.user?.id" type="button" class="btn btn-sm btn-ghost" @click="removePost(p)">Delete</button>
           </footer>
+
           <div v-if="openComments[p.id]" class="comments">
-            <p v-for="c in openComments[p.id]" :key="c.id"><strong>{{ c.author?.name }}</strong> {{ c.text }}</p>
-            <form class="row" style="gap: 8px; flex-wrap: nowrap" @submit.prevent="comment(p)">
-              <input v-model="commentDraft[p.id]" class="input" maxlength="1000" placeholder="Add a comment…" :aria-label="`Comment on ${p.author?.name}'s tale`" />
-              <button type="submit" class="btn btn-sm btn-dark">Post</button>
+
+            <!-- Display loaded comments -->
+              <div v-for="c in openComments[p.id]?.items ?? []" :key="c.id" class="comment-row">
+                <span><strong>{{ c.author?.name }}:</strong> {{ c.text }}</span>
+                <button v-if="c.author?.id === auth.user?.id" type="button" class="btn btn-sm btn-ghost" @click="removeComment(p, c)">Delete</button>
+              </div>
+
+            <!-- Load more comments -->
+            <button
+              v-if="openComments[p.id]?.nextCursor"
+              type="button"
+              class="btn btn-ghost"
+              :disabled="openComments[p.id]?.loading"
+              @click="loadMoreComments(p)"
+            >
+              {{ openComments[p.id]?.loading ? 'Loading...' : 'Load More Comments' }}
+            </button>
+
+            <!-- Add a comment -->
+            <form
+              class="row"
+              style="gap: 8px; flex-wrap: nowrap"
+              @submit.prevent="comment(p)"
+            >
+              <input
+                v-model="commentDraft[p.id]"
+                class="input"
+                maxlength="1000"
+                placeholder="Add a comment…"
+                :aria-label="`Comment on ${p.author?.name}'s tale`"
+              />
+
+              <button type="submit" class="btn btn-sm btn-dark">
+                Post
+              </button>
             </form>
           </div>
+
         </article>
 
         <p v-if="!feed.loading && !feed.items.length" class="hand muted">No tales yet. Be the first by the fire.</p>
         <button v-if="feed.nextCursor" type="button" class="btn btn-ghost" style="margin-top: 16px" :disabled="feed.loading" @click="load(true)">Older tales</button>
       </section>
     </div>
+
+    <!-- Enlarged photo viewer -->
+      <div
+        v-if="selectedPhotos.length"
+        class="photo-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Photo viewer"
+        tabindex="-1"
+        @click.self="closePhotoViewer"
+        @keydown="handlePhotoKeydown"
+        ref="photoDialog"
+      >
+        <button
+          type="button"
+          class="photo-close"
+          aria-label="Close photo"
+          @click="closePhotoViewer"
+        >
+          ✕
+        </button>
+
+        <button
+          v-if="selectedPhotos.length > 1"
+          type="button"
+          class="photo-prev"
+          aria-label="Previous photo"
+          @click="previousPhoto"
+        >
+          ❮
+        </button>
+
+        <img
+          class="photo-enlarged"
+          :src="selectedPhotos[selectedPhotoIndex]"
+          :alt="`Photo ${selectedPhotoIndex + 1}`"
+        />
+
+        <button
+          v-if="selectedPhotos.length > 1"
+          type="button"
+          class="photo-next"
+          aria-label="Next photo"
+          @click="nextPhoto">
+          ❯
+        </button>
+
+        <div class="photo-counter">
+          {{ selectedPhotoIndex + 1 }} / {{ selectedPhotos.length }}
+        </div>
+      </div>
   </main>
 </template>
 
@@ -241,9 +478,39 @@ async function removePost(p) {
 .avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 2px solid var(--ink); border-radius: 50%; background: var(--sand); font-weight: 800; font-size: 14px; }
 .caption { margin: 12px 0 0; white-space: pre-line; }
 .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
-.photos img { width: 100%; height: 140px; object-fit: cover; border: 2px solid var(--ink); border-radius: 8px; }
+.photos img { width: 100%; height: 140px; object-fit: contain; border: 2px solid var(--ink); border-radius: 8px; }
 .liked { background: var(--clay); }
-.comments { margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); font-size: 14px; }
-.comments p { margin: 0 0 8px; }
 @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .composer { position: static; } }
+
+/* Make Tale photos clickable */
+.photos img { cursor: zoom-in; }
+/* Fullscreen overlay */
+.photo-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; padding: 55px 50px; }
+/* Enlarged image */
+.photo-enlarged { max-width: 100%; max-height: 85vh; object-fit: contain; border-radius: 8px; }
+/* Close button */
+.photo-close { position: absolute; top: 18px; right: 22px; background: none; border: none; color: white; font-size: 30px; cursor: pointer; }
+/* Navigation arrows */
+.photo-prev, .photo-next { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.15); border: none; border-radius: 50%; color: white; font-size: 26px; width: 44px; height: 44px; cursor: pointer; }
+.photo-prev { left: 12px; }
+.photo-next { right: 12px; }
+.photo-counter { position: absolute; bottom: 20px; color: white; font-size: 14px; }
+/* Mobile responsiveness */
+@media (max-width: 600px) { .photo-overlay { padding: 60px 12px; } .photo-prev, .photo-next { width: 36px; height: 36px; font-size: 20px; } }
+
+
+.comments { margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); font-size: 14px; }
+.comment-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.comment-item p { margin: 0; padding: 0; flex: 1; min-width: 0; line-height: 1.4; overflow-wrap: anywhere; }
+.comment-item button { flex-shrink: 0; }
+.comment-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 2px 0; }
+.comment-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.comment-row button { flex-shrink: 0; min-height: 0; height: auto; padding: 2px 8px; line-height: 1.2; font-size: 12px; }
+
+
+
+
+.segmented { display: inline-flex; align-items: stretch; }
+.segmented button + button { border-left: 2px solid var(--ink); }
 </style>
+

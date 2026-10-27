@@ -23,7 +23,7 @@ onBeforeUnmount(() => clearTimeout(timer));
       type="button"
       class="car"
       :class="zooming ? 'zoom' : 'idle'"
-      aria-label="Hop in the car and go to the Planner"
+      aria-label="Hop in the car and go to your trips"
       data-cy="car"
       @click="drive"
     >
@@ -132,7 +132,7 @@ onBeforeUnmount(() => clearTimeout(timer));
     <p class="hint" :style="{ opacity: zooming ? 0 : 1 }" aria-hidden="true">
       vroom vroom!
     </p>
-    <RouterLink to="/planner" class="planner-link">Planner →</RouterLink>
+    <RouterLink to="/planner" class="planner-link">Trips →</RouterLink>
   </div>
 </template>
 
@@ -276,6 +276,12 @@ onBeforeUnmount(() => clearTimeout(timer));
   color: var(--sand);
   transform: rotate(-3deg);
   transition: opacity 0.2s;
+}
+/* on a phone it runs into the Trips button */
+@media (max-width: 600px) {
+  .hint {
+    display: none;
+  }
 }
 .planner-link {
   position: absolute;
