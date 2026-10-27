@@ -66,6 +66,19 @@ export const useAuthStore = defineStore('auth', {
       const { data } = await api.post('/auth/signup', form);
       await this.applySession(data);
     },
+    /** Uploads a new profile photo (the API picks the URL, deletes the old file and returns the new URL). */
+    async setAvatar(file) {
+      const userId = this.user?.id;
+      const form = new FormData();
+      form.append('image', file, file.name || 'avatar.jpg');
+      const { data } = await api.put('/auth/me/avatar', form);
+      if (this.user?.id === userId) this.profile = { ...this.profile, avatar_url: data.avatar_url };
+    },
+    async removeAvatar() {
+      const userId = this.user?.id;
+      const { data } = await api.delete('/auth/me/avatar');
+      if (this.user?.id === userId) this.profile = { ...this.profile, avatar_url: data.avatar_url };
+    },
     /**
      * Permanently deletes the signed-in account (the API re-checks the password and throws if it cannot).
      * `beforeSignOut` lets the page move to a public screen first; otherwise the auth guard would bounce the

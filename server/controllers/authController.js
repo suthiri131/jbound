@@ -1,7 +1,7 @@
 import { createAnonClient, supabase } from '../db/supabase.js';
-import { HttpError, check, conflict, forbidden, unauthorized } from '../utils/httpError.js';
+import { HttpError, badRequest, check, conflict, forbidden, unauthorized } from '../utils/httpError.js';
 import { displayName, postSystemMessage } from '../services/systemMessages.js';
-import { removeUserFiles } from '../services/storageService.js';
+import { pathFromPublicUrl, removeFile, removeUserFiles, sniffImageType, uploadImage } from '../services/storageService.js';
 
 const PROFILE_COLUMNS = 'id, username, name, avatar_url';
 
@@ -192,3 +192,41 @@ export async function deleteAccount(req, res) {
 
   res.json({ deleted: true });
 }
+
+// Avatars: no animated GIFs (they cannot be paused, which is an accessibility problem next to every name).
+const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+/** Delete an old avatar file, but only if it is one of ours and sits in this user's own avatar folder. */
+async function removeOldAvatar(url, userId) {
+  const path = pathFromPublicUrl(url);
+  if (path && path.startsWith(`avatars/${userId}/`)) await removeFile(path);
+}
+
+// PUT /api/auth/me/avatar  (multipart, field "image") -> { avatar_url }
+export async function setAvatar(req, res) {
+  if (!req.file) throw badRequest('Attach a photo in the "image" field');
+  const type = sniffImageType(req.file.buffer);
+  if (!AVATAR_TYPES.includes(type)) throw badRequest('That file is not a JPG, PNG or WebP image.');
+
+  const previous = (await getProfile(req.user)).avatar_url; // also makes sure the profiles row exists
+  // The server picks the URL (avatars/<userId>/<uuid>.<ext>); the client can never point it somewhere else.
+  const { url, path } = await uploadImage({ buffer: req.file.buffer, mimetype: type }, { folder: 'avatars', userId: req.user.id });
+
+  const { error } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', req.user.id);
+  if (error) {
+    await removeFile(path); // do not leave an orphan behind
+    throw new HttpError(500, 'We could not save your photo. Please try again.');
+  }
+  await removeOldAvatar(previous, req.user.id);
+  res.json({ avatar_url: url });
+}
+
+// DELETE /api/auth/me/avatar -> { avatar_url: null }
+export async function removeAvatar(req, res) {
+  const previous = (await getProfile(req.user)).avatar_url;
+  const { error } = await supabase.from('profiles').update({ avatar_url: null }).eq('id', req.user.id);
+  if (error) throw new HttpError(500, 'We could not remove your photo. Please try again.');
+  await removeOldAvatar(previous, req.user.id);
+  res.json({ avatar_url: null });
+}
+

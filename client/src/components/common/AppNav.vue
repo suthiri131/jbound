@@ -2,7 +2,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
-import { initials } from "@/utils/format";
+import UserAvatar from "@/components/common/UserAvatar.vue";
 
 defineEmits(["open-satchel"]);
 const auth = useAuthStore();
@@ -98,7 +98,7 @@ async function logout() {
             :aria-label="`Account menu for ${auth.profile?.name}`"
             @click="menuOpen = !menuOpen"
           >
-            {{ initials(auth.profile?.name) }}
+            <UserAvatar :name="auth.profile?.name" :url="auth.profile?.avatar_url" :size="40" />
           </button>
           <div v-if="menuOpen" class="menu" role="menu">
             <p class="menu-name">{{ auth.profile?.name }}</p>
@@ -185,6 +185,10 @@ async function logout() {
   box-shadow: var(--shadow-sm);
 }
 .avatar {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  overflow: hidden;
   width: 44px;
   height: 44px;
   border-radius: 50%;

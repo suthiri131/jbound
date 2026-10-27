@@ -2,8 +2,9 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { assetUrl, errorMessage } from '@/lib/api';
-import { initials } from '@/utils/format';
+import { errorMessage } from '@/lib/api';
+import UserAvatar from '@/components/common/UserAvatar.vue';
+import AvatarEditor from '@/components/profile/AvatarEditor.vue';
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal.vue';
 
 const auth = useAuthStore();
@@ -14,7 +15,6 @@ const heading = ref(null);
 onMounted(() => heading.value?.focus({ preventScroll: true }));
 
 const name = computed(() => auth.profile?.name || '');
-const avatarUrl = computed(() => assetUrl(auth.profile?.avatar_url));
 
 const showDelete = ref(false);
 const busy = ref(false);
@@ -46,15 +46,14 @@ async function confirmDelete(password) {
 <template>
   <main class="container page profile">
     <header class="head">
-      <div class="avatar" aria-hidden="true">
-        <img v-if="avatarUrl" :src="avatarUrl" alt="" />
-        <span v-else>{{ initials(name) }}</span>
-      </div>
+      <UserAvatar class="head-avatar" :name="name" :url="auth.profile?.avatar_url" :size="72" />
       <div>
         <p class="eyebrow accent">Account</p>
         <h1 ref="heading" class="display display-lg" tabindex="-1">Your profile</h1>
       </div>
     </header>
+
+    <AvatarEditor />
 
     <section class="card-flat card-pad block" aria-labelledby="details-title">
       <h2 id="details-title" class="display display-sm">Your details</h2>
@@ -102,12 +101,7 @@ async function confirmDelete(password) {
 :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 .profile { max-width: 760px; }
 .head { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 20px; margin-bottom: 24px; }
-.avatar {
-  display: grid; place-items: center; flex: none; overflow: hidden;
-  width: 72px; height: 72px; border: 2px solid var(--ink); border-radius: 50%;
-  background: var(--sage); font-size: 26px; font-weight: 800;
-}
-.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.head-avatar { border: 2px solid var(--ink); }
 .block { margin-bottom: 24px; }
 .block h2 { margin-bottom: 14px; }
 .details { display: grid; gap: 14px; margin: 0; }
