@@ -46,8 +46,8 @@ useTripRealtime(computed(() => props.trip.id), ['memories'], load, { pollMs: 300
 async function uploadFiles(fileList) {
   const files = [...fileList].filter((f) => f.type.startsWith('image/'));
   for (const file of files) {
-    if (file.size > 8 * 1024 * 1024) {
-      emit('error', `${file.name} is over 8 MB`);
+    if (file.size > 4 * 1024 * 1024) {
+      emit('error', `${file.name} is over 4 MB`);
       continue;
     }
     uploading.value++;
@@ -134,7 +134,7 @@ async function archiveNow() {
       >
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h3l2-3h6l2 3h3v13H4Z" /><circle cx="12" cy="13" r="4" /></svg>
         <strong>{{ uploading ? `Uploading ${uploading}…` : 'Drop photos here, or tap to choose' }}</strong>
-        <span class="muted" style="font-size: 13px">JPG/PNG/WebP up to 8 MB. Tag each one to a stop you ticked.</span>
+        <span class="muted" style="font-size: 13px">JPG/PNG/WebP up to 4 MB. Tag each one to a stop you ticked.</span>
         <input type="file" accept="image/*" multiple class="sr-only" data-cy="memory-input" @change="uploadFiles($event.target.files); $event.target.value = ''" />
       </label>
 

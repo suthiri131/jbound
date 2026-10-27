@@ -1,7 +1,7 @@
 <script setup>
     import { ref, reactive, computed, watch, nextTick } from 'vue';
     import { useRoute } from 'vue-router';
-    import { api, errorMessage } from '@/lib/api';
+    import { api, assetUrl, errorMessage } from '@/lib/api';
     import { useAuthStore } from '@/stores/auth';
     import { VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
     import { timeAgo, initials } from '@/utils/format';
@@ -206,27 +206,17 @@
         <div v-if="placePhotos.length" class="place-carousel">
 
             <img
-                :src="placePhotos[currentPlacePhoto]?.startsWith('/api/')
-                    ? `http://localhost:3001${placePhotos[currentPlacePhoto]}`
-                    : placePhotos[currentPlacePhoto]"
+                :src="assetUrl(placePhotos[currentPlacePhoto])"
                 :alt="`${place?.name} photo ${currentPlacePhoto + 1}`"
                 class="place-hero"
                 role="button"
                 tabindex="0"
                 @click="openPhotoViewer(
-                    placePhotos.map(photo =>
-                        photo.startsWith('/api/')
-                            ? `http://localhost:3001${photo}`
-                            : photo
-                    ),
+                    placePhotos.map(assetUrl),
                     currentPlacePhoto
                 )"
                 @keydown.enter="openPhotoViewer(
-                    placePhotos.map(photo =>
-                        photo.startsWith('/api/')
-                            ? `http://localhost:3001${photo}`
-                            : photo
-                    ),
+                    placePhotos.map(assetUrl),
                     currentPlacePhoto
                 )"
             />

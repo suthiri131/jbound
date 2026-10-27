@@ -9,7 +9,7 @@ import { convertQuery, rateQuery, routingBody, uploadQuery } from './schemas.js'
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 4 * 1024 * 1024 }, // 4 MiB leaves room for multipart overhead on Vercel.
   fileFilter: (_req, file, cb) =>
     ALLOWED_IMAGE_TYPES.includes(file.mimetype)
       ? cb(null, true)

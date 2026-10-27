@@ -21,7 +21,7 @@ import * as s from "./schemas.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB per photo
+  limits: { fileSize: 4 * 1024 * 1024 }, // 4 MiB leaves room for multipart overhead on Vercel.
   fileFilter: (_req, file, cb) =>
     ALLOWED_IMAGE_TYPES.includes(file.mimetype)
       ? cb(null, true)

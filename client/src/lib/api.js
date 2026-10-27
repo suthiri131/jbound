@@ -35,6 +35,9 @@ export function errorMessage(err, fallback = 'Something went wrong. Try again.')
 
 /** Upload one image file for posts/avatars. Returns the public URL. */
 export async function uploadImage(file, folder = 'posts') {
+  if (file.size > 4 * 1024 * 1024) {
+    throw new Error('Image must be 4 MB or smaller');
+  }
   const form = new FormData();
   form.append('image', file);
   const { data } = await api.post(`/uploads?folder=${folder}`, form);
