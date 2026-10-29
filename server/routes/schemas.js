@@ -1,6 +1,7 @@
 /** Request validation schemas (zod). Shared by all routers. */
 import { z } from 'zod';
 import { VIBES } from '../services/logic/vibeMatching.js';
+import { ATTIC_SLOTS } from '../services/logic/attic.js';
 
 export const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
@@ -181,6 +182,7 @@ export const memoryFields = z.object({
 });
 export const STICKER_KINDS = ['star', 'sun', 'palm', 'chili', 'heart', 'car', 'bowl', 'compass'];
 export const stickersBody = z.object({ stickers: z.array(z.enum(STICKER_KINDS)).max(4) });
+export const drawerBody = z.object({ slot: z.number().int().min(0).max(ATTIC_SLOTS - 1) });
 
 // ---------- chat ----------
 export const messagesQuery = z.object({

@@ -7,6 +7,7 @@ import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 import routesRouter from "./routes/routes.js";
 import expensesRouter from "./routes/expensesRoutes.js";
 import tripRoutes from "./routes/trips.js";
+import archiveRoutes from "./routes/archives.js";
 import authRoutes from "./routes/auth.js";
 import utilityRoutes from "./routes/utility.js";
 import placeRoutes from "./routes/places.js";
@@ -55,6 +56,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api", utilityRoutes);
 app.use("/api/routes", routesRouter);
 app.use("/api/trips", tripRoutes);
+app.use("/api/archives", archiveRoutes);
 app.use("/api/trips/:tripId/expenses", expensesRouter);
 app.use("/api/places", placeRoutes);
 

@@ -7,6 +7,19 @@ export const STOPS_PER_PAGE = 3;
 const INKS = ['#9E3B1B', '#3C2A21', '#2F4A5A', '#5C6B2E'];
 const PAPERS = ['#E8D9B5', '#DCCBA3', '#EFE3C6', '#D9C4A0'];
 const STAMP_WORDS = ['PASSED', 'ARRIVED', 'KEPT', 'BORDER OK', 'JB ⇄ SG', 'APPROVED'];
+// for photos with no caption and no stop; short enough to fit a polaroid's two lines
+export const FALLBACK_CAPTIONS = [
+  'A moment worth keeping',
+  'You had to be there',
+  'Somewhere across the causeway',
+  'Worth the jam at the border',
+  'Proof we were here',
+  'Golden hour, probably',
+  'One for the memory book',
+  'Ask us about this one',
+  'The good kind of detour',
+  'Still talking about it',
+];
 
 /** FNV-1a hash of a string to an unsigned 32-bit number */
 export function hashSeed(text) {
@@ -83,13 +96,15 @@ export function buildScrapbookPages({ trip, memories = [], expenses = [], canUpl
   const year = trip.start_date?.slice(0, 4) || '';
   const stampWords = [...STAMP_WORDS, trip.start_date ? `${shortDate(trip.start_date).slice(4).toUpperCase()} ${year}` : 'ON THE ROAD'];
 
+  // walk the fallback captions from a per-trip starting point, so none repeats until all have been used
+  let fallbackIndex = hashSeed(`${seed}:captions`);
   const photos = memories.map((memory, i) => {
     const stop = stopById.get(memory.stop?.id) || memory.stop || null;
     return {
       id: `photo-${memory.id}`,
       kind: 'photo',
       image: memory.image_url,
-      caption: memory.caption || stop?.title || 'A moment worth keeping',
+      caption: memory.caption || stop?.title || FALLBACK_CAPTIONS[fallbackIndex++ % FALLBACK_CAPTIONS.length],
       author: memory.author?.name,
       day: stop?.day || memory.created_at?.slice(0, 10),
       order: i,
@@ -123,7 +138,7 @@ export function buildScrapbookPages({ trip, memories = [], expenses = [], canUpl
         const left = slot === 0 ? between(rng, 6, 16) : between(rng, 34, 44);
         return {
           ...item,
-          top: slot === 0 ? between(rng, 5, 9) : between(rng, 51, 55),
+          top: slot === 0 ? between(rng, 4, 7) : between(rng, 52, 55),
           left: mirrored ? 100 - 50 - left : left,
           rotation: between(rng, -6, 6),
           fastener: fastener(rng),

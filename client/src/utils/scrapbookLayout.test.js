@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildScrapbookPages, MIN_PHOTO_SLOTS, seededRandom } from './scrapbookLayout.js';
+import { buildScrapbookPages, FALLBACK_CAPTIONS, MIN_PHOTO_SLOTS, seededRandom } from './scrapbookLayout.js';
 
 const trip = {
   id: 'trip-1',
@@ -21,6 +21,14 @@ describe('buildScrapbookPages', () => {
     expect(buildScrapbookPages({ trip, memories })).toEqual(a);
     const b = buildScrapbookPages({ trip: { ...trip, id: 'trip-2' }, memories });
     expect(polaroids(b).map((p) => p.rotation)).not.toEqual(polaroids(a).map((p) => p.rotation));
+  });
+
+  it('gives uncaptioned, untagged photos different fallback captions, the same each time', () => {
+    const bare = Array.from({ length: 4 }, (_, i) => ({ id: `b${i}`, image_url: `/b${i}.jpg` }));
+    const captions = polaroids(buildScrapbookPages({ trip, memories: bare })).map((p) => p.caption);
+    expect(new Set(captions).size).toBe(4);
+    for (const caption of captions) expect(FALLBACK_CAPTIONS).toContain(caption);
+    expect(polaroids(buildScrapbookPages({ trip, memories: bare })).map((p) => p.caption)).toEqual(captions);
   });
 
   it('tilts every polaroid between -6 and +6 degrees and holds it down with tape, a pin or corners', () => {

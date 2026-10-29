@@ -94,7 +94,7 @@ function decorStyle(decor) {
           <span class="plus" aria-hidden="true">+</span>
           <span>{{ item.prompt }}</span>
         </div>
-        <figcaption class="hand">
+        <figcaption class="hand" :title="item.author ? `${item.caption} — ${item.author}` : item.caption">
           <span class="caption">{{ item.caption }}</span>
           <span v-if="item.author" class="by">— {{ item.author }}</span>
         </figcaption>
@@ -193,9 +193,11 @@ function decorStyle(decor) {
 .photo-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4cqw; padding: 2cqw; border: 2px dashed rgba(60,42,33,.35); color: #5A4A36; font-family: var(--font-hand); font-size: 4.2cqw; line-height: 1.1; text-align: center; }
 .plus { display: grid; width: 8cqw; height: 8cqw; place-items: center; border: 2px solid currentColor; border-radius: 50%; font-family: inherit; font-size: 5cqw; }
 .polaroid.blank { border-style: dashed; }
-.polaroid figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 2cqw; margin-top: 1.2cqw; font-size: 4.4cqw; line-height: 1.1; }
-.caption { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.by { flex: none; color: #5A4A36; font-size: .8em; }
+/* the caption gets up to two handwritten lines (the full text is in the tooltip); the author always shows */
+.polaroid figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 0 2cqw; min-height: 2.1em; margin-top: 1cqw; font-size: 4cqw; line-height: 1.05; }
+.caption { display: -webkit-box; flex: 0 1 auto; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+/* sits beside a short caption, or tucks under the last line of a long one */
+.by { flex: none; margin-left: auto; color: #5A4A36; font-size: .8em; line-height: 1; }
 .tape { position: absolute; z-index: 2; top: -2.2cqw; width: 14cqw; height: 4.4cqw; opacity: .85; box-shadow: 0 1px 2px rgba(44,24,16,.15); transform: rotate(var(--tape-tilt)); }
 .tape-l { left: -4cqw; }
 .tape-r { right: -4cqw; }
@@ -203,7 +205,8 @@ function decorStyle(decor) {
 .hold-corners::before, .hold-corners::after { position: absolute; z-index: 2; width: 5cqw; height: 5cqw; content: ''; background: #3C2A21; }
 .hold-corners::before { top: -1cqw; left: -1cqw; clip-path: polygon(0 0, 100% 0, 0 100%); }
 .hold-corners::after { right: -1cqw; bottom: -1cqw; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
-.margin-note { position: absolute; top: 44%; z-index: 1; max-width: 72%; margin: 0; padding: 0 2cqw; font-size: 5.4cqw; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: linear-gradient(transparent 60%, rgba(223,208,168,.8) 60%); transform: rotate(var(--tilt)); }
+/* centred in the gap between the polaroids; a long note takes a second, highlighted line */
+.margin-note { position: absolute; top: 48%; z-index: 1; display: -webkit-box; max-width: 72%; margin: 0; padding: 0 2cqw; overflow: hidden; font-size: 5cqw; line-height: 1.2; overflow-wrap: anywhere; background: repeating-linear-gradient(transparent 0 .72em, rgba(223,208,168,.8) .72em 1.2em); -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; transform: translateY(-50%) rotate(var(--tilt)); }
 
 /* bucket list */
 .note-card { position: relative; z-index: 1; display: flex; width: 86%; gap: 3cqw; padding: 3.4cqw 4cqw; background: #FDFBF7; box-shadow: 1px 4px 10px rgba(44,24,16,.17); transform: translateX(var(--shift)) rotate(var(--tilt)); }

@@ -4,7 +4,7 @@ import { postSystemMessage, displayName } from '../services/systemMessages.js';
 import { tripPhase, sgToday, addDays, MEMORY_WINDOW_DAYS } from '../services/logic/memoryWindow.js';
 
 const PROFILE = 'id, username, name, avatar_url';
-const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
+export const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
 
 async function addMember(tripId, userId, role = 'member') {
   const { error } = await supabase.from('trip_members').insert({ trip_id: tripId, user_id: userId, role });
@@ -13,7 +13,7 @@ async function addMember(tripId, userId, role = 'member') {
 }
 
 /** Attach phase info and lazily archive trips whose 7-day memory window has passed. */
-async function withPhase(trip, today = sgToday()) {
+export async function withPhase(trip, today = sgToday()) {
   const info = tripPhase(trip, today);
   if (info.autoArchive) {
     const archivedAt = new Date().toISOString();

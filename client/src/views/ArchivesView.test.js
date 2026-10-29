@@ -6,7 +6,7 @@ import ArchivesView from './ArchivesView.vue';
 import { api } from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
-  api: { get: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
   errorMessage: (_error, fallback) => fallback || 'Something went wrong',
   assetUrl: (url) => url,
 }));
@@ -27,7 +27,7 @@ const trip = {
 
 function mockTrip({ memories = [], expenses = [], window = { phase: 'archived' } } = {}) {
   api.get.mockImplementation(async (path) => {
-    if (path === '/trips') return { data: [trip, { ...trip, id: 'live', phase: 'planning', name: 'Upcoming' }] };
+    if (path === '/archives') return { data: { capacity: 7, drawers: [{ slot: 0, trip, isNew: false }], pending: [] } };
     if (path === '/trips/trip-42') return { data: trip };
     if (path === '/trips/trip-42/memories') return { data: { memories, window } };
     if (path === '/trips/trip-42/expenses') return { data: { expenses } };
@@ -39,6 +39,8 @@ let router;
 
 beforeEach(() => {
   api.get.mockReset();
+  api.post.mockReset();
+  api.put.mockReset();
   window.innerWidth = 1024;
   router = createRouter({
     history: createMemoryHistory(),
@@ -62,13 +64,54 @@ async function open(path) {
 }
 
 describe('ArchivesView', () => {
-  it('lists only archived trips', async () => {
+  it('puts each archived trip in its drawer and keeps the rest shut', async () => {
     mockTrip();
     const wrapper = await open('/archives');
-    const links = wrapper.findAll('a.cover-link');
-    expect(links).toHaveLength(1);
-    expect(links[0].attributes('href')).toBe('/archives/trip-42');
+    const filled = wrapper.findAll('a.drawer');
+    expect(filled).toHaveLength(1);
+    expect(filled[0].attributes('href')).toBe('/archives/trip-42');
+    expect(filled[0].text()).toContain('A little Johor adventure');
+    expect(filled[0].text()).toContain('OCT 2026');
+    expect(wrapper.findAll('.drawer.empty')).toHaveLength(6);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     wrapper.unmount();
+  });
+
+  describe('when an 8th trip arrives', () => {
+    const full = [...Array(7).keys()].map((slot) => ({ slot, trip: { ...trip, id: `old-${slot}`, name: `Old trip ${slot}` }, isNew: false }));
+    const eighth = { ...trip, id: 'eighth', name: 'Kukup Seafood Day Trip' };
+
+    beforeEach(() => {
+      let pending = [eighth];
+      api.get.mockImplementation(async () => ({ data: { capacity: 7, drawers: full, pending } }));
+      api.post.mockImplementation(async () => { pending = []; });
+      api.put.mockImplementation(async () => { pending = []; });
+    });
+
+    it('asks the user to clear it out or swap it, and can clear it', async () => {
+      const wrapper = await open('/archives');
+      const dialog = document.querySelector('[role="alertdialog"]');
+      expect(dialog.textContent).toContain('Kukup Seafood Day Trip');
+      [...dialog.querySelectorAll('button')].find((b) => b.textContent.includes('Clear it out')).click();
+      await flushPromises();
+      expect(api.post).toHaveBeenCalledWith('/archives/eighth/clear');
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('swaps it into the drawer the user picks', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const wrapper = await open('/archives');
+      [...document.querySelectorAll('[role="alertdialog"] button')].find((b) => b.textContent.includes('Swap')).click();
+      await flushPromises();
+      expect(wrapper.text()).toContain('Pick a drawer to swap out');
+      await wrapper.get('button.drawer[data-slot="5"]').trigger('click');
+      await flushPromises();
+      expect(api.put).toHaveBeenCalledWith('/archives/eighth/drawer', { slot: 5 });
+      expect(wrapper.find('.swap-banner').exists()).toBe(false);
+      window.confirm.mockRestore();
+      wrapper.unmount();
+    });
   });
 
   it('loads the trip, photos and ledger into a closed scrapbook', async () => {
@@ -77,7 +120,10 @@ describe('ArchivesView', () => {
       expenses: [{ id: 'e1', description: 'Satay', amount_sgd: 21.5 }, { id: 'e2', amount_sgd: 8 }],
     });
     const wrapper = await open('/archives/trip-42');
-    expect(api.get.mock.calls.map(([path]) => path)).toEqual(['/trips/trip-42', '/trips/trip-42/memories', '/trips/trip-42/expenses']);
+    expect(api.get.mock.calls.map(([path]) => path).sort()).toEqual(['/archives', '/trips/trip-42', '/trips/trip-42/expenses', '/trips/trip-42/memories']);
+    // the scrapbook opens over the attic rather than replacing it
+    expect(wrapper.find('.attic').exists()).toBe(true);
+    expect(wrapper.get('[role="dialog"]').text()).toContain('From the mahogany dresser, 2026');
 
     const cover = wrapper.get('.leaf .front');
     expect(cover.text()).toContain('A little Johor adventure');
@@ -106,10 +152,21 @@ describe('ArchivesView', () => {
     wrapper.unmount();
   });
 
+  it('closes the drawer back into the attic', async () => {
+    mockTrip();
+    const wrapper = await open('/archives/trip-42');
+    await wrapper.get('.close-drawer').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/archives');
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.find('a.drawer[data-trip="trip-42"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it('shows an error instead of a book when the trip cannot be loaded', async () => {
     api.get.mockRejectedValue(new Error('boom'));
     const wrapper = await open('/archives/trip-42');
-    expect(wrapper.get('[role="alert"]').text()).toBe('Could not load this scrapbook');
+    expect(wrapper.get('[role="dialog"] [role="alert"]').text()).toBe('Could not load this scrapbook');
     expect(wrapper.find('.book').exists()).toBe(false);
     wrapper.unmount();
   });
