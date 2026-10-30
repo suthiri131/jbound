@@ -1,9 +1,5 @@
 <script setup>
-/**
- * Memory box: shown on the right of the Planner while a trip is in its 7-day
- * window after it ends (also usable while on the road).
- * Every photo here becomes a scrapbook page in the trip's Archives drawer.
- */
+
 import { ref, computed, watch } from 'vue';
 import { api, errorMessage } from '@/lib/api';
 // import { useAuthStore } from '@/stores/auth';

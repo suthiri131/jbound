@@ -1,14 +1,5 @@
 <script setup>
-// CHANGES FOR EXPLORER: new component
-/**
- * Explorer intro: two doors swing open onto a cork bulletin board of vibe flyers.
- * Tap flyers to add them to your vibe, then "Let's Explore!" → flyers poof away → emits `explore`.
- *
- * Props:  name        first name for the greeting ('' → "explorer")
- *         initial     vibe ids picked last time (when coming back via "Change my vibe")
- *         skipDoors   true when coming back, so the doors don't play again
- * Emits:  explore(vibeIds)   [] means "show me everything"
- */
+
 import { ref, onMounted } from "vue";
 import { VIBES, VIBE_TINT, VIBE_FLYER } from "@/utils/constants";
 import VibeIcon from "@/components/common/VibeIcon.vue";

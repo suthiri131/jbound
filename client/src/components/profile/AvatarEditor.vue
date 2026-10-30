@@ -1,12 +1,5 @@
 <script setup>
-/**
- * "Profile photo" section: choose a photo, see a preview, then explicitly Save (or Cancel); or Remove the current one.
- * Nothing is uploaded until "Save photo" is pressed, so picking a file never changes the page unexpectedly.
- *
- * Accessibility: a real, labelled <input type="file"> (keyboard + screen reader friendly), a hint linked with
- * aria-describedby, progress/success messages in a polite live region (role="status"), errors in role="alert",
- * and focus returned to the file input whenever the button that was pressed goes away.
- */
+
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { errorMessage } from '@/lib/api';

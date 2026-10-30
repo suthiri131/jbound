@@ -1,12 +1,5 @@
 <script setup>
-/**
- * "Delete your account?" dialog. It only collects the password and shows what happened; the parent
- * (ProfileView) makes the API call and passes `busy` / `error` / `blockedTrips` back in.
- *
- * Accessibility: role="dialog" + aria-modal with a label and description, focus moves in (to the password
- * field) and is trapped, the rest of the app is made `inert` while it is open, Esc and Cancel close it, focus
- * returns to the button that opened it, and errors are announced (role="alert").
- */
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const props = defineProps({

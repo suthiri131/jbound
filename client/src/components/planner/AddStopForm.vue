@@ -1,5 +1,5 @@
 <script setup>
-/** Scribble a stop - add a custom stop (no place from the Explorer). */
+
 import { reactive, ref, watch, onBeforeUnmount } from "vue";
 import { api, errorMessage } from "@/lib/api";
 import { dayLabel } from "@/utils/format";

@@ -1,8 +1,5 @@
 <script setup>
-/**
- * "Email" section: change the email you sign in with. The password is re-checked first.
- * Like sign-up, the new address is not verified with a link, so the hint tells people to check the spelling.
- */
+
 import { ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { errorMessage } from '@/lib/api';

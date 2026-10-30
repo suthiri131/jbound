@@ -1,8 +1,5 @@
 <script setup>
-/**
- * The trip's bucket list: stops grouped by day, tick boxes, times, drag reorder.
- * Every change goes straight to the API; the parent reloads (and Realtime syncs the crew).
- */
+
 import { ref, computed, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import { api, errorMessage } from '@/lib/api';

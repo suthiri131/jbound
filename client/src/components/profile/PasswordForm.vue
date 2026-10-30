@@ -1,8 +1,5 @@
 <script setup>
-/**
- * "Password" section: current password + new password (typed twice). The API signs every other device out, so the
- * status says so. A single "Show passwords" checkbox reveals all three boxes.
- */
+
 import { computed, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { errorMessage } from '@/lib/api';

@@ -1,9 +1,5 @@
 <script setup>
-/**
- * "Join a crew with an invite code". Used on the Planner (SatchelBar) and on the home page,
- * so the code cleaning, errors and button states live in one place.
- * Emits `joined` with the trip the API returned ({ ...trip, alreadyMember }).
- */
+
 import { ref } from 'vue';
 import { useTripsStore } from '@/stores/trips';
 import { errorMessage } from '@/lib/api';

@@ -1,9 +1,5 @@
 <script setup>
-/**
- * A round profile picture, or the person's initials when there is no picture (or it fails to load).
- * It is decorative by default (alt=""): put the person's name in text next to it, or on the button that wraps it.
- * Pass `alt` when the picture itself is the content (e.g. the preview while choosing a new photo).
- */
+
 import { computed, ref, watch } from 'vue';
 import { assetUrl } from '@/lib/api';
 import { initials } from '@/utils/format';

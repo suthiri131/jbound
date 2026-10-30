@@ -1,5 +1,5 @@
 <script setup>
-/** "Name" section: change first and last name. No password needed (it is not a sign-in detail). */
+
 import { ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { errorMessage } from '@/lib/api';

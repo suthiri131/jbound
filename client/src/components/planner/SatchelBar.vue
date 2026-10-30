@@ -1,8 +1,5 @@
 <script setup>
-/**
- * Trip grid for the Planner: one cover per trip,
- * "+ New trip" (opens TripModal) and a join-by-code box.
- */
+
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage } from '@/lib/api';

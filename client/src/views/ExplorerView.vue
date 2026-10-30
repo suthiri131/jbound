@@ -1,18 +1,5 @@
 <script setup>
-// CHANGES FOR EXPLORER: this page was reworked (vibe board intro, search + filters at the top right,
-// multi-vibe category chips, pages). The pin modal and the place cards are the same as before.
-/**
- * Explorer
- * 1. Opens on the vibe board (components/explorer/VibeBoard.vue): pick flyers → "Let's Explore!"
- * 2. Then the feed: "JBound's recommendations for you" for the picked vibes.
- *
- * GET /api/places/google/search?vibes=eating,cozy&q=&checkpoint=&maxDistanceKm=&maxPrice=&hiddenGem=
- *
- * The URL keeps the feed state (?vibes=eating,cozy or ?q=laksa), so Back from a place page returns
- * straight to the feed instead of the board.
- * ?pinTo=<tripId> preselects the trip in the pin modal (from Planner "+ Add from Explorer").
- * ?pin=<googlePlaceId> opens the pin modal for that place (from the place page).
- */
+
 import { ref, reactive, computed, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, assetUrl } from "@/lib/api";
