@@ -67,8 +67,25 @@ function openTrip(item) {
   const dest = item.trip.phase === 'archived' ? `/archives/${item.trip.id}` : `/planner/${item.trip.id}`;
   router.push(dest);
 }
+onMounted(() => {
+  load();
+  loadInvites();
+})
+const invites = ref([]);
 
-onMounted(load);
+async function loadInvites() {
+  try {
+    const { data } = await api.get('/trips/invites');
+    invites.value = data;
+  } catch {
+    invites.value = [];
+  }
+}
+
+async function respond(tripId, action) {
+  await api.post(`/trips/${tripId}/invites/${action}`);
+  invites.value = invites.value.filter((t) => t.id !== tripId);
+}
 </script>
 
 <template>
@@ -83,6 +100,19 @@ onMounted(load);
     <p v-if="loadError" class="error-text card-flat card-pad" role="alert">{{ loadError }}</p>
     <p v-if="loading" class="hand muted">Loading…</p>
 
+    <section v-if="invites.length" class="group"> 
+      <h2 class="group-label"> Invites</h2>
+      <ul class="feed">
+        <li v-for="t in invites" :key="t.id" class="row-item" style="flex-direction: row; justify-content: space-between; align-items: center;">
+          <span>You've been invited to <strong>{{ t.name }}</strong></span>
+          <span class="row" style="gap: 8px">
+            <button type="button" class="btn btn-sm" @click="respond(t.id, 'accept')"> Accept</button>
+            <button ype="button" class="btn btn-sm btn-ghost" @click="respond(t.id, 'decline')"> Decline</button>
+          </span>
+
+        </li>
+      </ul>
+    </section>
     <section v-if="!loading && !items.length" class="card card-pad empty">
       <p>Nothing yet. Activity across your trips will show up here.</p>
     </section>
