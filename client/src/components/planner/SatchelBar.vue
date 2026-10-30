@@ -5,11 +5,11 @@
  */
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useTripsStore } from '@/stores/trips';
 import { api, errorMessage } from '@/lib/api';
 import TripCover from '@/components/common/TripCover.vue';
 import Pagination from '@/components/common/Pagination.vue';
 import TripModal from './TripModal.vue';
+import JoinTripForm from './JoinTripForm.vue';
 
 const props = defineProps({
   search: { type: String, default: '' },
@@ -17,7 +17,6 @@ const props = defineProps({
   startOpen: { type: Boolean, default: false },
 });
 
-const trips = useTripsStore();
 const router = useRouter();
 const route = useRoute();
 const pageSize = 12;
@@ -74,28 +73,21 @@ const listQuery = computed(() => ({
 }));
 const showNew = ref(props.startOpen);
 watch(() => props.startOpen, (v) => { if (v) showNew.value = true; });
-const code = ref('');
-const joinError = ref('');
-const joining = ref(false);
 
-async function join() {
-  if (!code.value.trim()) return;
-  joinError.value = '';
-  joining.value = true;
-  try {
-    const trip = await trips.join(code.value.trim());
-    code.value = '';
-    router.push(`/planner/${trip.id}`);
-  } catch (err) {
-    joinError.value = errorMessage(err);
-  } finally {
-    joining.value = false;
-  }
+// The notice rides along in history state so the trip page can show it as a toast
+function joined(trip) {
+  const notice = trip.alreadyMember ? `You're already in "${trip.name}".` : `You joined "${trip.name}"!`;
+  router.push({ path: `/planner/${trip.id}`, state: { notice } });
 }
 
 function created(trip) {
   showNew.value = false;
-  router.push(`/planner/${trip.id}`);
+  const missing = trip.skippedUsernames || [];
+  const notice =
+    missing.length
+      ? `"${trip.name}" is packed, but we couldn't find ${missing.map((u) => '@' + u).join(', ')}. Share the invite code instead.`
+      : `"${trip.name}" is packed!`;
+  router.push({ path: `/planner/${trip.id}`, state: { notice } });
 }
 </script>
 
@@ -110,14 +102,7 @@ function created(trip) {
         <p class="muted">Your next adventure starts here. Pick a trip to keep planning.</p>
       </div>
       <div class="actions">
-      <form id="join-crew" class="join" @submit.prevent="join">
-        <label class="sr-only" for="invite-code">Join a crew with an invite code</label>
-        <div class="join-controls">
-          <input id="invite-code" v-model="code" class="input" placeholder="Enter invite code" :aria-describedby="joinError ? 'join-err' : undefined" />
-          <button type="submit" class="btn" :disabled="joining || !code.trim()">{{ joining ? 'Joining…' : 'Join' }}</button>
-        </div>
-        <p v-if="joinError" id="join-err" class="error-text" role="alert">{{ joinError }}</p>
-      </form>
+      <JoinTripForm id="join-crew" class="join" @joined="joined" />
         <button type="button" class="btn btn-primary" data-cy="new-trip" @click="showNew = true">+ New trip</button>
       </div>
     </header>
@@ -147,7 +132,6 @@ function created(trip) {
       >
         <TripCover :trip="t" />
       </RouterLink>
-
     </div>
 
     <Pagination v-if="!loading && !loadError && total > 0" class="trip-pagination" :page="page" :total-pages="totalPages" label="Trip pages" @page-change="setPage" />

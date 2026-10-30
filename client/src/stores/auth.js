@@ -3,11 +3,15 @@ import { api } from '@/lib/api';
 import { supabase, hasSupabase } from '@/lib/supabase';
 import { useTripsStore } from '@/stores/trips';
 
+/** An Error whose message is safe to show as-is (errorMessage() in lib/api.js prefers userMessage). */
+const sessionError = (message) => Object.assign(new Error(message), { userMessage: message });
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({ user: null, profile: null, ready: false }),
   getters: {
     isLoggedIn: (s) => Boolean(s.user),
-    firstName: (s) => s.profile?.name?.split(' ')[0] ?? '',
+    // first_name comes from sign-up (so "Su Thiri" stays whole); older accounts fall back to the first word of name
+    firstName: (s) => s.profile?.first_name || s.profile?.name?.split(' ')[0] || '',
   },
   actions: {
     setUser(user, profile = null) {
@@ -21,11 +25,14 @@ export const useAuthStore = defineStore('auth', {
       try {
         if (hasSupabase) {
           const { data } = await supabase.auth.getSession();
-          if (data.session) await this.loadMe();
-          supabase.auth.onAuthStateChange((_event, session) => {
+          // Listen before calling the API so a SIGNED_OUT (expired/rejected session, or another tab)
+          // is never missed, even if loading the profile below fails.
+          supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'INITIAL_SESSION') return; // init() already handles the restored session
             const user = session?.user || null;
             this.setUser(user, user?.id === this.user?.id ? this.profile : null);
           });
+          if (data.session) await this.loadMe();
         }
       } catch {
         this.setUser(null);
@@ -39,9 +46,16 @@ export const useAuthStore = defineStore('auth', {
     },
     async applySession(payload) {
       // Hand the tokens from our API to the Supabase client so it can refresh them + power Realtime.
-      if (hasSupabase) {
-        await supabase.auth.setSession({ access_token: payload.session.access_token, refresh_token: payload.session.refresh_token });
+      // Only show the person as logged in once the session was actually stored; otherwise every
+      // later API call would fail with a 401 while the UI still claims they are signed in.
+      if (!hasSupabase) {
+        throw sessionError('Sign-in is not set up on this site (missing Supabase settings). Please tell the team.');
       }
+      const { error } = await supabase.auth.setSession({
+        access_token: payload.session.access_token,
+        refresh_token: payload.session.refresh_token,
+      });
+      if (error) throw sessionError('We could not start your session. Please try signing in again.');
       this.setUser(payload.user, payload.profile);
     },
     async login(email, password) {
@@ -52,9 +66,72 @@ export const useAuthStore = defineStore('auth', {
       const { data } = await api.post('/auth/signup', form);
       await this.applySession(data);
     },
+    /** Changes the first/last name. The API keeps profiles.name and the stored first/last name in step. */
+    async updateName({ firstName, lastName }) {
+      const userId = this.user?.id;
+      const { data } = await api.patch('/auth/me', { firstName, lastName });
+      if (this.user?.id === userId) this.profile = data.profile;
+    },
+    /** Changes the sign-in email (the API re-checks the password and throws if it is wrong or the email is taken). */
+    async changeEmail({ email, password }) {
+      const userId = this.user?.id;
+      const { data } = await api.post('/auth/change-email', { email, password });
+      if (this.user?.id !== userId) return;
+      this.user = { ...this.user, email: data.user.email };
+      // The stored session still carries the old email and would put it back when the tab regains focus: refresh it.
+      if (hasSupabase) await supabase.auth.refreshSession().catch(() => {});
+    },
+    /**
+     * Changes the password (the API re-checks the current one). The API signs every other session out and hands back
+     * a fresh one for this browser, which we store. Resolves to { signedOut, otherDevicesSignedOut }; `signedOut`
+     * means the password changed but this browser could not keep a session, so the person must sign in again.
+     */
+    async changePassword({ currentPassword, newPassword }) {
+      const { data } = await api.post('/auth/change-password', { currentPassword, newPassword });
+      if (data.session && hasSupabase) {
+        const { error } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (!error) return { signedOut: false, otherDevicesSignedOut: Boolean(data.otherDevicesSignedOut) };
+      }
+      await this.logout(); // the old session is dead and we have no new one
+      return { signedOut: true, otherDevicesSignedOut: false };
+    },
+    /** Uploads a new profile photo (the API picks the URL, deletes the old file and returns the new URL). */
+    async setAvatar(file) {
+      const userId = this.user?.id;
+      const form = new FormData();
+      form.append('image', file, file.name || 'avatar.jpg');
+      const { data } = await api.put('/auth/me/avatar', form);
+      if (this.user?.id === userId) this.profile = { ...this.profile, avatar_url: data.avatar_url };
+    },
+    async removeAvatar() {
+      const userId = this.user?.id;
+      const { data } = await api.delete('/auth/me/avatar');
+      if (this.user?.id === userId) this.profile = { ...this.profile, avatar_url: data.avatar_url };
+    },
+    /**
+     * Permanently deletes the signed-in account (the API re-checks the password and throws if it cannot).
+     * `beforeSignOut` lets the page move to a public screen first; otherwise the auth guard would bounce the
+     * person to /sign-in the moment they are signed out of a protected page.
+     */
+    async deleteAccount(password, beforeSignOut) {
+      await api.post('/auth/delete-account', { password });
+      await beforeSignOut?.();
+      await this.logout(); // the account is gone, so wipe the stored session and cached trips
+    },
     async logout() {
-      this.setUser(null);
-      if (hasSupabase) await supabase.auth.signOut();
+      this.setUser(null); // also clears the trips store (setUser sees the account change)
+      if (!hasSupabase) return;
+      // If revoking the session on the server fails (offline, token already dead), still wipe the
+      // locally stored session so a reload can't bring the old account back.
+      try {
+        const { error } = await supabase.auth.signOut();
+        if (error) await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      }
     },
   },
 });

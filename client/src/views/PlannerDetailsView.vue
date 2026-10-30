@@ -133,9 +133,29 @@ function refreshSoon() {
 } 
 ({isLive} =useTripRealtime(tripId, ["itinerary_items"], refreshSoon));
 
+// Joins, invites, leaves and removals are posted as "...the crew" system messages. trip_members is not in
+// the realtime publication, so listen for those messages to keep everyone's crew list live.
+let crewTimer;
+onBeforeUnmount(() => clearTimeout(crewTimer));
+function reloadCrewSoon() {
+  clearTimeout(crewTimer);
+  crewTimer = setTimeout(loadTrip, 300);
+}
+useTripRealtime(tripId, ["messages"], (_table, payload) => {
+  // no payload = the polling fallback, which just reloads
+  // those four messages all end with "the crew"; anchoring avoids matching a stop or trip named "...Crew..."
+  if (!payload || /\bthe crew$/i.test(payload.new?.text || "")) reloadCrewSoon();
+});
+
 watch(
   tripId,
   async () => {
+    // "You joined …" / "… is packed!" from the trips list or a ?join= link
+    const notice = window.history.state?.notice;
+    if (notice) {
+      notify(notice);
+      window.history.replaceState({ ...window.history.state, notice: undefined }, "");
+    }
     activeStopId.value = null;
     loading.value = true;
     trip.value = null;

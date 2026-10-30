@@ -16,6 +16,9 @@ import checkpointRouter from './routes/checkpoint.js';
 
 export const app = express();
 
+// Behind Render's proxy, trust one hop so req.ip is the visitor's IP (the auth rate limiter keys on it).
+if (config.env === "production") app.set("trust proxy", 1);
+
 app.use(helmet());
 app.use(
   cors({

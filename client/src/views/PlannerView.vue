@@ -28,7 +28,8 @@ watch(() => route.query.join, async (code) => {
   loadError.value = '';
   try {
     const trip = await trips.join(String(code));
-    await router.replace(`/planner/${trip.id}`);
+    const notice = trip.alreadyMember ? `You're already in "${trip.name}".` : `You joined "${trip.name}"!`;
+    await router.replace({ path: `/planner/${trip.id}`, state: { notice } });
   } catch (err) {
     loadError.value = errorMessage(err, 'Could not join this trip');
   } finally {

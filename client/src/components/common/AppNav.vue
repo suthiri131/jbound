@@ -2,7 +2,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
-import { initials } from "@/utils/format";
+import UserAvatar from "@/components/common/UserAvatar.vue";
 
 defineEmits(["open-satchel"]);
 const auth = useAuthStore();
@@ -99,12 +99,13 @@ async function logout() {
             :aria-label="`Account menu for ${auth.profile?.name}`"
             @click="menuOpen = !menuOpen"
           >
-            {{ initials(auth.profile?.name) }}
+            <UserAvatar :name="auth.profile?.name" :url="auth.profile?.avatar_url" :size="40" />
           </button>
           <div v-if="menuOpen" class="menu" role="menu">
             <p class="menu-name">{{ auth.profile?.name }}</p>
             <p v-if="auth.profile?.username" class="menu-meta">@{{ auth.profile.username }}</p>
             <p v-if="auth.user?.email" class="menu-meta">{{ auth.user.email }}</p>
+            <RouterLink to="/profile" class="btn btn-sm menu-link" role="menuitem">Profile</RouterLink>
             <button type="button" class="btn btn-sm menu-out" role="menuitem" @click="logout">Sign out</button>
           </div>
         </div>
@@ -185,6 +186,10 @@ async function logout() {
   box-shadow: var(--shadow-sm);
 }
 .avatar {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  overflow: hidden;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -219,6 +224,7 @@ async function logout() {
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
+.menu-link,
 .menu-out {
   width: 100%;
   margin-top: 12px;
