@@ -5,6 +5,9 @@ import { useAuthStore } from '@/stores/auth';
 import { errorMessage } from '@/lib/api';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import AvatarEditor from '@/components/profile/AvatarEditor.vue';
+import NameForm from '@/components/profile/NameForm.vue';
+import EmailForm from '@/components/profile/EmailForm.vue';
+import PasswordForm from '@/components/profile/PasswordForm.vue';
 import DeleteAccountModal from '@/components/profile/DeleteAccountModal.vue';
 
 const auth = useAuthStore();
@@ -72,6 +75,10 @@ async function confirmDelete(password) {
         </div>
       </dl>
     </section>
+
+    <NameForm />
+    <EmailForm />
+    <PasswordForm />
 
     <section class="card-flat card-pad block danger" aria-labelledby="danger-title">
       <h2 id="danger-title" class="display display-sm">Delete account</h2>

@@ -139,17 +139,27 @@ export async function me(req, res) {
   res.json({ user: req.user, profile: withNames(profile, data?.user) });
 }
 
-// POST /api/auth/delete-account  { password }
-export async function deleteAccount(req, res) {
-  const { id, email } = req.user;
-  const { password } = req.valid.body;
-
-  // 1. Re-check the password. 403, not 401: the client signs people out on any 401, and this session is fine.
-  const reauth = await createAnonClient().auth.signInWithPassword({ email, password });
+/**
+ * Sensitive changes (email, password, deleting the account) re-check the password first, so a session left open on
+ * a shared computer is not enough. Throws 403, not 401: the client signs people out on any 401, and this session is fine.
+ */
+async function requirePassword(user, password) {
+  const reauth = await createAnonClient().auth.signInWithPassword({ email: user.email, password });
   if (reauth.error || !reauth.data.session) {
     if (reauth.error?.status === 429) throw new HttpError(429, 'Too many attempts. Please wait a minute and try again.');
     throw forbidden('That password is not correct.');
   }
+  // The check opened a throwaway session. Close it so they do not pile up (best effort).
+  await supabase.auth.admin.signOut(reauth.data.session.access_token, 'local').catch(() => {});
+}
+
+// POST /api/auth/delete-account  { password }
+export async function deleteAccount(req, res) {
+  const { id } = req.user;
+  const { password } = req.valid.body;
+
+  // 1. Re-check the password.
+  await requirePassword(req.user, password);
 
   // 2. Deleting the auth user cascades through the database: trips.owner_id is ON DELETE CASCADE, so an owner
   //    who leaves would wipe the trip (itinerary, memories, ...) for everyone else in it. Same rule as the
@@ -228,5 +238,79 @@ export async function removeAvatar(req, res) {
   if (error) throw new HttpError(500, 'We could not remove your photo. Please try again.');
   await removeOldAvatar(previous, req.user.id);
   res.json({ avatar_url: null });
+}
+
+// PATCH /api/auth/me  { firstName, lastName } -> { profile }
+export async function updateProfile(req, res) {
+  const { firstName, lastName } = req.valid.body;
+  const name = `${firstName} ${lastName}`;
+  const before = await getProfile(req.user);
+  const { data: existing } = await supabase.auth.admin.getUserById(req.user.id);
+  const meta = existing?.user?.user_metadata || {};
+
+  // The name lives in two places: profiles.name (what the app shows) and the auth user's metadata
+  // (first/last, so "Su Thiri" stays whole). Change both or neither.
+  const saved = await supabase.from('profiles').update({ name }).eq('id', req.user.id).select(PROFILE_COLUMNS).single();
+  if (saved.error) throw new HttpError(500, 'We could not save your name. Please try again.');
+  const updated = await supabase.auth.admin.updateUserById(req.user.id, {
+    user_metadata: { ...meta, name, first_name: firstName, last_name: lastName },
+  });
+  if (updated.error) {
+    await supabase.from('profiles').update({ name: before.name }).eq('id', req.user.id); // put the old name back
+    throw new HttpError(500, 'We could not save your name. Please try again.');
+  }
+  res.json({ profile: withNames(saved.data, updated.data.user) });
+}
+
+// POST /api/auth/change-email  { email, password } -> { user: { id, email } }
+// Like sign-up, the new address is not verified by a link (email_confirm: true), so the password is re-checked instead.
+export async function changeEmail(req, res) {
+  const { email, password } = req.valid.body;
+  await requirePassword(req.user, password);
+  if (email === String(req.user.email).toLowerCase()) throw badRequest('That is already your email address.');
+
+  const updated = await supabase.auth.admin.updateUserById(req.user.id, { email, email_confirm: true });
+  if (updated.error) {
+    const { code, message = '' } = updated.error;
+    if (code === 'email_exists' || /already (been )?registered|already exists/i.test(message)) {
+      throw conflict('Another account already uses that email address.');
+    }
+    console.error('[changeEmail] failed:', message);
+    throw new HttpError(500, 'We could not change your email. Please try again.');
+  }
+  res.json({ user: { id: updated.data.user.id, email: updated.data.user.email } });
+}
+
+// POST /api/auth/change-password  { currentPassword, newPassword } -> { session, otherDevicesSignedOut }
+export async function changePassword(req, res) {
+  const { currentPassword, newPassword } = req.valid.body;
+  await requirePassword(req.user, currentPassword);
+  if (newPassword === currentPassword) throw badRequest('Your new password must be different from your current one.');
+
+  const updated = await supabase.auth.admin.updateUserById(req.user.id, { password: newPassword });
+  if (updated.error) {
+    if (updated.error.code === 'weak_password') {
+      throw badRequest(updated.error.message || 'That password is too easy to guess. Try a longer or less common one.');
+    }
+    console.error('[changePassword] failed:', updated.error.message);
+    throw new HttpError(500, 'We could not change your password. Please try again.');
+  }
+
+  // Start a fresh session with the new password, then sign every OTHER session out, so an old password or a
+  // session left on another device stops working. If this part fails the password is already changed: we answer
+  // with no session and the app signs the person out instead of leaving them half logged in.
+  let session = null;
+  let otherDevicesSignedOut = false;
+  const fresh = await createAnonClient().auth.signInWithPassword({ email: req.user.email, password: newPassword });
+  if (!fresh.error && fresh.data.session) {
+    session = fresh.data.session;
+    const out = await supabase.auth.admin.signOut(session.access_token, 'others');
+    otherDevicesSignedOut = !out.error;
+    if (out.error) console.warn('[changePassword] could not sign out other sessions:', out.error.message);
+  }
+  res.json({
+    session: session && { access_token: session.access_token, refresh_token: session.refresh_token, expires_at: session.expires_at },
+    otherDevicesSignedOut,
+  });
 }
 

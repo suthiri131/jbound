@@ -66,6 +66,38 @@ export const useAuthStore = defineStore('auth', {
       const { data } = await api.post('/auth/signup', form);
       await this.applySession(data);
     },
+    /** Changes the first/last name. The API keeps profiles.name and the stored first/last name in step. */
+    async updateName({ firstName, lastName }) {
+      const userId = this.user?.id;
+      const { data } = await api.patch('/auth/me', { firstName, lastName });
+      if (this.user?.id === userId) this.profile = data.profile;
+    },
+    /** Changes the sign-in email (the API re-checks the password and throws if it is wrong or the email is taken). */
+    async changeEmail({ email, password }) {
+      const userId = this.user?.id;
+      const { data } = await api.post('/auth/change-email', { email, password });
+      if (this.user?.id !== userId) return;
+      this.user = { ...this.user, email: data.user.email };
+      // The stored session still carries the old email and would put it back when the tab regains focus: refresh it.
+      if (hasSupabase) await supabase.auth.refreshSession().catch(() => {});
+    },
+    /**
+     * Changes the password (the API re-checks the current one). The API signs every other session out and hands back
+     * a fresh one for this browser, which we store. Resolves to { signedOut, otherDevicesSignedOut }; `signedOut`
+     * means the password changed but this browser could not keep a session, so the person must sign in again.
+     */
+    async changePassword({ currentPassword, newPassword }) {
+      const { data } = await api.post('/auth/change-password', { currentPassword, newPassword });
+      if (data.session && hasSupabase) {
+        const { error } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (!error) return { signedOut: false, otherDevicesSignedOut: Boolean(data.otherDevicesSignedOut) };
+      }
+      await this.logout(); // the old session is dead and we have no new one
+      return { signedOut: true, otherDevicesSignedOut: false };
+    },
     /** Uploads a new profile photo (the API picks the URL, deletes the old file and returns the new URL). */
     async setAvatar(file) {
       const userId = this.user?.id;
