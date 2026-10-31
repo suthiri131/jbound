@@ -15,7 +15,6 @@ const form = reactive({
   startDate: props.trip?.start_date || '',
   endDate: props.trip?.end_date || '',
   coverColor: props.trip?.cover_color || COVER_COLORS[0],
-  invites: '',
 });
 const colors = [...new Set([...COVER_COLORS, form.coverColor])];
 const busy = ref(false);
@@ -67,11 +66,6 @@ async function submit() {
       const result = await trips.update(props.trip.id, payload);
       emit('saved', result);
     } else {
-      const inviteUsernames = form.invites
-        .split(/[\s,]+/)
-        .map((u) => u.replace(/^@/, '').trim().toLowerCase())
-        .filter(Boolean);
-      payload.inviteUsernames = inviteUsernames.length ? inviteUsernames : undefined;
       const result = await trips.create(payload);
       emit('created', result);
     }
@@ -87,7 +81,7 @@ async function submit() {
   <Teleport to="body">
     <div class="scrim" @click="close" />
     <div ref="dialog" class="modal" role="dialog" aria-modal="true" :aria-labelledby="titleId" :aria-busy="busy" @keydown.esc.stop.prevent="close" @keydown.tab="trapFocus">
-      <h2 :id="titleId" class="display display-md">{{ editing ? 'Edit trip' : 'New trip' }}</h2>
+      <h2 :id="titleId" class="display display-md">{{ editing ? 'Edit trip' : 'Pack a new trip' }}</h2>
       <form class="stack" style="gap: 14px; margin-top: 16px" @submit.prevent="submit">
         <label class="field">Trip name<input ref="nameInput" v-model="form.name" class="input" required maxlength="100" :disabled="busy" placeholder="JB Food Run" data-cy="trip-name" /></label>
         <label class="field">Mission (optional)<input v-model="form.mission" class="input" maxlength="160" :disabled="busy" placeholder="Eat our way through the old town." /></label>
@@ -97,7 +91,7 @@ async function submit() {
         </div>
         <p v-if="editing" id="edit-date-note" class="muted">Changing dates keeps existing stops on their assigned dates. You can move them in the bucket list.</p>
         <fieldset class="field" style="border: 0; padding: 0; margin: 0" :disabled="busy">
-          <legend style="margin-bottom: 6px">Trip cover</legend>
+          <legend style="margin-bottom: 6px">Satchel cover</legend>
           <div class="row" style="gap: 10px">
             <label v-for="c in colors" :key="c" class="swatch" :style="{ background: c }">
               <input v-model="form.coverColor" type="radio" :name="editing ? 'edit-cover' : 'create-cover'" :value="c" class="sr-only" />
@@ -105,7 +99,6 @@ async function submit() {
             </label>
           </div>
         </fieldset>
-        <label v-if="!editing" class="field">Invite by username (optional)<input v-model="form.invites" class="input" placeholder="@sam, @priya" :disabled="busy" /></label>
         <p v-if="error" class="error-text" role="alert">{{ error }}</p>
         <div class="row" style="justify-content: flex-end">
           <button type="button" class="btn btn-ghost" :disabled="busy" @click="close">Cancel</button>

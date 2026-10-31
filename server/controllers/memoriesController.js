@@ -8,7 +8,7 @@ import { uploadImage } from '../services/storageService.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
 import { tripPhase, canAddMemories } from '../services/logic/memoryWindow.js';
 
-const MEMORY_FIELDS = 'id, trip_id, image_url, caption, item_id, created_at, author:profiles(id, username, name, avatar_url), stop:itinerary_items(id, title)';
+const MEMORY_FIELDS = 'id, trip_id, image_url, caption, item_id, created_at, author:profiles(id, name, avatar_url), stop:itinerary_items(id, title)';
 
 async function assertOpen(tripId) {
   const trip = check(await supabase.from('trips').select('start_date, end_date, archived_at').eq('id', tripId).single(), 'Trip not found');

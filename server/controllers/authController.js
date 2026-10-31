@@ -3,7 +3,7 @@ import { HttpError, badRequest, check, conflict, forbidden, unauthorized } from 
 import { displayName, postSystemMessage } from '../services/systemMessages.js';
 import { pathFromPublicUrl, removeFile, removeUserFiles, sniffImageType, uploadImage } from '../services/storageService.js';
 
-const PROFILE_COLUMNS = 'id, username, name, avatar_url';
+const PROFILE_COLUMNS = 'id, name, avatar_url';
 
 /**
  * The profiles row is created by the handle_new_user database trigger when the auth user is created.
@@ -16,7 +16,6 @@ async function getProfile(user) {
 
   const fallback = {
     id: user.id,
-    username: `user_${user.id.slice(0, 8)}`,
     name: user.email?.split('@')[0] || 'Traveller',
   };
   const created = await supabase.from('profiles').insert(fallback).select(PROFILE_COLUMNS).single();
@@ -33,34 +32,6 @@ function withNames(profile, authUser) {
   const meta = authUser?.user_metadata || {};
   const [first = '', ...rest] = (profile.name || '').trim().split(/\s+/);
   return { ...profile, first_name: meta.first_name || first, last_name: meta.last_name || rest.join(' ') };
-}
-
-/** "Darwin Núñez" -> "darwinnunez": lowercase letters/digits only, accents stripped. */
-const slug = (text) =>
-  text
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
-
-/**
- * People no longer type a username. We build one from their name (first_last) and add a number
- * if it is taken, so "@username" invites keep working. Always matches profiles' ^[a-z0-9_]{3,20}$ check.
- */
-async function pickUsername(firstName, lastName) {
-  let base = [slug(firstName), slug(lastName)].filter(Boolean).join('_').slice(0, 16);
-  if (base.length < 3) base = `jbound_${base}`.replace(/_$/, '').slice(0, 16);
-
-  // underscore is a LIKE wildcard, so this can over-match; that is fine, we compare exact names below
-  const { data, error } = await supabase.from('profiles').select('username').like('username', `${base}%`).limit(1000);
-  if (error) throw new HttpError(500, error.message);
-  const taken = new Set((data || []).map((row) => row.username));
-
-  if (!taken.has(base)) return base;
-  for (let n = 2; n < 10000; n++) {
-    if (!taken.has(`${base}${n}`)) return `${base}${n}`; // base is <= 16 chars, so this stays <= 20
-  }
-  return `${base.slice(0, 11)}${Date.now().toString(36).slice(-5)}`;
 }
 
 /** Shape the Vue auth store expects: { user, profile, session }. */
@@ -82,27 +53,17 @@ export async function signup(req, res) {
   const name = `${firstName} ${lastName}`;
 
   // email_confirm: true marks the email as verified, so nobody has to click a confirmation link.
-  // The username is generated; if two people sign up at the same moment the unique constraint on
-  // profiles.username makes the trigger fail ("Database error ..."), so we pick again and retry.
-  let created;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const username = await pickUsername(firstName, lastName);
-    created = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { name, username, first_name: firstName, last_name: lastName },
-    });
-    if (!created.error) break;
-
+  const created = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { name, first_name: firstName, last_name: lastName },
+  });
+  if (created.error) {
     const { code, message = '' } = created.error;
     if (code === 'email_exists' || /already (been )?registered/i.test(message)) {
       throw conflict('An account with this email already exists. Try signing in instead.');
     }
-    if (!/database error/i.test(message)) break;
-  }
-  if (created.error) {
-    const { message = '' } = created.error;
     if (/database error/i.test(message)) throw new HttpError(500, 'Could not create your account. Please try again.');
     throw new HttpError(created.error.status || 400, message || 'Could not create your account.');
   }

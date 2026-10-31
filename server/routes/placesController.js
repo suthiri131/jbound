@@ -4,7 +4,7 @@ import { rankPlaces, isHiddenGem } from '../services/logic/vibeMatching.js';
 import { distanceFromCheckpointKm } from '../services/logic/geo.js';
 
 const PLACE_FIELDS = 'id, name, description, address, lat, lng, vibes, price_level, photos, source, google_place_id, rating, rating_count, maps_url, created_at';
-const AUTHOR = 'author:profiles!posts_user_id_fkey(id, username, name, avatar_url)';
+const AUTHOR = 'author:profiles!posts_user_id_fkey(id, name, avatar_url)';
 
 const withPostCount = (row) => {
   const { posts, ...place } = row;

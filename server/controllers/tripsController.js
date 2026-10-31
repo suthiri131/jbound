@@ -2,19 +2,19 @@ import { randomBytes } from 'node:crypto';
 import { supabase } from '../db/supabase.js';
 import { badRequest, check, conflict, forbidden, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
-import { tripPhase, sgToday, addDays, MEMORY_WINDOW_DAYS } from '../services/logic/memoryWindow.js';
+import { tripPhase, sgToday } from '../services/logic/memoryWindow.js';
 
-const PROFILE = 'id, username, name, avatar_url';
-export const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
+const PROFILE = 'id, name, avatar_url';
+const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
 
-async function addMember(tripId, userId, role = 'member' , status = 'accepted') {
-  const { error } = await supabase.from('trip_members').insert({ trip_id: tripId, user_id: userId, role, status });
+async function addMember(tripId, userId, role = 'member') {
+  const { error } = await supabase.from('trip_members').insert({ trip_id: tripId, user_id: userId, role });
   if (error?.code === '23505') throw conflict('Already a member of this trip');
   if (error) throw new Error(error.message);
 }
 
 /** Attach phase info and lazily archive trips whose 7-day memory window has passed. */
-export async function withPhase(trip, today = sgToday()) {
+async function withPhase(trip, today = sgToday()) {
   const info = tripPhase(trip, today);
   if (info.autoArchive) {
     const archivedAt = new Date().toISOString();
@@ -25,50 +25,8 @@ export async function withPhase(trip, today = sgToday()) {
   return { ...trip, ...info };
 }
 
-/** Planner-only database pagination. The unpaged endpoint remains available to shared selectors. */
-async function listTripPage(req, res) {
-  const { page: requestedPage, pageSize, search, phase } = req.valid.query;
-  const today = sgToday();
-  const cutoff = addDays(today, -MEMORY_WINDOW_DAYS);
-  function query(head = false) {
-    let q = supabase.from('trips')
-      .select(`${TRIP_FIELDS}, membership:trip_members!inner(user_id, role), members:trip_members(count), items:itinerary_items(done)`, { count: 'exact', head })
-      .eq('membership.user_id', req.user.id)
-      .is('archived_at', null);
-    // Match the computed phase before counting and limiting rows.
-    if (phase === 'planning') q = q.or(`start_date.is.null,start_date.gt.${today}`);
-    else if (phase === 'on_the_road') q = q.lte('start_date', today)
-      .or(`end_date.gte.${today},and(end_date.is.null,start_date.eq.${today})`);
-    else if (phase === 'memory_box') q = q.lte('start_date', today)
-      .or(`and(end_date.lt.${today},end_date.gte.${cutoff}),and(end_date.is.null,start_date.lt.${today},start_date.gte.${cutoff})`);
-    else q = q.or(`start_date.is.null,start_date.gt.${today},end_date.gte.${cutoff},and(end_date.is.null,start_date.gte.${cutoff})`);
-    if (search) {
-      // Escape LIKE wildcards so searches retain literal substring behaviour.
-      const literal = search.replace(/[\\%_]/g, '\\$&');
-      q = q.ilike('name', `%${literal}%`);
-    }
-    return q.order('created_at', { ascending: false }).order('id', { ascending: true });
-  }
-  const countResult = await query(true);
-  check(countResult);
-  const total = countResult.count ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(requestedPage, totalPages);
-  const result = total ? await query().range((page - 1) * pageSize, page * pageSize - 1) : { data: [] };
-  check(result);
-  const items = result.data.map(({ membership, members, items, ...trip }) => ({
-    ...trip, ...tripPhase(trip, today),
-    myRole: membership[0]?.role,
-    memberCount: members?.[0]?.count ?? 0,
-    stopCount: items?.length ?? 0,
-    doneCount: items?.filter((item) => item.done).length ?? 0,
-  }));
-  res.json({ items, page, pageSize, total, totalPages });
-}
-
 /** GET /api/trips?include=active|all — "active" = the satchel (everything not archived) */
 export async function listMyTrips(req, res) {
-  if (req.valid.query.page !== undefined) return listTripPage(req, res);
   const rows = check(
     await supabase
       .from('trip_members')
@@ -88,13 +46,13 @@ export async function listMyTrips(req, res) {
       })),
   );
   const list = req.valid.query.include === 'all' ? trips : trips.filter((t) => t.phase !== 'archived');
-  list.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
+  list.sort((a, b) => (a.start_date || '9999').localeCompare(b.start_date || '9999'));
   res.json(list);
 }
 
-/** POST /api/trips  { name, mission?, coverColor?, startDate?, endDate?, inviteUsernames?[] } */
+/** POST /api/trips  { name, mission?, coverColor?, startDate?, endDate? } */
 export async function createTrip(req, res) {
-  const { name, mission, coverColor, startDate, endDate, inviteUsernames } = req.valid.body;
+  const { name, mission, coverColor, startDate, endDate } = req.valid.body;
   const trip = check(
     await supabase
       .from('trips')
@@ -110,24 +68,8 @@ export async function createTrip(req, res) {
     throw err;
   }
 
-  // Inviting friends is a bonus: if it fails the trip still exists, and we report who we could not add.
-  const wanted = [...new Set(inviteUsernames || [])];
-  const invited = new Set();
-  if (wanted.length) {
-    try {
-      const profiles = check(await supabase.from('profiles').select('id, username').in('username', wanted));
-      for (const p of profiles) {
-        if (p.id !== req.user.id) await addMember(trip.id, p.id); // the owner is already in
-        invited.add(p.username);
-      }
-    } catch (err) {
-      console.warn('[createTrip] inviting the crew failed:', err.message);
-    }
-  }
-  const skipped = wanted.filter((u) => !invited.has(u));
-
   await postSystemMessage(trip.id, `${await displayName(req.user.id)} packed the trip "${trip.name}"`);
-  res.status(201).json({ ...(await withPhase(trip)), skippedUsernames: skipped });
+  res.status(201).json(await withPhase(trip));
 }
 
 /** GET /api/trips/:tripId — trip + phase + members + itinerary */
@@ -135,10 +77,10 @@ export async function getTrip(req, res) {
   const tripId = req.params.tripId;
   const [trip, members, itinerary] = await Promise.all([
     supabase.from('trips').select(TRIP_FIELDS).eq('id', tripId).single(),
-    supabase.from('trip_members').select(`role, status,joined_at, user:profiles(${PROFILE})`).eq('trip_id', tripId),
+    supabase.from('trip_members').select(`role, joined_at, user:profiles(${PROFILE})`).eq('trip_id', tripId),
     supabase
       .from('itinerary_items')
-      .select('id, title, day, time, position, notes, dwell_minutes, lat, lng, crossing, crossing_dir, done, place:places(id, name, lat, lng, vibes, photos)')
+      .select('id, title, day, time, position, notes, vibe, dwell_minutes, lat, lng, crossing, crossing_dir, done, place:places(id, name, lat, lng, vibes, photos)')
       .eq('trip_id', tripId)
       .order('day', { ascending: true, nullsFirst: true })
       .order('position', { ascending: true }),
@@ -186,17 +128,6 @@ export async function archiveTrip(req, res) {
   );
   await postSystemMessage(trip.id, `${await displayName(req.user.id)} sent the trip up to the Archives`);
   res.json({ ...data, phase: 'archived' });
-}
-
-/** POST /api/trips/:tripId/members  { username } */
-export async function inviteMember(req, res) {
-  const profile = check(
-    await supabase.from('profiles').select(PROFILE).eq('username', req.valid.body.username).single(),
-    'No user with that username',
-  );
-  await addMember(req.params.tripId, profile.id, 'member', 'pending');
-  await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} added ${profile.name} to the crew`);
-  res.status(201).json(profile);
 }
 
 /** POST /api/trips/join  { inviteCode } */
@@ -251,50 +182,3 @@ export async function regenerateInviteCode(req, res) {
   );
   res.json(data);
 }
-
-/** GET /api/trips/invites  Trips where the current user has a pending invite */
- export async function listMyInvites(req,res) {
-  const rows = check(
-    await supabase
-    .from('trip_members')
-    .select(`trip:trips(${TRIP_FIELDS})`)
-    .eq('user_id',req.user.id)
-    .eq('status','pending'),
-
-  );
-  res.json(rows.filter((r) => r.trip).map((r) => r.trip))
- }
-
-
- /** POST /api/trips/:tripID/invite/accept */
- export async function acceptInvite(req,res) {
-  const {data, error } = await supabase
-  .from('trip_members')
-  .update({status: 'accepted'})
-  .eq('trip_id', req.params.tripId)
-  .eq('status', 'pending')
-  .select('role')
-  .maybeSingle();
-  
-  if (error) throw new Error(error.message)
-  if (!data) throw notFound('No pending invites found!');
-  await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} Joined the crew `);
-  res.json({accepted : true});
-
- }
-
-
- /** POST /api/trips:tripId/invites/decline */
-
- export async function declineInvite(req, res) {
-  const {data, error } = await supabase
-   .from('trip_members')
-   .update({status: 'accepted'})
-   .eq('trip_id', req.params.tripId)
-   .eq('status', 'pending')
-   .select('role')
-  if (error) throw new Error(error.message);
-  if (!data?.strength) throw notFound('No pending invite found');
-  res.status(204).end();
-
- }

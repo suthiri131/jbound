@@ -66,10 +66,6 @@ async function confirmDelete(password) {
           <dd>{{ name }}</dd>
         </div>
         <div>
-          <dt>Username</dt>
-          <dd>@{{ auth.profile?.username }}</dd>
-        </div>
-        <div>
           <dt>Email</dt>
           <dd>{{ auth.user?.email }}</dd>
         </div>

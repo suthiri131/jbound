@@ -10,10 +10,9 @@ import { badRequest } from "../utils/httpError.js";
 import { ALLOWED_IMAGE_TYPES } from "../services/storageService.js";
 import * as trips from "../controllers/tripsController.js";
 import * as itinerary from "../controllers/itineraryController.js";
-import * as expenses from "../controllers/expensesController.js";
 
 // TO DO
-import * as messages from "../controllers/messagesController.js";
+// import * as messages from '../controllers/messagesController.js';
 // import * as expenses from '../controllers/expensesController.js';
 import * as memories from "../controllers/memoriesController.js";
 
@@ -21,7 +20,7 @@ import * as s from "./schemas.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 4 * 1024 * 1024 }, // 4 MiB leaves room for multipart overhead on Vercel.
+  limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB per photo
   fileFilter: (_req, file, cb) =>
     ALLOWED_IMAGE_TYPES.includes(file.mimetype)
       ? cb(null, true)
@@ -38,17 +37,8 @@ r.post("/join", validate({ body: s.joinBody }), trips.joinByCode);
 
 const member = [validate({ params: s.tripParam }), requireTripMember];
 const memberWith = (params) => [validate({ params }), requireTripMember];
-r.get("/invites", trips.listMyInvites);
-r.post("/:tripId/invites/accept", trips.acceptInvite);
-r.post("/:tripId/invites/decline", trips.declineInvite);
-r.get("/:tripId", member, trips.getTrip);
 
-// Ledger
-r.get('/:tripId/expenses', member, expenses.getExpenses);
-r.post('/:tripId/expenses', member, validate({ body: s.createExpenseBody }), expenses.createExpense);
-r.put('/:tripId/expenses/:expenseId', memberWith(s.tripExpenseParam), validate({ body: s.createExpenseBody }), expenses.updateExpense);
-r.get('/:tripId/expenses/balances', member, validate({ query: s.balancesQuery }), expenses.getBalances);
-r.post('/:tripId/expenses/settlements', member, validate({ body: s.settlementBody }), expenses.createSettlement);
+r.get("/:tripId", member, trips.getTrip);
 r.patch(
   "/:tripId",
   member,
@@ -62,12 +52,6 @@ r.post(
   member,
   requireTripOwner,
   trips.regenerateInviteCode,
-);
-r.post(
-  "/:tripId/members",
-  member,
-  validate({ body: s.inviteBody }),
-  trips.inviteMember,
 );
 r.delete(
   "/:tripId/members/:userId",
@@ -108,19 +92,10 @@ r.get(
   itinerary.getDayRoute,
 );
 
+// TO DO
 // Camp chat
-r.get(
-  "/:tripId/messages",
-  member,
-  validate({ query: s.messagesQuery }),
-  messages.listMessages,
-);
-r.post(
-  "/:tripId/messages",
-  member,
-  validate({ body: s.messageBody }),
-  messages.sendMessage,
-);
+// r.get('/:tripId/messages', member, validate({ query: s.messagesQuery }), messages.listMessages);
+// r.post('/:tripId/messages', member, validate({ body: s.messageBody }), messages.sendMessage);
 
 // Ledger
 // r.get('/:tripId/expenses', member, expenses.listExpenses);
