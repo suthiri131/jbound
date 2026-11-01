@@ -32,7 +32,12 @@ async function getProfile(user) {
 function withNames(profile, authUser) {
   const meta = authUser?.user_metadata || {};
   const [first = '', ...rest] = (profile.name || '').trim().split(/\s+/);
-  return { ...profile, first_name: meta.first_name || first, last_name: meta.last_name || rest.join(' ') };
+  return {
+    ...profile,
+    first_name: meta.first_name || first,
+    last_name: meta.last_name || rest.join(' '),
+    look: meta.look || null, // camp character (see setLook); null = the client's default
+  };
 }
 
 /** "Darwin Núñez" -> "darwinnunez": lowercase letters/digits only, accents stripped. */
@@ -260,6 +265,49 @@ export async function updateProfile(req, res) {
     throw new HttpError(500, 'We could not save your name. Please try again.');
   }
   res.json({ profile: withNames(saved.data, updated.data.user) });
+}
+
+// PUT /api/auth/me/look  { skin, hair, hairStyle, top, bottom, hat } -> { look }
+// Kept in the auth metadata like first/last name. Crewmates see it through camp presence, not through the database.
+export async function setLook(req, res) {
+  const { data: existing } = await supabase.auth.admin.getUserById(req.user.id);
+  const meta = existing?.user?.user_metadata || {};
+  const updated = await supabase.auth.admin.updateUserById(req.user.id, { user_metadata: { ...meta, look: req.valid.body } });
+  if (updated.error) throw new HttpError(500, 'We could not save your character. Please try again.');
+  res.json({ look: req.valid.body });
+}
+
+// GET /api/auth/crew -> [{ id, name, look, tripIds }]
+// Everyone who shares a trip with you, so they can wander around your basecamp (capped: it is a campsite, not a stadium).
+export async function crew(req, res) {
+  const mine = await supabase.from('trip_members').select('trip_id').eq('user_id', req.user.id).neq('status', 'pending');
+  if (mine.error) throw new HttpError(500, mine.error.message);
+  const tripIds = mine.data.map((r) => r.trip_id);
+  if (!tripIds.length) return res.json([]);
+
+  const rows = await supabase
+    .from('trip_members')
+    .select('trip_id, user:profiles(id, name)')
+    .in('trip_id', tripIds)
+    .neq('user_id', req.user.id)
+    .neq('status', 'pending');
+  if (rows.error) throw new HttpError(500, rows.error.message);
+
+  const byId = new Map();
+  for (const { trip_id, user } of rows.data) {
+    if (!user) continue;
+    const mate = byId.get(user.id) || { id: user.id, name: user.name, tripIds: [] };
+    mate.tripIds.push(trip_id);
+    byId.set(user.id, mate);
+  }
+  const mates = [...byId.values()].slice(0, 12);
+  await Promise.all(
+    mates.map(async (m) => {
+      const { data } = await supabase.auth.admin.getUserById(m.id);
+      m.look = data?.user?.user_metadata?.look || null;
+    }),
+  );
+  res.json(mates);
 }
 
 // POST /api/auth/change-email  { email, password } -> { user: { id, email } }

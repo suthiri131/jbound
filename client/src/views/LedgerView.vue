@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage as getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
+import StationShell from '@/components/basecamp/StationShell.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -157,6 +158,44 @@ async function confirmSettlement(settlement) {
     await loadLedger();
   } catch (error) { errorMessage.value = error.message; }
 }
+// ---------- the stall scene beside the receipt ----------
+const formOpen = ref(false);
+const lastSettled = ref('');
+
+/** Per person: what they paid, what their share came to, and where they stand now (from the API's balances). */
+const people = computed(() => members.value.map((member) => {
+  const sum = (list, key) => list.reduce((t, x) => t + Number(x[key] || 0), 0);
+  const paid = sum(expenses.value.filter((e) => e.paid_by === member.id), 'amount_sgd');
+  const sent = sum(transactions.value.filter((t) => t.from_user === member.id), 'amount_sgd');
+  const received = sum(transactions.value.filter((t) => t.to_user === member.id), 'amount_sgd');
+  const balance = Number(balances.value.find((b) => b.memberId === member.id)?.balanceSgd || 0);
+  // balance = paid - share + sent - received, so the share falls out of it
+  return { ...member, paid, share: Math.max(0, paid + sent - received - balance), isMe: member.id === auth.user?.id };
+}));
+const TILE_TINTS = ['#f6d58e', '#bfe3f0', '#c8e6b8', '#f4c4cf', '#d9cdf2', '#f2d0b0'];
+const receiptDate = computed(() => {
+  const start = selectedTrip.value?.start_date;
+  return start ? new Date(`${start}T00:00:00`).toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '';
+});
+const first = (memberId) => memberName(memberId).split(' ')[0];
+const canEdit = (expense) => expense.created_by === auth.user?.id || selectedTrip.value?.myRole === 'owner';
+function startEdit(expense) {
+  editExpense(expense);
+  formOpen.value = true;
+}
+async function submitExpense() {
+  await saveExpense();
+  if (!errorMessage.value) formOpen.value = false;
+}
+function cancelForm() {
+  resetForm();
+  formOpen.value = false;
+}
+async function tickOff(settlement) {
+  await confirmSettlement(settlement);
+  if (!errorMessage.value) lastSettled.value = `Ticked off: ${first(settlement.from)} is square with you.`;
+}
+
 watch(() => route.query.tripId, (value) => {
   if (typeof value === 'string' && value !== tripId.value) { tripId.value = value; loadLedger(); }
 });
@@ -165,316 +204,480 @@ onMounted(loadConversionRate);
 </script>
 
 <template>
-  <main class="ledger-page">
-    <header class="ledger-heading">
-      <div class="heading-copy">
-        <p class="eyebrow">THE SHARED TAB</p>
-        <h1 class="display display-xl">Expense <span>Ledger.</span></h1>
-        <p class="muted">Log it in ringgit or dollars as you go. The ledger converts everything and works out the fewest transfers to settle up.</p>
-      </div>
-      <div class="heading-tools">
-        <label class="trip-picker" for="trip-picker">
-          <span>Trip</span>
-          <select id="trip-picker" v-model="tripId" class="select" @change="chooseTrip">
+  <StationShell station="ledger" sign="The Market Stall" label="Receipt">
+      <article class="receipt" aria-labelledby="receipt-title">
+        <header class="r-head">
+          <label class="sr-only" for="trip-picker">Trip</label>
+          <select id="trip-picker" v-model="tripId" class="trip-select" @change="chooseTrip">
             <option value="" disabled>Select a trip</option>
             <option v-for="trip in trips" :key="trip.id" :value="trip.id">{{ trip.name }}</option>
           </select>
-        </label>
-        <div class="currency-toggle" role="group" aria-label="Balance display currency">
-          <button type="button" :aria-pressed="displayCurrency === 'SGD'" @click="displayCurrency = 'SGD'">S$ SGD</button>
-          <button type="button" :aria-pressed="displayCurrency === 'MYR'" :disabled="!conversionRate" @click="displayCurrency = 'MYR'">RM MYR</button>
-        </div>
-        <small v-if="conversionRate" class="rate-caption">
-          1 SGD = {{ conversionRate.toFixed(4) }} MYR<span v-if="conversionDate"> · Rate date {{ conversionDate }}</span>
-        </small>
-        <small v-else-if="currencyError" class="rate-caption rate-error" role="status">{{ currencyError }}</small>
-      </div>
-    </header>
+          <h1 id="receipt-title" class="r-title">{{ selectedTrip?.name || 'The Ledger' }}</h1>
+          <p class="r-meta">
+            <span v-if="receiptDate">{{ receiptDate }} · </span>{{ members.length }} crew<span v-if="conversionRate"> · S$1 = RM{{ conversionRate.toFixed(2) }}</span>
+          </p>
+          <div class="currency" role="group" aria-label="Show amounts in">
+            <button type="button" :aria-pressed="displayCurrency === 'SGD'" @click="displayCurrency = 'SGD'">S$</button>
+            <button type="button" :aria-pressed="displayCurrency === 'MYR'" :disabled="!conversionRate" @click="displayCurrency = 'MYR'">RM</button>
+          </div>
+        </header>
 
-    <p v-if="!trips.length && !loading" class="muted">Join or create a trip to start a ledger.</p>
-    <p v-if="errorMessage" class="error-text" role="alert">{{ errorMessage }}</p>
-    <p v-if="loading" class="muted" role="status">Loading ledger…</p>
+        <p v-if="!trips.length && !loading" class="r-empty">Join or create a trip to open a tab.</p>
+        <p v-if="errorMessage" class="error-text" role="alert">{{ errorMessage }}</p>
+        <p v-if="loading" class="r-empty" role="status">Totting up the tab…</p>
 
-    <section v-if="tripId && !loading" class="ledger-content">
-      <div class="overview-grid">
-        <section class="haul-card" aria-labelledby="balances-heading">
-          <p class="eyebrow">TOTAL HAUL SO FAR</p>
-          <h2 id="balances-heading" class="display haul-total">{{ formatLedgerMoney(totalSgd) }}</h2>
-          <p class="haul-meta">{{ expenses.length }} {{ expenses.length === 1 ? 'expense' : 'expenses' }} · {{ members.length }} {{ members.length === 1 ? 'explorer' : 'explorers' }}</p>
-          <ul v-if="balances.length" class="balance-list">
-            <li v-for="balance in balances" :key="balance.memberId">
-              <span>{{ memberName(balance.memberId) }}{{ balance.memberId === auth.user?.id ? ' (you)' : '' }}</span>
-              <strong :class="{ owed: balance.balanceSgd > 0, owes: balance.balanceSgd < 0 }">
-                {{ balance.balanceSgd > 0 ? '+' : balance.balanceSgd < 0 ? '−' : '' }}{{ formatLedgerMoney(Math.abs(balance.balanceSgd)) }}
-              </strong>
+        <template v-if="tripId && !loading">
+          <hr class="dash" />
+          <p v-if="!expenses.length" class="r-empty">Nothing on the tab yet. Add the first shared cost below.</p>
+          <ul v-else class="items">
+            <li v-for="expense in expenses" :key="expense.id">
+              <div>
+                <strong>{{ expense.description }}</strong>
+                <small>
+                  Paid by {{ expense.paid_by === auth.user?.id ? 'you' : first(expense.paid_by) }}
+                  · split {{ (expense.splitMembers ?? expense.splitAmong ?? []).length }}
+                  <template v-if="expense.currency !== 'SGD'"> · {{ formatMoney(expense.amount, expense.currency) }}</template>
+                </small>
+              </div>
+              <span class="amt">{{ formatLedgerMoney(expense.amount_sgd) }}</span>
+              <button v-if="canEdit(expense)" type="button" class="edit" :aria-label="`Edit ${expense.description}`" @click="startEdit(expense)">Edit</button>
             </li>
           </ul>
-          <p v-else class="haul-empty">No balances to settle yet.</p>
-        </section>
 
-        <section class="iou-section" aria-labelledby="iou-heading">
-          <div class="section-heading">
-            <h2 id="iou-heading" class="display display-sm">IOU slips</h2>
-            <span class="hand muted">fewest transfers to square up</span>
-          </div>
-          <div v-if="suggestedSettlements.length" class="iou-grid">
-            <article
-              v-for="(settlement, index) in suggestedSettlements"
-              :key="`${settlement.from}-${settlement.to}-${index}`"
-              class="iou-card"
-              :class="{ 'iou-paid': settlement.to === auth.user?.id }"
-            >
-              <div class="iou-route">
-                <span class="avatar">{{ initials(settlement.from) }}</span>
-                <span class="route-arrow" aria-hidden="true">→</span>
-                <span class="avatar avatar-to">{{ initials(settlement.to) }}</span>
-              </div>
-              <p class="iou-names">{{ memberName(settlement.from) }} pays {{ memberName(settlement.to) }}</p>
-              <strong class="iou-amount">{{ formatLedgerMoney(settlement.amountSgd) }}</strong>
-              <div class="iou-action">
-                <button v-if="settlement.to === auth.user?.id" class="btn btn-sm" type="button" @click="confirmSettlement(settlement)">Mark as settled</button>
-                <span v-else class="muted">Awaiting {{ memberName(settlement.to) }} to confirm</span>
-              </div>
-            </article>
-          </div>
-          <p v-else class="no-ious">{{ expenses.length ? 'Everyone is square. Nice work!' : 'Your IOU slips will show up here once expenses are added.' }}</p>
-          <div v-if="transactions.length" class="settlement-history">
-            <h3>Settled up</h3>
-            <p v-for="transaction in transactions" :key="transaction.id">
-              <span>{{ memberName(transaction.from_user) }} paid {{ memberName(transaction.to_user) }}</span>
-              <strong>{{ formatLedgerMoney(transaction.amount_sgd) }}</strong>
-              <small>{{ new Date(transaction.created_at).toLocaleDateString() }}</small>
+          <hr class="dash" />
+          <p class="total"><span>Group total</span><strong>{{ formatLedgerMoney(totalSgd) }}</strong></p>
+
+          <ul v-if="people.length" class="tiles" aria-label="Breakdown per person">
+            <li v-for="(p, i) in people" :key="p.id" :style="{ '--tint': TILE_TINTS[i % TILE_TINTS.length] }">
+              <strong>{{ p.isMe ? 'You' : p.name.split(' ')[0] }}</strong>
+              <small>paid {{ formatLedgerMoney(p.paid) }}</small>
+              <small>share {{ formatLedgerMoney(p.share) }}</small>
+            </li>
+          </ul>
+
+          <h2 class="r-sub">Who owes who</h2>
+          <ul v-if="suggestedSettlements.length" class="owes">
+            <li v-for="(st, index) in suggestedSettlements" :key="`${st.from}-${st.to}-${index}`">
+              <label v-if="st.to === auth.user?.id" class="tick">
+                <input type="checkbox" @change="tickOff(st)" />
+                <span>{{ first(st.from) }} owes you</span>
+              </label>
+              <span v-else class="tick" :class="{ mine: st.from === auth.user?.id }">
+                <i class="box" aria-hidden="true" />
+                <span>{{ st.from === auth.user?.id ? `You owe ${first(st.to)}` : `${first(st.from)} owes ${first(st.to)}` }}</span>
+              </span>
+              <strong>{{ formatLedgerMoney(st.amountSgd) }}</strong>
+              <small v-if="st.from === auth.user?.id" class="wait">Paid? {{ first(st.to) }} ticks it off once it lands.</small>
+            </li>
+          </ul>
+          <p v-else class="r-empty">{{ expenses.length ? 'Everyone is square. Nice work!' : 'Debts show up here once there is something on the tab.' }}</p>
+          <p class="settled-msg" role="status">{{ lastSettled }}</p>
+
+          <details v-if="transactions.length" class="history">
+            <summary>Settled up ({{ transactions.length }})</summary>
+            <p v-for="t in transactions" :key="t.id">
+              <s>{{ first(t.from_user) }} → {{ first(t.to_user) }}</s>
+              <span>{{ formatLedgerMoney(t.amount_sgd) }}</span>
             </p>
-          </div>
-        </section>
-      </div>
+          </details>
 
-      <section class="currency-compass" aria-labelledby="compass-heading">
-        <div class="compass-copy">
-          <h2 id="compass-heading" class="display display-sm">Currency compass</h2>
-          <p>Quick check at the stall before you pay.</p>
-        </div>
-        <label class="compass-value">
-          <span>YOU HAVE · {{ compassCurrency }}</span>
-          <input v-model.number="compassAmount" type="number" min="0" step="0.01" aria-label="Amount to convert" />
-        </label>
-        <button class="compass-swap" type="button" aria-label="Swap conversion direction" @click="toggleCompassCurrency">⇄</button>
-        <div class="compass-value compass-output" aria-live="polite">
-          <span>THAT’S ABOUT · {{ compassCurrency === 'SGD' ? 'MYR' : 'SGD' }}</span>
-          <strong>{{ compassResult === null ? 'Rate unavailable' : formatCompassMoney(compassResult) }}</strong>
-        </div>
-      </section>
-      <section class="ledger-grid">
-        <section class="expense-form" aria-labelledby="expense-form-heading">
-          <div class="section-heading">
-            <h2 id="expense-form-heading" class="display display-sm">{{ isEditing ? 'Edit expense' : 'Log a supply run' }}</h2>
-            <button class="form-reset" type="button" @click="resetForm">Clear</button>
-          </div>
-          <form @submit.prevent="saveExpense">
+          <hr class="dash" />
+
+          <button v-if="!formOpen" type="button" class="add" @click="formOpen = true">+ Add to the tab</button>
+          <form v-else class="add-form" @submit.prevent="submitExpense">
+            <h2 class="r-sub">{{ isEditing ? 'Edit expense' : 'Add to the tab' }}</h2>
             <label class="field" for="expense-description">What was it for?
-              <input id="expense-description" v-model="form.description" class="input" maxlength="200" placeholder="e.g. Durian at the night market" required />
+              <input id="expense-description" v-model="form.description" class="input" maxlength="200" placeholder="e.g. Durian at SS2" required />
             </label>
-            <div class="amount-row">
+            <div class="two">
               <label class="field" for="expense-amount">Amount
                 <input id="expense-amount" v-model.number="form.amount" class="input" type="number" min="0.01" step="0.01" placeholder="0.00" required />
               </label>
               <label class="field" for="expense-currency">Currency
-                <select id="expense-currency" v-model="form.currency" class="select"><option value="SGD">SGD · S$</option><option value="MYR">MYR · RM</option></select>
+                <select id="expense-currency" v-model="form.currency" class="select"><option value="SGD">S$ SGD</option><option value="MYR">RM MYR</option></select>
               </label>
             </div>
             <label class="field" for="expense-payer">Paid by
-              <select id="expense-payer" v-model="form.paidBy" class="select"><option v-for="member in members" :key="member.id" :value="member.id">{{ member.id === auth.user?.id ? `${member.name} (you)` : member.name }}</option></select>
+              <select id="expense-payer" v-model="form.paidBy" class="select">
+                <option v-for="member in members" :key="member.id" :value="member.id">{{ member.id === auth.user?.id ? `${member.name} (you)` : member.name }}</option>
+              </select>
             </label>
-            <fieldset class="member-picker">
-              <legend>Split among</legend>
-              <p class="split-choice">
-                <span>{{ customSplit ? 'Set each person’s share' : 'Split the amount equally' }}</span>
-                <button class="form-reset" type="button" @click="toggleCustom">{{ customSplit ? 'Use equal split' : 'Customize' }}</button>
-              </p>
-              <template v-if="customSplit">
-                <label v-for="member in members" :key="member.id" class="custom-member">
-                  <input v-model="form.splitAmong" type="checkbox" :value="member.id" />
-                  <span>{{ member.name }}</span>
-                  <input v-if="form.splitAmong.includes(member.id)" v-model.number="customAmounts[member.id]" class="input custom-amount" type="number" min="0" step="0.01" :aria-label="`${member.name} amount`" />
-                </label>
-                <small class="split-status" :class="{ complete: customSplitReady, over: customRemaining < 0 }" aria-live="polite">
-                  {{ customSplitStatus() }} out of {{ formatMoney(form.amount || 0, form.currency) }}
-                  <template v-if="form.splitAmong.length === 2"> · Assigning {{ formatMoney(7, form.currency) }} out of {{ formatMoney(12, form.currency) }} leaves {{ formatMoney(5, form.currency) }}.</template>
-                </small>
-              </template>
-              <div v-else class="split-members">
-                <label v-for="member in members" :key="member.id">
-                  <input v-model="form.splitAmong" type="checkbox" :value="member.id" />
-                  {{ member.name }}{{ member.id === auth.user?.id ? ' (you)' : '' }}
-                </label>
-              </div>
+            <fieldset class="split">
+              <legend>Split among <button class="link" type="button" @click="toggleCustom">{{ customSplit ? 'Split equally' : 'Custom amounts' }}</button></legend>
+              <label v-for="member in members" :key="member.id" class="split-row">
+                <input v-model="form.splitAmong" type="checkbox" :value="member.id" />
+                <span>{{ member.name }}{{ member.id === auth.user?.id ? ' (you)' : '' }}</span>
+                <input v-if="customSplit && form.splitAmong.includes(member.id)" v-model.number="customAmounts[member.id]" class="input custom" type="number" min="0" step="0.01" :aria-label="`${member.name} amount`" />
+              </label>
+              <small v-if="customSplit" class="split-status" :class="{ complete: customSplitReady, over: customRemaining < 0 }" aria-live="polite">{{ customSplitStatus() }}</small>
             </fieldset>
-            <div class="form-actions">
-              <button class="btn btn-teal add-expense" type="submit" :disabled="saving || !members.length || !form.splitAmong.length || (customSplit && !customSplitReady)">
-                {{ saving ? 'Saving…' : isEditing ? 'Save changes' : 'Add to the ledger' }}
+            <div class="row">
+              <button class="btn btn-primary" type="submit" :disabled="saving || !members.length || !form.splitAmong.length || (customSplit && !customSplitReady)">
+                {{ saving ? 'Saving…' : isEditing ? 'Save changes' : 'Add it' }}
               </button>
-              <button v-if="isEditing" class="btn btn-ghost" type="button" @click="resetForm">Cancel edit</button>
+              <button class="btn btn-ghost" type="button" @click="cancelForm">Cancel</button>
             </div>
           </form>
-        </section>
 
-        <section class="expense-section" aria-labelledby="expenses-heading">
-          <div class="section-heading">
-            <h2 id="expenses-heading" class="display display-sm">The ledger</h2>
-            <span class="hand muted">{{ expenses.length }} {{ expenses.length === 1 ? 'entry' : 'entries' }}</span>
+          <div class="convert">
+            <label>
+              <span class="sr-only">Amount in {{ compassCurrency }}</span>
+              <span aria-hidden="true">{{ compassCurrency === 'SGD' ? 'S$' : 'RM' }}</span>
+              <input v-model.number="compassAmount" type="number" min="0" step="0.01" />
+            </label>
+            <button type="button" aria-label="Swap conversion direction" @click="toggleCompassCurrency">⇄</button>
+            <output aria-live="polite">≈ {{ compassResult === null ? '—' : formatCompassMoney(compassResult) }}</output>
           </div>
-          <p v-if="!expenses.length" class="muted empty-ledger">No expenses yet. Add the first shared cost.</p>
-          <div v-else class="ledger-table-wrap">
-            <table class="ledger-table">
-              <thead><tr><th scope="col">Item</th><th scope="col">Paid by</th><th scope="col">Split</th><th scope="col">Amount</th></tr></thead>
-              <tbody>
-                <tr v-for="expense in expenses" :key="expense.id">
-                  <td>
-                    <strong>{{ expense.description }}</strong>
-                    <small>{{ new Date(expense.created_at).toLocaleDateString() }} · {{ formatMoney(expense.amount_sgd) }} SGD equivalent</small>
-                    <button v-if="expense.created_by === auth.user?.id || selectedTrip?.myRole === 'owner'" class="edit-expense" type="button" @click="editExpense(expense)">Edit entry</button>
-                  </td>
-                  <td>{{ expense.paid_by_profile?.name ?? memberName(expense.paid_by) }}</td>
-                  <td>{{ (expense.splitMembers ?? []).map((person) => person.name).join(', ') || '—' }}</td>
-                  <td class="table-amount">
-                    <strong>{{ formatMoney(expense.amount, expense.currency) }}</strong>
-                    <small>1 {{ expense.currency }} = {{ Number(expense.exchange_rate || 0).toFixed(4) }} SGD · {{ expense.rate_date || '—' }}</small>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-    </section>
-  </main>
+          <small v-if="currencyError" class="r-meta">{{ currencyError }}</small>
+        </template>
+      </article>
+  </StationShell>
 </template>
 
 <style scoped>
-.ledger-page { width: min(100% - 48px, 1440px); margin: 0 auto; padding: 38px 0 72px; }
-.ledger-heading { display: flex; align-items: end; justify-content: space-between; gap: 32px; margin-bottom: 26px; }
-.heading-copy { max-width: 690px; }
-.heading-copy .eyebrow { margin-bottom: 5px; }
-.heading-copy h1 { margin: 0 0 10px; font-size: clamp(42px, 5vw, 70px); }
-.heading-copy h1 span { color: var(--teal); }
-.heading-copy > p:last-child { max-width: 520px; margin: 0; font-size: 16px; }
-.heading-tools { display: grid; justify-items: end; gap: 8px; min-width: 220px; }
-.trip-picker { display: grid; grid-template-columns: auto minmax(150px, 220px); align-items: center; gap: 8px; color: var(--ink); font-weight: 700; }
-.trip-picker select { min-width: 0; }
-.currency-toggle { display: flex; overflow: hidden; border: 2px solid var(--ink); border-radius: 24px; background: var(--card); }
-.currency-toggle button { min-height: 38px; padding: 0 16px; border: 0; background: transparent; color: var(--ink); font-size: 13px; font-weight: 800; cursor: pointer; }
-.currency-toggle button[aria-pressed="true"] { background: var(--teal); color: var(--card); }
-.currency-toggle button:disabled { opacity: .5; cursor: not-allowed; }
-.rate-caption { color: var(--ink-mute); font-size: 11px; text-align: right; }
-.rate-error { max-width: 280px; color: var(--ember); }
-.ledger-content { display: grid; gap: 24px; min-width: 0; }
-.overview-grid { display: grid; grid-template-columns: minmax(300px, .8fr) minmax(0, 1.45fr); gap: 22px; align-items: stretch; }
-.haul-card { padding: 22px 24px; border: 2px solid var(--ink); border-radius: var(--radius); background: var(--teal); color: var(--card); box-shadow: var(--shadow); }
-.haul-card .eyebrow { color: #bcd3c4; font-size: 11px; }
-.haul-total { margin: 7px 0 3px; color: var(--sand); font-size: clamp(32px, 4vw, 48px); overflow-wrap: anywhere; }
-.haul-meta { margin: 0 0 15px; color: #d9e4d9; font-size: 13px; }
-.balance-list { margin: 0; padding: 0; list-style: none; }
-.balance-list li { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-top: 1px dashed rgb(255 255 255 / 26%); font-size: 13px; }
-.balance-list strong { text-align: right; white-space: nowrap; }
-.balance-list .owed { color: #c8dfbf; }
-.balance-list .owes { color: #f2cdb8; }
-.haul-empty { margin: 12px 0 0; color: #d9e4d9; font-size: 13px; }
-.iou-section { min-width: 0; }
-.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
-.section-heading h2 { margin: 0; }
-.section-heading .hand { flex: none; font-size: 20px; }
-.iou-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.iou-card { display: flex; flex-direction: column; min-height: 190px; padding: 16px 18px; border: 2px solid var(--ink); border-radius: 12px; background: var(--sage); box-shadow: var(--shadow-sm); }
-.iou-card:nth-child(even) { background: var(--card); }
-.iou-route { display: flex; align-items: center; gap: 9px; }
-.avatar { display: grid; width: 36px; height: 36px; place-items: center; border: 2px solid var(--ink); border-radius: 50%; background: var(--clay); font-size: 12px; font-weight: 800; }
-.avatar-to { background: var(--sage); }
-.route-arrow { font-size: 22px; }
-.iou-names { margin: 9px 0 1px; font-size: 14px; font-weight: 700; }
-.iou-amount { color: var(--teal); font-family: var(--font-display); font-size: clamp(25px, 2.5vw, 34px); line-height: 1.2; }
-.iou-action { display: flex; align-items: center; min-height: 48px; margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--line-strong); }
-.iou-action .muted { font-size: 12px; }
-.iou-paid { background: var(--sage); }
-.no-ious { display: grid; min-height: 140px; place-items: center; padding: 20px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); color: var(--ink-mute); text-align: center; }
-.settlement-history { margin-top: 14px; padding: 13px 16px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
-.settlement-history h3 { margin: 0 0 6px; font-size: 14px; }
-.settlement-history p { display: flex; align-items: center; gap: 10px; margin: 5px 0 0; font-size: 13px; }
-.settlement-history p span { flex: 1; }
-.settlement-history small { color: var(--ink-mute); }
-.currency-compass { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(170px, .95fr) auto minmax(190px, 1fr); align-items: center; gap: 14px; padding: 18px 20px; border: 2px solid var(--ink); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); }
-.compass-copy h2 { margin: 0 0 4px; }
-.compass-copy p { margin: 0; color: var(--ink-mute); font-size: 13px; }
-.compass-value { display: grid; gap: 3px; min-width: 0; padding: 10px 14px; border: 2px solid var(--ink); border-radius: 9px; background: var(--paper-deep); }
-.compass-value > span { font-size: 10px; font-weight: 800; letter-spacing: 1.4px; }
-.compass-value input, .compass-value strong { width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--ink); font-family: var(--font-display); font-size: clamp(22px, 2.5vw, 30px); }
-.compass-output { background: var(--sage); }
-.compass-swap { width: 44px; height: 44px; border: 2px solid var(--ink); border-radius: 50%; background: var(--mustard); box-shadow: var(--shadow-sm); font-size: 24px; cursor: pointer; }
-.currency-error { margin: -15px 0 0; color: var(--ember); font-size: 12px; }
-.ledger-grid { display: grid; grid-template-columns: minmax(340px, .82fr) minmax(0, 1.25fr); gap: 22px; align-items: start; }
-.expense-form, .expense-section { min-width: 0; padding: 20px 22px; border: 2px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow); }
-.expense-form { background: var(--paper-deep); }
-.expense-section { background: var(--card); }
-.expense-form form { display: grid; gap: 13px; }
-.expense-form .field { display: grid; gap: 5px; color: var(--ink); font-size: 13px; font-weight: 700; }
-.expense-form .input, .expense-form .select { width: 100%; min-width: 0; }
-.amount-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(115px, .55fr); gap: 12px; }
-.member-picker { display: grid; gap: 9px; margin: 0; padding: 10px 12px 12px; border: 2px dashed var(--ink-soft); border-radius: 10px; }
-.member-picker legend { padding: 0 6px; font-weight: 800; }
-.split-choice { display: flex; justify-content: space-between; gap: 12px; margin: 0; font-size: 12px; color: var(--ink-mute); }
-.form-reset, .edit-expense { border: 0; background: none; color: var(--teal); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.split-members { display: flex; flex-wrap: wrap; gap: 9px 15px; }
-.split-members label { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
-.split-members input, .custom-member input[type="checkbox"] { accent-color: var(--teal); }
-.custom-member { display: grid; grid-template-columns: auto minmax(80px, 1fr) minmax(90px, 125px); align-items: center; gap: 8px; }
-.custom-amount { min-width: 0; padding: 8px; }
-.split-status { color: var(--ink-mute); font-size: 12px; line-height: 1.5; }
-.split-status.complete { color: var(--jungle); font-weight: 700; }
-.split-status.over { color: var(--ember); font-weight: 700; }
-.form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.add-expense { width: 100%; }
-.ledger-table-wrap { overflow-x: auto; }
-.ledger-table { width: 100%; border-collapse: collapse; text-align: left; }
-.ledger-table th { padding: 9px 8px; border-bottom: 2px solid var(--ink); font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; }
-.ledger-table td { padding: 12px 8px; border-bottom: 1px dashed var(--line-strong); vertical-align: top; font-size: 13px; }
-.ledger-table td:first-child { min-width: 165px; }
-.ledger-table td:nth-child(2) { min-width: 82px; }
-.ledger-table td:nth-child(3) { min-width: 120px; }
-.ledger-table td:last-child { min-width: 130px; }
-.ledger-table td strong, .ledger-table td small { display: block; }
-.ledger-table td small { margin-top: 4px; color: var(--ink-mute); font-size: 10px; line-height: 1.4; }
-.ledger-table .table-amount { text-align: right; }
-.edit-expense { margin-top: 5px; font-size: 11px; }
-.empty-ledger { padding: 20px 0; }
-@media (max-width: 900px) {
-  .ledger-heading { align-items: start; flex-direction: column; gap: 18px; }
-  .heading-tools { width: 100%; grid-template-columns: 1fr auto; justify-items: start; align-items: center; }
-  .rate-caption { grid-column: 2; }
-  .overview-grid { grid-template-columns: 1fr; }
-  .ledger-grid { grid-template-columns: 1fr; }
-  .currency-compass { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
-  .compass-copy { grid-column: 1 / -1; }
+/* ---------- the receipt ---------- */
+.receipt {
+  position: relative;
+  padding: 22px 22px 34px;
+  background: #fffdf7;
+  border: 2.5px solid #1f2a24;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  font-family: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, monospace;
+  font-size: 13.5px;
+  animation: print 0.6s cubic-bezier(0.2, 0.8, 0.3, 1.1) both;
+  transform-origin: top center;
 }
-@media (max-width: 600px) {
-  .ledger-page { width: min(100% - 28px, 1440px); padding-top: 25px; }
-  .heading-copy h1 { font-size: clamp(40px, 12vw, 56px); }
-  .heading-copy > p:last-child { font-size: 14px; }
-  .heading-tools { grid-template-columns: 1fr; justify-items: stretch; }
-  .trip-picker { grid-template-columns: 1fr; gap: 4px; }
-  .currency-toggle { justify-self: start; }
-  .rate-caption { grid-column: auto; text-align: left; }
-  .haul-card { padding: 19px; }
-  .iou-grid { grid-template-columns: 1fr; }
-  .section-heading { align-items: start; }
-  .section-heading .hand { font-size: 17px; }
-  .currency-compass { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 9px; padding: 14px; }
-  .compass-copy { grid-column: 1 / -1; }
-  .compass-value { padding: 9px; }
-  .compass-value > span { font-size: 8px; letter-spacing: .8px; }
-  .compass-value input, .compass-value strong { font-size: 19px; }
-  .compass-swap { width: 38px; height: 38px; }
-  .expense-form, .expense-section { padding: 17px 14px; }
-  .amount-row { grid-template-columns: minmax(0, 1fr) minmax(105px, .7fr); gap: 8px; }
-  .ledger-table { min-width: 600px; }
-  .settlement-history p { flex-wrap: wrap; }
+/* torn zig-zag bottom edge */
+.receipt::after {
+  content: '';
+  position: absolute;
+  left: -2.5px;
+  right: -2.5px;
+  bottom: -14px;
+  height: 14px;
+  background:
+    linear-gradient(-45deg, transparent 7px, #fffdf7 0) 0 0 / 14px 14px repeat-x,
+    linear-gradient(45deg, transparent 7px, #fffdf7 0) 0 0 / 14px 14px repeat-x;
+  filter: drop-shadow(0 2.5px 0 #1f2a24);
+}
+@keyframes print {
+  from {
+    opacity: 0;
+    transform: translateY(-24px) scaleY(0.6);
+  }
+}
+.r-head {
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.trip-select {
+  font: inherit;
+  font-family: var(--font-round);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border: 1.5px solid #1f2a24;
+  border-radius: 999px;
+  background: #fffdf7;
+}
+.r-title {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.05;
+}
+.r-meta {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.currency {
+  display: inline-flex;
+  margin-top: 6px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.currency button {
+  border: 0;
+  padding: 3px 14px;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.currency button[aria-pressed='true'] {
+  background: #1f2a24;
+  color: #fffdf7;
+}
+.dash {
+  border: 0;
+  border-top: 2px dashed #1f2a24;
+  opacity: 0.4;
+  margin: 14px 0;
+}
+.r-empty {
+  margin: 10px 0;
+  text-align: center;
+  opacity: 0.75;
+}
+.items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.items li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 0 10px;
+}
+.items li > div {
+  grid-row: 1 / 3;
+}
+.items strong {
+  display: block;
+  font-weight: 700;
+}
+.items small {
+  opacity: 0.7;
+  font-size: 11.5px;
+}
+.amt {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.edit {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  align-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 11.5px;
+  text-decoration: underline;
+  cursor: pointer;
+  color: #2e6b46;
+}
+.total {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.tiles {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+.tiles li {
+  display: grid;
+  padding: 8px 10px;
+  border: 2px solid #1f2a24;
+  border-radius: 10px;
+  background: var(--tint);
+  font-family: var(--font-round);
+}
+.tiles small {
+  font-size: 11.5px;
+}
+.r-sub {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 19px;
+}
+.owes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.owes li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 10px;
+  padding: 10px 12px;
+  border: 2px solid #1f2a24;
+  border-radius: 10px;
+  font-family: var(--font-round);
+  font-size: 14.5px;
+}
+.tick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+label.tick {
+  cursor: pointer;
+}
+.tick input,
+.box {
+  appearance: none;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 2px solid #1f2a24;
+  border-radius: 6px;
+  background: #fffdf7;
+}
+.tick input {
+  cursor: pointer;
+}
+.tick input:checked {
+  background: #2e6b46 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12l5 5 9-10' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E") center / 80% no-repeat;
+}
+.tick input:focus-visible {
+  outline: 3px solid #1f2a24;
+  outline-offset: 2px;
+}
+.box {
+  opacity: 0.35;
+}
+.tick.mine {
+  color: #9e3b1b;
+}
+.wait {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.settled-msg {
+  margin: 8px 0 0;
+  min-height: 1.2em;
+  color: #2e6b46;
+  font-family: var(--font-round);
+  font-weight: 600;
+}
+.history summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.history p {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0 0;
+  opacity: 0.7;
+}
+.add {
+  width: 100%;
+  min-height: 44px;
+  border: 2px dashed #1f2a24;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  font-family: var(--font-round);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.add:hover {
+  background: #f5bf4f;
+}
+.add-form {
+  display: grid;
+  gap: 12px;
+  font-family: var(--font-round);
+}
+.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.split {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  gap: 6px;
+}
+.split legend {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.split-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.custom {
+  width: 110px;
+  min-height: 34px;
+  margin-left: auto;
+}
+.split-status {
+  font-size: 12px;
+}
+.split-status.complete {
+  color: #2e6b46;
+}
+.split-status.over {
+  color: #9e3b1b;
+}
+.convert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f3ead3;
+}
+.convert label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+}
+.convert input {
+  width: 90px;
+  padding: 4px 6px;
+  border: 1.5px solid #1f2a24;
+  border-radius: 6px;
+  font: inherit;
+}
+.convert button {
+  border: 0;
+  background: none;
+  font-size: 18px;
+  cursor: pointer;
+}
+.convert output {
+  margin-left: auto;
+  font-weight: 700;
+}
+
+.receipt {
+  color: #1f2a24;
 }
 </style>

@@ -7,7 +7,7 @@ const routes = [
     path: "/",
     name: "home",
     component: () => import("@/views/BasecampView.vue"),
-    meta: { title: "Home" },
+    meta: { title: "Home", fullBleed: true }, // the 3D camp fills the window: no footer, no page scroll
   },
 
   {
@@ -31,7 +31,7 @@ const routes = [
     path: "/tales",
     name: "tales",
     component: () => import("@/views/TalesView.vue"),
-    meta: { requiresAuth: true, title: "Tales" },
+    meta: { requiresAuth: true, title: "Tales", fullBleed: true },
   },
 
   {
@@ -69,13 +69,13 @@ const routes = [
     path: "/ledger",
     name: "ledger",
     component: () => import("@/views/LedgerView.vue"),
-    meta: { requiresAuth: true, title: "Ledger" },
+    meta: { requiresAuth: true, title: "Ledger", fullBleed: true },
   },
   {
     path: "/explorer",
     name: "explorer",
     component: () => import("@/views/ExplorerView.vue"),
-    meta: { title: "Explorer" },
+    meta: { title: "Explorer", fullBleed: true },
   },
   {
     path: "/explorer/place/:googlePlaceId",

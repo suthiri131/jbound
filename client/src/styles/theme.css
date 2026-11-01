@@ -34,6 +34,7 @@
   --font-display: "Alfa Slab One", Georgia, serif;
   --font-body: "Archivo", system-ui, sans-serif;
   --font-hand: "Caveat", cursive;
+  --font-round: "Fredoka", "Archivo", system-ui, sans-serif; /* the camp / game UI */
 
   --radius: 14px;
   --shadow: 5px 5px 0 var(--ink);

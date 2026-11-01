@@ -3,6 +3,7 @@ import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { initials } from "@/utils/format";
+import UserAvatar from "@/components/common/UserAvatar.vue";
  
 defineEmits(["open-satchel"]);
 const auth = useAuthStore();

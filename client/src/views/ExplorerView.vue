@@ -9,8 +9,7 @@ import { VIBES, VIBE_LABEL, VIBE_TINT } from "@/utils/constants";
 import { dayLabel } from "@/utils/format";
 import VibeIcon from "@/components/common/VibeIcon.vue";
 import ToastMessage from "@/components/common/ToastMessage.vue";
-import Pagination from "@/components/common/Pagination.vue";
-import VibeBoard from "@/components/explorer/VibeBoard.vue";
+import StationShell from "@/components/basecamp/StationShell.vue";
 import FilterMenu from "@/components/explorer/FilterMenu.vue";
 
 const route = useRoute();
@@ -19,7 +18,6 @@ const trips = useTripsStore();
 const auth = useAuthStore();
 
 const VIBE_IDS = VIBES.map((v) => v.id);
-const PAGE_SIZE = 12;
 const DEFAULT_FILTERS = {
   checkpoint: "woodlands",
   maxDistanceKm: 40,
@@ -33,11 +31,6 @@ const vibesFromUrl = () =>
     .split(",")
     .filter((v) => VIBE_IDS.includes(v));
 
-/** 'board' = vibe board intro, 'feed' = results */
-const stage = ref(
-  route.query.vibes !== undefined || route.query.q ? "feed" : "board",
-);
-const boardVisits = ref(0); // the doors only play on the first visit
 const vibes = ref(vibesFromUrl());
 const q = ref(String(route.query.q || ""));
 const filters = ref({ ...DEFAULT_FILTERS });
@@ -45,16 +38,8 @@ const filters = ref({ ...DEFAULT_FILTERS });
 const places = ref([]);
 const loading = ref(false);
 const error = ref("");
-const page = ref(1);
-const poofIn = ref(false); // feed cards "poof up" right after the board
 const toast = ref({ message: "", linkTo: "", linkLabel: "" });
 
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(places.value.length / PAGE_SIZE)),
-);
-const pagePlaces = computed(() =>
-  places.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE),
-);
 const vibeSummary = computed(() =>
   vibes.value.map((v) => VIBE_LABEL[v]).join(", "),
 );
@@ -79,7 +64,7 @@ async function search() {
     });
     if (id !== requestId) return; // a newer search already started
     places.value = data;
-    page.value = 1;
+    deckIndex.value = 0;
   } catch (err) {
     if (id === requestId) error.value = errorMessage(err);
   } finally {
@@ -106,24 +91,18 @@ function searchSoon() {
     search();
   }, 600);
 }
-let skipWatch = false; // onExplore already searched; don't search again for the same change
 watch(
   [vibes, filters],
-  () => {
-    if (skipWatch) return (skipWatch = false);
-    if (stage.value === "feed") searchSoon();
-  },
+  () => searchSoon(),
   { deep: true },
 );
 // the search box's own ✕ (or deleting the text) empties it → go back to the vibe results
 function onSearchInput() {
-  if (!q.value.trim() && route.query.q && stage.value === "feed")
-    submitSearch();
+  if (!q.value.trim() && route.query.q) submitSearch();
 }
 
 function submitSearch() {
   clearTimeout(debounce);
-  if (stage.value === "board") stage.value = "feed";
   syncUrl();
   search();
 }
@@ -132,35 +111,14 @@ function clearSearch() {
   submitSearch();
 }
 
-// ---------- vibe board ----------
-function onExplore(picked) {
-  skipWatch = true;
-  vibes.value = picked;
-  q.value = "";
-  stage.value = "feed";
-  poofIn.value = true;
-  setTimeout(() => (poofIn.value = false), 1200);
-  syncUrl();
-  search();
-}
-function changeVibe() {
-  boardVisits.value++;
-  stage.value = "board";
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
 function toggleVibe(id) {
   if (q.value) q.value = ""; // picking a category leaves the typed search
   const i = vibes.value.indexOf(id);
   i === -1 ? vibes.value.push(id) : vibes.value.splice(i, 1);
 }
 
-function goToPage(n) {
-  page.value = n;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
 onMounted(async () => {
-  if (stage.value === "feed") search();
+  search();
   await trips.fetch().catch(() => {});
   // "+ Pin to trip" on a place page sends people here with ?pin=<googlePlaceId>
   if (route.query.pin) {
@@ -250,414 +208,619 @@ async function pin() {
 }
 
 const price = (n) => (n ? "$".repeat(n) : "");
+
+// ---------- the flyer deck + backpack ----------
+// Swipe right (or ♥) to drop a place in your Backpack to plan with later; left (or ✕) to skip.
+const BACKPACK_KEY = "jbound:backpack";
+const readBackpack = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BACKPACK_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+};
+const backpack = ref(readBackpack());
+watch(backpack, (list) => {
+  try {
+    localStorage.setItem(BACKPACK_KEY, JSON.stringify(list));
+  } catch {
+    /* private mode: backpack lasts for this visit only */
+  }
+}, { deep: true });
+
+const keyOf = (p) => p.googlePlaceId || p.google_place_id || p.id;
+const inBackpack = (p) => backpack.value.some((b) => b.key === keyOf(p));
+const deck = computed(() => places.value.filter((p) => !inBackpack(p)));
+const deckIndex = ref(0);
+const current = computed(() => deck.value[deckIndex.value] || null);
+const upNext = computed(() => deck.value.slice(deckIndex.value + 1, deckIndex.value + 3));
+const lastAction = ref(null); // { kind: 'keep' | 'skip', place } for undo
+
+function keep(place = current.value) {
+  if (!place) return;
+  backpack.value.unshift({ key: keyOf(place), id: place.id || null, googlePlaceId: place.googlePlaceId || place.google_place_id || null, name: place.name, photo: place.photos?.[0] || null, vibes: place.vibes || [] });
+  lastAction.value = { kind: "keep", place };
+  // the kept card leaves the deck, so the index already points at the next one
+}
+function skip(place = current.value) {
+  if (!place) return;
+  lastAction.value = { kind: "skip", place };
+  deckIndex.value++;
+}
+function undo() {
+  const last = lastAction.value;
+  if (!last) return;
+  if (last.kind === "keep") backpack.value = backpack.value.filter((b) => b.key !== keyOf(last.place));
+  else deckIndex.value = Math.max(0, deckIndex.value - 1);
+  lastAction.value = null;
+}
+function dropFromBackpack(item) {
+  backpack.value = backpack.value.filter((b) => b.key !== item.key);
+}
+
+// drag to swipe
+const drag = ref({ active: false, startX: 0, dx: 0 });
+const leaving = ref(null); // 'left' | 'right' while the card flies off
+function onDown(e) {
+  if (leaving.value) return;
+  drag.value = { active: true, startX: e.clientX, dx: 0 };
+  e.currentTarget.setPointerCapture?.(e.pointerId);
+}
+function onMove(e) {
+  if (drag.value.active) drag.value.dx = e.clientX - drag.value.startX;
+}
+function onUp() {
+  if (!drag.value.active) return;
+  const { dx } = drag.value;
+  drag.value = { active: false, startX: 0, dx: 0 };
+  if (dx > 110) fling("right");
+  else if (dx < -110) fling("left");
+}
+function fling(dir) {
+  if (!current.value || leaving.value) return;
+  leaving.value = dir;
+  const place = current.value;
+  setTimeout(() => {
+    dir === "right" ? keep(place) : skip(place);
+    leaving.value = null;
+  }, 260);
+}
+function onDeckKey(e) {
+  if (e.key === "ArrowRight") fling("right");
+  else if (e.key === "ArrowLeft") fling("left");
+  else return;
+  e.preventDefault();
+}
+const cardStyle = computed(() => {
+  if (leaving.value) return { transform: `translateX(${leaving.value === "right" ? 140 : -140}%) rotate(${leaving.value === "right" ? 24 : -24}deg)`, opacity: 0, transition: "transform .26s ease-in, opacity .26s" };
+  const { dx, active } = drag.value;
+  return { transform: `translateX(${dx}px) rotate(${dx / 18}deg)`, transition: active ? "none" : "transform .25s" };
+});
+const hint = computed(() => (drag.value.dx > 50 ? "keep" : drag.value.dx < -50 ? "skip" : ""));
+
+/** Open the pin-to-trip dialog for a backpack item. */
+function pinFromBackpack(item) {
+  openPin({ id: item.id, googlePlaceId: item.googlePlaceId, name: item.name });
+}
 </script>
 
 <template>
-  <main class="container page">
-    <!-- top bar: page stamp on the left, search + filters on the right -->
-    <div class="topbar">
-      <span class="tag-stamp">Explorer</span>
+  <StationShell station="explorer" sign="The Flyer Tree" label="Flyers">
+    <section class="board">
+      <header class="b-head">
+        <h1 class="b-title">Flyers from the tree</h1>
+        <p class="b-sub">Swipe right to pack it, left to skip. Quick for indecisive groups.</p>
+      </header>
+
       <div class="tools">
         <form class="search" role="search" @submit.prevent="submitSearch">
-          <svg
-            class="search-ico"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            aria-hidden="true"
-          >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7" />
             <path d="m20 20-4-4" />
           </svg>
-          <input
-            v-model="q"
-            class="input search-input"
-            type="search"
-            placeholder="Search bak kut teh, murals, durian…"
-            aria-label="Search places in JB"
-            data-cy="explorer-search"
-            @input="onSearchInput"
-          />
+          <input v-model="q" type="search" placeholder="Bak kut teh, murals, durian…" aria-label="Search places in JB" data-cy="explorer-search" @input="onSearchInput" />
         </form>
         <FilterMenu v-model="filters" :defaults="DEFAULT_FILTERS" />
       </div>
-    </div>
 
-    <!-- 1. vibe board -->
-    <VibeBoard
-      v-if="stage === 'board'"
-      :key="boardVisits"
-      class="vibe-board"
-      :name="auth.firstName"
-      :initial="vibes"
-      :skip-doors="boardVisits > 0"
-      @explore="onExplore"
-    />
-
-    <!-- 2. feed -->
-    <template v-else>
-      <h1 class="display display-lg" style="margin-top: 22px">
-        JBound's recommendations for you
-      </h1>
-      <p v-if="q.trim()" class="muted sub">
-        Results for “{{ q.trim() }}”
-        <button type="button" class="btn btn-sm btn-ghost" @click="clearSearch">
-          ✕ Clear search
-        </button>
-      </p>
-      <p v-else class="muted sub">
-        {{
-          vibes.length
-            ? `Because you're feeling ${vibeSummary}.`
-            : "A bit of everything around JB."
-        }}
-      </p>
-
-      <!-- category filters, right under the heading -->
-      <div class="row cats" role="group" aria-label="Categories">
+      <div class="vibes" role="group" aria-label="Vibes">
         <button
           v-for="v in VIBES"
           :key="v.id"
           type="button"
-          class="chip"
+          class="vibe"
           :aria-pressed="!q.trim() && vibes.includes(v.id)"
+          :style="{ '--tint': VIBE_TINT[v.id] }"
           :data-cy="`vibe-${v.id}`"
           @click="toggleVibe(v.id)"
         >
-          <VibeIcon :vibe="v.id" :size="18" /> {{ v.label }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-ghost"
-          data-cy="change-vibe"
-          @click="changeVibe"
-        >
-          ↺ Change my vibe
+          <VibeIcon :vibe="v.id" :size="16" /> {{ v.label }}
         </button>
       </div>
-
-      <p class="hand muted count" aria-live="polite">
-        {{
-          loading
-            ? "Scouting…"
-            : `${places.length} place${places.length === 1 ? "" : "s"} found`
-        }}
+      <p class="b-sub" aria-live="polite">
+        <template v-if="q.trim()">Results for “{{ q.trim() }}” · <button type="button" class="link" @click="clearSearch">clear</button></template>
+        <template v-else>{{ vibes.length ? `Feeling ${vibeSummary}` : 'A bit of everything around JB' }}</template>
       </p>
-      <!-- Google requires attribution when showing Places data outside a Google map.
-           TODO(team): also show each photo's authorAttributions (see Places API photo policies). -->
-      <p v-if="places.length" class="attribution">Places data © Google</p>
-      <p v-if="error" class="error-text" role="alert">{{ error }}</p>
 
-      <ul class="grid" :class="{ 'poof-in': poofIn }">
-        <li
-          v-for="(p, i) in pagePlaces"
-          :key="p.id || p.googlePlaceId"
-          class="card place"
-          :style="{ '--i': i }"
-          data-cy="place-card"
-        >
-          <img
-            v-if="p.photos?.[0]"
-            :src="assetUrl(p.photos[0])"
-            :alt="p.name"
-            class="photo"
-            loading="lazy"
-          />
-          <div
-            v-else
-            class="placeholder-photo photo"
-            :style="{ background: VIBE_TINT[p.vibes[0]] }"
+      <!-- the deck -->
+      <div class="deck" tabindex="0" aria-label="Flyer deck. Left arrow skips, right arrow packs it." @keydown="onDeckKey">
+        <p v-if="loading" class="deck-empty" role="status">Pinning up fresh flyers…</p>
+        <p v-else-if="error" class="error-text" role="alert">{{ error }}</p>
+        <p v-else-if="!current" class="deck-empty">
+          {{ places.length ? 'That’s every flyer on the tree. Try another vibe.' : 'No flyers for that. Try another vibe or search.' }}
+        </p>
+
+        <template v-else>
+          <div v-for="(p, i) in upNext" :key="keyOf(p)" class="flyer under" :style="{ '--n': i + 1 }" aria-hidden="true" />
+          <article
+            :key="keyOf(current)"
+            class="flyer top"
+            :class="hint"
+            :style="cardStyle"
+            data-cy="place-card"
+            @pointerdown="onDown"
+            @pointermove="onMove"
+            @pointerup="onUp"
+            @pointercancel="onUp"
           >
-            <VibeIcon :vibe="p.vibes[0]" :size="40" :stroke-width="1.6" />
-          </div>
-          <div class="body">
-            <div class="row" style="gap: 6px">
-              <span
-                v-for="v in p.vibes"
-                :key="v"
-                class="pill"
-                :style="{ background: VIBE_TINT[v] }"
-                >{{ VIBE_LABEL[v] }}</span
-              >
-              <span
-                v-if="p.isHiddenGem"
-                class="pill"
-                style="background: var(--mustard)"
-                >✦ Hidden gem</span
-              >
+            <span class="tape" aria-hidden="true" />
+            <img v-if="current.photos?.[0]" :src="assetUrl(current.photos[0])" :alt="current.name" class="f-photo" draggable="false" />
+            <div v-else class="f-photo f-blank" :style="{ background: VIBE_TINT[current.vibes?.[0]] || '#f6d58e' }">
+              <VibeIcon :vibe="current.vibes?.[0] || 'eating'" :size="48" />
             </div>
-            <h2 class="display display-sm" style="margin-top: 8px">
-              <RouterLink
-                v-if="placeLink(p)"
-                :to="placeLink(p)"
-                class="place-link"
-                data-cy="place-link"
-                >{{ p.name }}</RouterLink
-              >
-              <template v-else>{{ p.name }}</template>
-            </h2>
-            <p v-if="p.rating" class="meta">
-              <strong>★ {{ p.rating }}</strong>
-              <span class="muted"
-                >({{ p.ratingCount ?? p.rating_count }} Google reviews)</span
-              >
+            <p class="f-kicker">
+              <span v-for="v in (current.vibes || []).slice(0, 2)" :key="v">{{ VIBE_LABEL[v] }}</span>
+              <span v-if="current.distanceKm != null">{{ current.distanceKm.toFixed(1) }} km from CIQ</span>
             </p>
-            <p class="meta muted">
-              {{ p.distanceKm }} km from
-              {{ filters.checkpoint === "tuas" ? "Tuas" : "Woodlands"
-              }}<template v-if="p.price_level">
-                · {{ price(p.price_level) }}</template
-              >
-              · {{ p.postCount }} tale{{ p.postCount === 1 ? "" : "s" }}
+            <h2 class="f-name">{{ current.name }}</h2>
+            <p v-if="current.description" class="f-desc">{{ current.description }}</p>
+            <p class="f-tags">
+              <span v-if="current.rating" class="tag">★ {{ current.rating.toFixed(1) }}<small v-if="current.ratingCount || current.rating_count"> ({{ current.ratingCount || current.rating_count }})</small></span>
+              <span v-if="current.price_level" class="tag">{{ price(current.price_level) }}</span>
+              <span v-if="current.isHiddenGem" class="tag gem">Hidden gem</span>
+              <span v-if="current.postCount" class="tag">{{ current.postCount }} tales</span>
             </p>
-            <p v-if="p.description" class="desc">{{ p.description }}</p>
-            <div class="spacer" />
-            <div class="row" style="gap: 8px; margin-top: 12px">
-              <RouterLink
-                v-if="placeLink(p)"
-                :to="placeLink(p)"
-                class="btn btn-sm btn-ghost"
-                >View place</RouterLink
-              >
-              <button
-                type="button"
-                class="btn btn-primary btn-sm"
-                data-cy="pin"
-                @click="openPin(p)"
-              >
-                + Pin to trip
-              </button>
-              <RouterLink
-                v-if="p.id"
-                :to="`/tales/place/${p.id}`"
-                class="btn btn-sm btn-ghost"
-                >Read tales</RouterLink
-              >
-            </div>
-          </div>
-        </li>
-      </ul>
+            <RouterLink v-if="placeLink(current)" :to="placeLink(current)" class="f-more" @pointerdown.stop>Read the full flyer →</RouterLink>
+            <span class="stamp keep-stamp" aria-hidden="true">PACK IT</span>
+            <span class="stamp skip-stamp" aria-hidden="true">NAH</span>
+          </article>
+        </template>
+      </div>
 
-      <p v-if="!loading && !error && !places.length" class="empty hand">
-        Nothing here. Try a wider distance in Filters, or another vibe.
-      </p>
+      <div class="controls">
+        <button type="button" class="round skip" aria-label="Skip this place" :disabled="!current" @click="fling('left')">✕</button>
+        <p class="count">
+          <template v-if="deck.length">Flyer {{ Math.min(deckIndex + 1, deck.length) }} of {{ deck.length }}</template>
+          <button v-if="lastAction" type="button" class="link" @click="undo">Undo</button>
+        </p>
+        <button type="button" class="round keep" aria-label="Put this place in your backpack" :disabled="!current" @click="fling('right')">♥</button>
+      </div>
 
-      <Pagination
-        class="pager"
-        :page="page"
-        :total-pages="totalPages"
-        :disabled="loading"
-        label="Explorer result pages"
-        @page-change="goToPage"
-      />
-    </template>
+      <!-- backpack -->
+      <section class="backpack" aria-labelledby="bp-title">
+        <h2 id="bp-title" class="bp-title">🎒 Backpack <small>{{ backpack.length }}</small></h2>
+        <p v-if="!backpack.length" class="b-sub">Places you pack show up here, ready to pin to a trip.</p>
+        <ul v-else class="bp-list">
+          <li v-for="item in backpack" :key="item.key">
+            <img v-if="item.photo" :src="assetUrl(item.photo)" alt="" />
+            <span v-else class="bp-dot" :style="{ background: VIBE_TINT[item.vibes?.[0]] || '#f6d58e' }" aria-hidden="true" />
+            <span class="bp-name">{{ item.name }}</span>
+            <button type="button" class="mini" @click="pinFromBackpack(item)">Pin to trip</button>
+            <button type="button" class="mini ghost" :aria-label="`Take ${item.name} out of the backpack`" @click="dropFromBackpack(item)">✕</button>
+          </li>
+        </ul>
+      </section>
+    </section>
 
-    <!-- pin modal (unchanged) -->
+    <ToastMessage v-if="toast.message" :message="toast.message" :link-to="toast.linkTo" :link-label="toast.linkLabel" @close="toast = { message: '' }" />
+
+    <!-- pin to trip -->
     <template v-if="pinning">
       <div class="scrim" @click="pinning = null" />
-      <div
-        class="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pin-title"
-        @keydown.esc="pinning = null"
-      >
-        <h2 id="pin-title" class="display display-md">
-          Pin {{ pinning.name }}
-        </h2>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pin-title" @keydown.esc="pinning = null">
+        <h2 id="pin-title" class="display display-md">Pin {{ pinning.name }}</h2>
         <p v-if="!trips.plannable.length" class="lead">
           No trips to pin to yet.
           <RouterLink to="/planner?new=1">Create a new trip</RouterLink> first.
         </p>
-        <form
-          v-else
-          class="stack"
-          style="gap: 14px; margin-top: 16px"
-          @submit.prevent="pin"
-        >
-          <label class="field"
-            >Trip
+        <form v-else class="stack" style="gap: 14px; margin-top: 16px" @submit.prevent="pin">
+          <label class="field">Trip
             <select v-model="pinTrip" class="select" data-cy="pin-trip">
-              <option v-for="t in trips.plannable" :key="t.id" :value="t.id">
-                {{ t.name }}
-              </option>
+              <option v-for="t in trips.plannable" :key="t.id" :value="t.id">{{ t.name }}</option>
             </select>
           </label>
           <div class="row" style="gap: 12px">
-            <label class="field" style="flex: 1"
-              >Day
+            <label class="field" style="flex: 1">Day
               <select v-model="pinDay" class="select">
                 <option value="">Unscheduled</option>
-                <option v-for="d in pinDates" :key="d" :value="d">
-                  {{ dayLabel(pinTripObj?.start_date, d) }} · {{ d }}
-                </option>
+                <option v-for="d in pinDates" :key="d" :value="d">{{ dayLabel(pinTripObj?.start_date, d) }} · {{ d }}</option>
               </select>
             </label>
-            <label class="field" style="flex: 1"
-              >Time (optional)<input
-                v-model="pinTime"
-                type="time"
-                class="input"
-            /></label>
+            <label class="field" style="flex: 1">Time (optional)<input v-model="pinTime" type="time" class="input" /></label>
           </div>
           <div class="row" style="justify-content: flex-end">
-            <button type="button" class="btn btn-ghost" @click="pinning = null">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="btn btn-primary"
-              :disabled="pinBusy || !pinTrip"
-              data-cy="pin-confirm"
-            >
-              Pin it
-            </button>
+            <button type="button" class="btn btn-ghost" @click="pinning = null">Cancel</button>
+            <button type="submit" class="btn btn-primary" :disabled="pinBusy || !pinTrip" data-cy="pin-confirm">Pin it</button>
           </div>
         </form>
       </div>
     </template>
-
-    <ToastMessage v-bind="toast" @close="toast.message = ''" />
-  </main>
+  </StationShell>
 </template>
 
 <style scoped>
-/* top bar */
-.topbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+.board {
+  padding: 20px 20px 22px;
+  background: #fffdf7;
+  border: 2.5px solid #1f2a24;
+  border-radius: 18px;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.15);
+  display: grid;
+  gap: 12px;
+  animation: pop-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateX(30px) scale(0.96);
+  }
+}
+.b-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 26px;
+  line-height: 1.05;
+}
+.b-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
 }
 .tools {
   display: flex;
+  gap: 8px;
   align-items: center;
-  gap: 10px;
-  flex: 0 1 520px;
 }
 .search {
-  position: relative;
   flex: 1;
-}
-.search-ico {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--ink-mute);
-  pointer-events: none;
-}
-.search-input {
-  width: 100%;
-  padding-left: 42px;
-  border-radius: 999px;
-}
-
-.vibe-board {
-  margin-top: 22px;
-}
-
-/* feed */
-.sub {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin: 8px 0 0;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  background: #fffdf7;
 }
-.cats {
-  margin-top: 18px;
-  gap: 10px;
-}
-.count {
-  margin: 20px 0 0;
-}
-.grid {
-  list-style: none;
-  margin: 18px 0 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 22px;
-}
-.place {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.photo {
-  width: 100%;
-  height: 170px;
-  object-fit: cover;
-  border-bottom: 2px solid var(--ink);
-}
-.body {
+.search input {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 16px 18px 18px;
-}
-.meta {
-  margin: 4px 0 0;
-  font-size: 13px;
-}
-.desc {
-  margin: 8px 0 0;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
   font-size: 14px;
 }
-.attribution {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--ink-mute);
+.search:focus-within {
+  outline: 3px solid #1f2a24;
+  outline-offset: 2px;
 }
-.place-link {
-  color: inherit;
-  text-decoration: none;
+.vibes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.place-link:hover {
-  text-decoration: underline;
+.vibe {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  background: #fffdf7;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
-.empty {
-  margin-top: 24px;
+.vibe[aria-pressed='true'] {
+  background: var(--tint);
+  box-shadow: inset 0 0 0 1px #1f2a24;
+}
+
+/* ---------- deck ---------- */
+.deck {
+  position: relative;
+  height: 400px;
+  margin-top: 6px;
+  border-radius: 14px;
+  outline: none;
+}
+.deck:focus-visible {
+  outline: 3px dashed #1f2a24;
+  outline-offset: 6px;
+}
+.deck-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: 20px;
+  border: 2.5px dashed rgba(31, 42, 36, 0.4);
+  border-radius: 14px;
   text-align: center;
+  font-family: var(--font-hand);
+  font-size: 22px;
 }
-.pager {
-  margin-top: 28px;
+.flyer {
+  position: absolute;
+  inset: 0;
+  border: 2.5px solid #1f2a24;
+  border-radius: 6px;
+  background: #fffaf0;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
 }
-
-/* cards "poof up" after Let's Explore */
-.poof-in .place {
-  animation: poof-up 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both;
-  animation-delay: calc(var(--i) * 45ms);
+.under {
+  translate: 0 calc(var(--n) * 7px);
+  scale: calc(1 - var(--n) * 0.04);
+  rotate: calc(var(--n) * 2deg - 1deg);
+  z-index: calc(3 - var(--n));
+  background: #f6eedb;
 }
-@keyframes poof-up {
+.top {
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 12px 14px;
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  animation: deal 0.3s ease-out;
+}
+.top:active {
+  cursor: grabbing;
+}
+@keyframes deal {
   from {
-    opacity: 0;
-    transform: translateY(18px) scale(0.92);
+    translate: 0 14px;
+    scale: 0.96;
   }
 }
+.tape {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 80px;
+  height: 24px;
+  translate: -50% 0;
+  rotate: -3deg;
+  background: rgba(245, 191, 79, 0.75);
+  border: 1px solid rgba(31, 42, 36, 0.2);
+}
+.f-photo {
+  width: 100%;
+  height: 170px;
+  flex: none;
+  object-fit: cover;
+  border: 2px solid #1f2a24;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.f-blank {
+  display: grid;
+  place-items: center;
+}
+.f-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9e3b1b;
+}
+.f-name {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 24px;
+  line-height: 1.05;
+}
+.f-desc {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.f-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: auto 0 0;
+  padding-top: 8px;
+}
+.tag {
+  padding: 2px 10px;
+  border: 1.5px solid #1f2a24;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fffdf7;
+}
+.tag small {
+  opacity: 0.7;
+}
+.tag.gem {
+  background: #d9cdf2;
+}
+.f-more {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #2e6b46;
+}
+.stamp {
+  position: absolute;
+  top: 26px;
+  padding: 4px 10px;
+  border: 4px solid currentColor;
+  border-radius: 8px;
+  font-family: var(--font-display);
+  font-size: 22px;
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+.keep-stamp {
+  left: 22px;
+  color: #2e6b46;
+  rotate: -14deg;
+}
+.skip-stamp {
+  right: 22px;
+  color: #9e3b1b;
+  rotate: 14deg;
+}
+.top.keep .keep-stamp,
+.top.skip .skip-stamp {
+  opacity: 1;
+}
 
-@media (max-width: 640px) {
-  .tools {
-    flex-basis: 100%;
-  }
-  /* one swipeable row of category chips */
-  .cats {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 6px;
-  }
-  .cats > * {
-    flex: none;
-  }
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+}
+.round {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 2.5px solid #1f2a24;
+  border-radius: 50%;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+  font-size: 22px;
+  cursor: pointer;
+}
+.round:active {
+  translate: 0 3px;
+  box-shadow: none;
+}
+.round:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.round.skip {
+  background: #fffdf7;
+}
+.round.keep {
+  background: #2e6b46;
+  color: #fffdf7;
+}
+.count {
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 14px;
+  border: 2px solid #1f2a24;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.backpack {
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #e9dcc0;
+  border: 2px solid #1f2a24;
+}
+.bp-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.bp-title small {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: #1f2a24;
+  color: #fffdf7;
+  font-size: 12px;
+}
+.bp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.bp-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #fffdf7;
+}
+.bp-list img,
+.bp-dot {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1.5px solid #1f2a24;
+}
+.bp-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 14px;
+}
+.mini {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  background: #f5bf4f;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mini.ghost {
+  background: transparent;
+  padding: 0 8px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .poof-in .place {
+  .top {
     animation: none;
   }
 }
