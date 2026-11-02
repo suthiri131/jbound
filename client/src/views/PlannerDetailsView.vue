@@ -212,13 +212,10 @@ const canMemories = computed(() =>
         <strong>This trip is in the Archives.</strong>
         <RouterLink to="/archives">Open its drawer in the attic →</RouterLink>
       </div>
-      <p class="row" style="gap: 6px; font-size: 12px" :class="isLive ? 'muted' : 'error-text'">
-  <span :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: isLive ? 'var(--jungle)' : 'var(--brick)' }" aria-hidden="true"></span>
-  {{ isLive ? 'Live' : 'Offline — syncing every 15s' }}
-</p>
+      
       <p v-if="crewNotice" class="hand" role="status">{{ crewNotice }}</p>
 
-      <CrewBar :trip="trip" @changed="loadTrip" @joined="crewNotice = $event" />
+      <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @joined="crewNotice = $event" />
 
       <div class="split">
         <BucketList
