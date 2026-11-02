@@ -2,9 +2,10 @@
 import { ref, onMounted, computed } from 'vue';
 import { api, errorMessage } from '@/lib/api';
 import { timeAgo } from '@/utils/format';
+import { useNotificationsStore } from '@/stores/notifications';
 
 const emit = defineEmits(['close']);
-
+const notifications = useNotificationsStore();
 const loading = ref(false);
 const loadError = ref('');
 const items = ref([]);
@@ -67,6 +68,7 @@ async function loadInvites() {
   try {
     const { data } = await api.get('/trips/invites');
     invites.value = data;
+    notifications.inviteCount = data.length;
   } catch {
     invites.value = [];
   }

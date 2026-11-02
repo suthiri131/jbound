@@ -3,8 +3,11 @@ import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { initials } from "@/utils/format";
- 
-defineEmits(["open-satchel"]);
+import { useNotificationsStore } from "@/stores/notifications";
+
+
+const notifications = useNotificationsStore(); 
+const emit = defineEmits(["open-satchel", "open-notifications"]);
 const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
@@ -33,6 +36,7 @@ const closeOnEscape = (e) => {
   }
 };
 onMounted(() => {
+  if (auth.isLoggedIn) notifications.fetchInviteCount();
   document.addEventListener("click", closeOnOutsideClick);
   document.addEventListener("keydown", closeOnEscape);
   mobileMedia = window.matchMedia(MOBILE_QUERY);
@@ -61,6 +65,13 @@ const links = [
   { to: "/archives", label: "Archives" },
   { to: "/explorer", label: "Explorer" },
 ];
+function openNotifications() {
+  if (mobileMedia?.matches) {
+    router.push('/notifications');
+  } else {
+    emit('open-notifications');
+  }
+}
  
 async function logout() {
   menuOpen.value = false;
@@ -68,6 +79,7 @@ async function logout() {
   await auth.logout();
   router.push("/login");
 }
+
 </script>
  
 <template>
@@ -101,7 +113,7 @@ async function logout() {
       </nav>
  
       <div class="actions">
-        <button v-if="auth.isLoggedIn" type="button" class="satchel" @click="$emit('open-notifications')">
+        <button v-if="auth.isLoggedIn" type="button" class="satchel" @click="openNotifications">
           <svg 
             width="22" 
             height="22"
@@ -115,6 +127,7 @@ async function logout() {
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
+          <span v-if="notifications.inviteCount" class="badge-dot">{{ notifications.inviteCount }}</span>
           </button>
         <button v-if="auth.isLoggedIn" type="button" class="satchel" @click="$emit('open-satchel')">
           <svg
@@ -240,6 +253,7 @@ async function logout() {
   font-weight: 700;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
+  position:relative;
 }
 .avatar {
   display: grid;
@@ -353,6 +367,24 @@ async function logout() {
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
+  }
+
+  .badge-dot { 
+    position: absolute;
+    top: 2px; 
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--brick);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    border: 2px solid var(--paper); 
   }
  
   /* three bars → an X when open */
