@@ -34,6 +34,8 @@ const subtitles = reactive({
   archives: "Past trip scrapbooks",
   ledger: "Split costs in S$ and RM",
 });
+
+const traffic = reactive({ toJb: undefined, toSg: undefined });
 const sgd = (n) => `S$${Number(n || 0).toFixed(2)}`;
 
 // ---------- sky: Singapore's clock + NEA forecast, with a manual day/night override ----------
@@ -65,14 +67,19 @@ onMounted(async () => {
 
   await trips.fetch().catch(() => {});
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const [cong, posts, arch, bal, mates] = await Promise.allSettled([
+  const [cong, congBack, posts, arch, bal, mates] = await Promise.allSettled([
     api.get("/checkpoints/woodlands/congestion", { params: { direction: "to_jb" } }),
+    api.get("/checkpoints/woodlands/congestion" ,{ params: { direction: "to_sg"}}),
     api.get("/posts", { params: { limit: 50 } }),
     api.get("/archives"),
     trips.defaultTrip ? api.get(`/trips/${trips.defaultTrip.id}/balances`) : Promise.reject(),
     api.get("/auth/crew"),
   ]);
-  if (cong.status === "fulfilled") subtitles.watcher = `Woodlands now: ${cong.value.data.selected.level}`;
+  if (cong.status === "fulfilled") {
+    subtitles.watcher =  `Woodlands now: ${cong.value.data.selected.level}`;
+    traffic.toJb = cong.value.data.selected.score;
+  };
+  if (congBack.status === 'fulfilled') traffic.toSg = congBack.value.data.selected.score;
   if (posts.status === "fulfilled") {
     const n = posts.value.data.items.filter((p) => p.created_at > weekAgo).length;
     subtitles.tales = n ? `${n} new tale${n === 1 ? "" : "s"} this week` : "Be the first to share";
@@ -105,6 +112,7 @@ onMounted(async () => {
       :mode="mode"
       :condition="condition"
       :return-from="returnFrom"
+      :traffic="traffic"
       @enter="onEnter"
       @move="presence.send"
       @wave="presence.wave"
