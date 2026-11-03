@@ -20,6 +20,7 @@ const props = defineProps({
   mode: { type: String, default: 'auto' }, // 'auto' | 'day' | 'night'
   condition: { type: String, default: 'clear' },
   returnFrom: { type: String, default: null },
+  traffic: { type: Object, default: () => ({}) },
 });
 const emit = defineEmits(['enter', 'move', 'wave']);
 
@@ -486,6 +487,7 @@ onMounted(() => {
   camera = new THREE.PerspectiveCamera(40, 1.6, 0.5, 400);
   camp = buildCamp(scene);
   camp.stations.forEach((s) => (doors[s.id] = 0));
+  camp.setTraffic(props.traffic)
 
   rebuildPlayer();
   syncMates();
@@ -539,6 +541,7 @@ onBeforeUnmount(() => {
 watch(() => props.me?.look, () => scene && rebuildPlayer(), { deep: true });
 watch(() => [props.crew, props.live], syncMates, { deep: true });
 watch(() => [props.mode, props.condition], () => applyEnvironment(true));
+watch(() => props.traffic, (t) => camp?.setTraffic(t), { deep: true })
 
 defineExpose({ enter, wave });
 
