@@ -440,15 +440,14 @@ function buildBirdTree() {
 /**
  * Where each feature lives. `approach` is where your character stands to go in, `cam` the close-up when entering.
  * `labelY` is how high above the station's origin its speech bubble floats.
- * `focusZoom` pulls the camera further back when the station is shown beside a panel (Tales, Explorer...).
  */
 export const STATIONS = [
   { id: 'trips', name: 'Trips', to: '/planner', x: 1.5, z: -3.2, ry: 0, r: 3.0, approach: [3.8, -0.3], labelY: 4.3, cam: [[0.4, 3.3, 5.8], [2.5, 1.4, -2.0]] },
   { id: 'watcher', name: 'Watcher', to: '/watcher', x: -7.2, z: -4.2, ry: 0.35, r: 1.6, approach: [-6.0, -1.9], labelY: 8.8, cam: [[-3.4, 5.8, 2.6], [-7.0, 4.6, -3.8]] },
-  { id: 'tales', name: 'Tales', to: '/tales', x: -3.8, z: 3.4, ry: 0, r: 1.5, approach: [-0.6, 3.0], focusZoom: 1.9, labelY: 2.9, cam: [[-1.4, 3.4, 8.6], [-2.6, 1.0, 2.2]] },
+  { id: 'tales', name: 'Tales', to: '/tales', x: -3.8, z: 3.4, ry: 0, r: 1.5, approach: [-0.6, 3.0], labelY: 2.9, cam: [[-1.4, 3.4, 8.6], [-2.6, 1.0, 2.2]] },
   { id: 'ledger', name: 'Ledger', to: '/ledger', x: 7.4, z: 2.4, ry: -0.35, r: 2.0, approach: [5.7, 4.6], labelY: 4.0, cam: [[5.6, 3.6, 12.6], [7.2, 1.7, 2.6]] },
   { id: 'archives', name: 'Archives', to: '/archives', x: 10.2, z: -5.6, ry: -0.5, r: 2.1, approach: [7.7, -3.3], labelY: 4.6, cam: [[7.8, 2.8, 2.9], [9.4, 1.1, -4.2]] },
-  { id: 'explorer', name: 'Explorer', to: '/explorer', x: -11.0, z: 0.2, ry: 0.5, r: 1.4, approach: [-9.0, 2.6], focusZoom: 1.7, labelY: 7.4, cam: [[-7.2, 3.8, 8.8], [-10.2, 2.5, 1.0]] },
+  { id: 'explorer', name: 'Explorer', to: '/explorer', x: -11.0, z: 0.2, ry: 0.5, r: 1.4, approach: [-9.0, 2.6], labelY: 7.4, cam: [[-7.2, 3.8, 8.8], [-10.2, 2.5, 1.0]] },
 ];
 
 const BUILDERS = {
@@ -719,7 +718,6 @@ export function buildCamp(scene) {
       labelAnchor: new THREE.Vector3(def.x, def.labelY, def.z),
       approachPoint: new THREE.Vector3(def.approach[0], 0, def.approach[1]),
       camPos: new THREE.Vector3(...def.cam[0]),
-      focusZoom: def.focusZoom || 1,
       camTarget: new THREE.Vector3(...def.cam[1]),
     };
   });

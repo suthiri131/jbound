@@ -1,5 +1,5 @@
 <script setup>
-/** Shown when a newly archived trip arrives and all 7 attic drawers are taken. The user must choose. */
+/** Shown when a newly archived trip arrives and all 7 drawers in the tent are taken. The user must choose. */
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 const props = defineProps({
@@ -30,13 +30,13 @@ function trapFocus(event) {
     <div class="scrim" />
     <div class="modal attic-full" role="alertdialog" aria-modal="true" aria-labelledby="attic-full-title" aria-describedby="attic-full-description" :aria-busy="busy" tabindex="-1" @keydown.tab="trapFocus">
       <span class="eyebrow muted">All {{ capacity }} drawers are taken</span>
-      <h2 id="attic-full-title" class="display display-md">The attic is full.</h2>
+      <h2 id="attic-full-title" class="display display-md">The tent is full.</h2>
       <div id="attic-full-description">
         <p>
           <strong>“{{ trip.name }}”</strong> just came up from the Memory Box, but there's no empty drawer for it.
           Clear it out, or swap it into one of your old drawers.
         </p>
-        <p class="hand muted note">Either way, this only changes your attic. The rest of the crew keeps their copy.</p>
+        <p class="hand muted note">Either way, this only changes your tent. The rest of the crew keeps their copy.</p>
         <p v-if="waiting" class="hand muted note">{{ waiting }} more trip{{ waiting === 1 ? ' is' : 's are' }} waiting after this one.</p>
       </div>
       <p v-if="error" class="error-text" role="alert">{{ error }}</p>

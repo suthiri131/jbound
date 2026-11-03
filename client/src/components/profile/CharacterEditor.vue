@@ -3,8 +3,8 @@
 import { computed, ref, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { errorMessage } from '@/lib/api';
-import { LOOK_OPTIONS, STYLE_LABEL, normaliseLook } from '@/lib/camp/avatar';
-import AvatarPreview from '@/components/basecamp/AvatarPreview.vue';
+import { LOOK_OPTIONS, STYLE_LABEL, normaliseLook } from '@/lib/camp/look';
+import AvatarFlat from '@/components/scene/AvatarFlat.vue';
 
 const auth = useAuthStore();
 const saved = computed(() => normaliseLook(auth.profile?.look));
@@ -56,7 +56,7 @@ async function save() {
     <p class="hint">This is you at basecamp. Crewmates on your trips see it walking around their camp too.</p>
 
     <div class="layout">
-      <AvatarPreview :look="draft" :size="220" />
+      <div class="stage"><AvatarFlat :look="draft" :height="190" /></div>
 
       <div class="controls">
         <fieldset v-for="row in COLOR_ROWS" :key="row.key" class="row-set">
@@ -105,6 +105,17 @@ async function save() {
   flex-wrap: wrap;
   gap: 22px 28px;
   align-items: flex-start;
+}
+.stage {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: linear-gradient(#bfe3f0 62%, #8cc461 62%);
+  border: 2px solid var(--ink);
+  overflow: hidden;
 }
 .controls {
   flex: 1 1 300px;

@@ -3,7 +3,11 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage as getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
-import StationShell from '@/components/basecamp/StationShell.vue';
+import { useCampSky } from '@/composables/useCampSky';
+import { lookFromId } from '@/lib/camp/look';
+import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
+import MarketStall from '@/components/scene/MarketStall.vue';
+import AvatarFlat from '@/components/scene/AvatarFlat.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -172,6 +176,29 @@ const people = computed(() => members.value.map((member) => {
   // balance = paid - share + sent - received, so the share falls out of it
   return { ...member, paid, share: Math.max(0, paid + sent - received - balance), isMe: member.id === auth.user?.id };
 }));
+// ---------- the crew in front of the stall ----------
+const { sky } = useCampSky();
+const crewLooks = ref({});
+onMounted(async () => {
+  try {
+    const { data } = await api.get('/auth/crew');
+    crewLooks.value = Object.fromEntries(data.map((m) => [m.id, m.look]));
+  } catch {
+    /* they just get their generated look */
+  }
+});
+const lookFor = (id) => (id === auth.user?.id ? auth.profile?.look : crewLooks.value[id]) || lookFromId(id);
+const balanceOf = (id) => Number(balances.value.find((b) => b.memberId === id)?.balanceSgd || 0);
+const lineup = computed(() => {
+  // you first, up to five people: it is a stall, not a stadium
+  const list = [...people.value].sort((a, b) => Number(b.isMe) - Number(a.isMe)).slice(0, 5);
+  return list.map((p) => {
+    const balance = balanceOf(p.id);
+    return { ...p, look: lookFor(p.id), tone: balance > 0.004 ? 'up' : balance < -0.004 ? 'down' : 'even', say: balance > 0.004 ? `is owed ${formatLedgerMoney(balance)}` : balance < -0.004 ? `owes ${formatLedgerMoney(-balance)}` : 'all square' };
+  });
+});
+const stacks = computed(() => people.value.map((p, i) => ({ id: p.id, initial: p.name[0]?.toUpperCase() || '?', amount: p.paid, tint: TILE_TINTS[i % TILE_TINTS.length] })));
+
 const TILE_TINTS = ['#f6d58e', '#bfe3f0', '#c8e6b8', '#f4c4cf', '#d9cdf2', '#f2d0b0'];
 const receiptDate = computed(() => {
   const start = selectedTrip.value?.start_date;
@@ -204,7 +231,23 @@ onMounted(loadConversionRate);
 </script>
 
 <template>
-  <StationShell station="ledger" sign="The Market Stall" label="Receipt">
+  <main class="ledger-camp">
+    <SkyBackdrop />
+    <RouterLink to="/" class="camp-back back">← Walk back to camp</RouterLink>
+
+    <section class="stall-scene" aria-label="The market stall: who has paid what">
+      <div class="stall-wrap">
+        <MarketStall :stacks="stacks" :night="sky.night" />
+        <ul class="crew-line">
+          <li v-for="p in lineup" :key="p.id" :class="p.tone">
+            <span class="say"><b>{{ p.isMe ? 'You' : p.name.split(' ')[0] }}</b> {{ p.say }}</span>
+            <AvatarFlat :look="p.look" :height="lineup.length > 3 ? 118 : 138" />
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <div class="receipt-wrap">
       <article class="receipt" aria-labelledby="receipt-title">
         <header class="r-head">
           <label class="sr-only" for="trip-picker">Trip</label>
@@ -331,11 +374,82 @@ onMounted(loadConversionRate);
           <small v-if="currencyError" class="r-meta">{{ currencyError }}</small>
         </template>
       </article>
-  </StationShell>
+    </div>
+  </main>
 </template>
 
 <style scoped>
-/* ---------- the receipt ---------- */
+.ledger-camp {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(370px, 450px);
+  font-family: var(--font-round);
+  color: #1f2a24;
+  overflow: hidden !important; /* the receipt scrolls on its own, the scene stays put */
+}
+.back {
+  position: absolute;
+  z-index: 3;
+  top: 18px;
+  left: 18px;
+}
+.stall-scene {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: end center;
+  padding: 70px 24px 22px;
+}
+.stall-wrap {
+  position: relative;
+  width: min(100%, 720px, calc((100dvh - 180px) * 1.2));
+}
+.crew-line {
+  position: absolute;
+  left: 2%;
+  right: 12%;
+  bottom: -2px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.crew-line li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.say {
+  max-width: 120px;
+  padding: 3px 9px;
+  border: 2px solid #1f2a24;
+  border-radius: 10px;
+  background: #fffdf7;
+  font-size: 12px;
+  line-height: 1.15;
+  text-align: center;
+}
+.say b {
+  display: block;
+  font-weight: 700;
+}
+.up .say {
+  background: #d7efc9;
+}
+.down .say {
+  background: #f8d4cb;
+}
+.receipt-wrap {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 30px 48px 8px;
+}
 .receipt {
   position: relative;
   padding: 22px 22px 34px;
@@ -343,8 +457,10 @@ onMounted(loadConversionRate);
   border: 2.5px solid #1f2a24;
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
-  font-family: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, monospace;
-  font-size: 13.5px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  rotate: 0.7deg;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
   animation: print 0.6s cubic-bezier(0.2, 0.8, 0.3, 1.1) both;
   transform-origin: top center;
 }
@@ -385,9 +501,9 @@ onMounted(loadConversionRate);
 }
 .r-title {
   margin: 4px 0 0;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 30px;
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 32px;
   line-height: 1.05;
 }
 .r-meta {
@@ -496,9 +612,9 @@ onMounted(loadConversionRate);
 }
 .r-sub {
   margin: 0 0 10px;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 19px;
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 20px;
 }
 .owes {
   list-style: none;
@@ -677,7 +793,25 @@ label.tick {
   font-weight: 700;
 }
 
-.receipt {
-  color: #1f2a24;
+
+@media (max-width: 900px) {
+  .ledger-camp {
+    grid-template-columns: 1fr;
+    align-content: start;
+    overflow-y: auto !important;
+  }
+  .stall-scene {
+    padding: 66px 12px 16px;
+  }
+  .stall-wrap {
+    width: min(100%, 560px);
+  }
+  .receipt-wrap {
+    overflow: visible;
+    padding: 0 14px 44px;
+  }
+  .receipt {
+    rotate: 0deg;
+  }
 }
 </style>

@@ -3,33 +3,9 @@
  * Pure functions, so they are easy to test and the scene just reads the result.
  */
 import * as THREE from 'three';
+import { sgHours, daylightAt, phaseAt, hoursForMode, isNightAt } from './sky';
 
-/** Hours since midnight in Singapore, e.g. 18.5 for 6:30pm. */
-export function sgHours(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Asia/Singapore', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-  }).formatToParts(date);
-  const get = (type) => Number(parts.find((p) => p.type === type)?.value || 0);
-  return get('hour') + get('minute') / 60;
-}
-
-const smooth = (a, b, x) => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-
-/** 0 = full night, 1 = full day. SG sunrise is ~7:00 and sunset ~19:10 all year round. */
-export function daylightAt(hours) {
-  return smooth(6.4, 7.6, hours) * (1 - smooth(18.7, 19.8, hours));
-}
-
-/** 'dawn' | 'day' | 'dusk' | 'night' */
-export function phaseAt(hours) {
-  const d = daylightAt(hours);
-  if (d <= 0.02) return 'night';
-  if (d >= 0.98) return 'day';
-  return hours < 12 ? 'dawn' : 'dusk';
-}
+export { sgHours, daylightAt, phaseAt, CONDITION_LABEL } from './sky';
 
 /** Sun direction for the given hour: rises in the east (+x), sets in the west (-x). */
 export function sunDirection(hours, target = new THREE.Vector3()) {
@@ -59,7 +35,7 @@ const c = (hex) => new THREE.Color(hex);
  * `mode` is the visitor's override: 'auto' follows Singapore time, 'day'/'night' pin it.
  */
 export function environmentFor({ hours = sgHours(), condition = 'clear', mode = 'auto' } = {}) {
-  const h = mode === 'day' ? 13 : mode === 'night' ? 22 : hours;
+  const h = hoursForMode(mode, hours);
   const daylight = daylightAt(h);
   const golden = Math.max(0, 1 - Math.abs(daylight - 0.5) * 2) * (mode === 'auto' ? 1 : 0); // peaks mid-sunrise/sunset
   const overcast = OVERCAST[condition] ?? 0;
@@ -88,14 +64,9 @@ export function environmentFor({ hours = sgHours(), condition = 'clear', mode = 
     hemiIntensity: NIGHT.hemiI + (DAY.hemiI - NIGHT.hemiI) * daylight,
     fogDensity: 0.006 + overcast * 0.012 + (condition === 'haze' ? 0.02 : 0),
     sunDir: sunDirection(daylight > 0.02 ? h : 1),
-    night: daylight < 0.35,
+    night: isNightAt(h),
     rain: condition === 'rain' || condition === 'storm',
     storm: condition === 'storm',
     clouds: { clear: 2, partly: 5, cloudy: 9, haze: 4, rain: 10, storm: 12 }[condition] ?? 3,
   };
 }
-
-/** Friendly words for the HUD chip. */
-export const CONDITION_LABEL = {
-  clear: 'Fair', partly: 'Partly cloudy', cloudy: 'Cloudy', haze: 'Hazy', rain: 'Showers', storm: 'Thundery showers',
-};

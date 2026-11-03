@@ -1,11 +1,12 @@
 <script setup>
 /**
- * The Archives attic: a mahogany dresser (drawers 0-3) and an old map chest (drawers 4-6).
+ * The Archives, inside a canvas tent: a mahogany dresser (drawers 0-3) and an old map chest (drawers 4-6).
  * Filled drawers carry a name tag and open into the trip's scrapbook; empty ones stay shut.
  * In `picking` mode every filled drawer can be chosen to swap out instead.
  */
 import { computed, ref } from 'vue';
 import DrawerSticker from './DrawerSticker.vue';
+import TentInterior from './TentInterior.vue';
 
 const props = defineProps({
   drawers: { type: Array, default: () => [] }, // [{ slot, trip, isNew }]
@@ -17,7 +18,6 @@ const DRESSER = [0, 1, 2, 3];
 const CHEST = [4, 5, 6];
 const STICKERS = ['star', 'sun', 'palm', 'chili', 'heart', 'car', 'bowl', 'compass'];
 const SPOTS = ['tl', 'bl', 'tr', 'br'];
-const DUST = [[14, 46], [22, 70], [48, 40], [55, 63], [47, 92], [79, 30], [88, 58], [66, 84]];
 
 const bySlot = computed(() => new Map(props.drawers.map((d) => [d.slot, d])));
 
@@ -51,26 +51,7 @@ function open(drawer) {
 
 <template>
   <div class="attic" :class="{ picking }">
-    <div class="rafters" aria-hidden="true">
-      <svg viewBox="0 0 1000 230" preserveAspectRatio="xMidYMin meet">
-        <polygon points="0,0 1000,0 1000,226 500,4 0,226" fill="#1d1510" />
-        <line x1="236" y1="116" x2="764" y2="116" stroke="#4b2e1e" stroke-width="16" />
-        <path d="M0 226 L500 4 L1000 226" fill="none" stroke="#4b2e1e" stroke-width="24" stroke-linejoin="round" />
-        <path d="M130 172 L262 113 M738 113 L870 172" stroke="#3a2317" stroke-width="10" stroke-linecap="round" />
-        <circle cx="500" cy="88" r="58" fill="#4b2e1e" />
-        <circle cx="500" cy="88" r="45" fill="#f4dfa6" />
-        <path d="M500 43v90M455 88h90" stroke="#4b2e1e" stroke-width="8" />
-        <g fill="none" stroke="#b9a27a" stroke-width="1.6" stroke-linecap="round" opacity=".75">
-          <path d="M40 22c22 2 44 12 62 28M40 22c12 14 18 36 18 56M40 22c18 6 34 22 44 40" />
-          <path d="M50 30c4 6 14 6 14 6M53 44c8 2 16-2 16-2M56 58c6-2 12-8 12-8" />
-        </g>
-      </svg>
-      <span class="bulb bulb-l" />
-      <span class="bulb bulb-r" />
-      <span class="sign">ATTIC ARCHIVES</span>
-    </div>
-    <span class="beam" aria-hidden="true" />
-    <span v-for="([x, y], i) in DUST" :key="i" class="dust" :style="{ left: `${x}%`, top: `${y}%`, animationDelay: `${i * -1.3}s` }" aria-hidden="true" />
+    <TentInterior />
 
     <div class="furniture">
       <div v-for="piece in [{ id: 'dresser', slots: DRESSER }, { id: 'chest', slots: CHEST }]" :key="piece.id" class="piece" :class="piece.id">
@@ -141,37 +122,11 @@ function open(drawer) {
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 72px); /* everything under the nav */
-  padding-top: 9%; /* keeps the furniture under the round window on short screens */
+  min-height: 100%; /* everything under the nav */
+  padding-top: 9%; /* keeps the furniture under the window on short screens */
   overflow: hidden;
-  background: radial-gradient(ellipse 60% 70% at 50% 35%, #4a3727 0%, #36271c 60%, #2b1f17 100%);
+  background: #dfbf87;
 }
-
-/* ---------- roof, lights, dust ---------- */
-.rafters { position: absolute; inset: 0 0 auto; aspect-ratio: 1000 / 230; }
-.rafters svg { display: block; width: 100%; height: 100%; }
-.bulb { position: absolute; z-index: 2; top: 46%; width: 2px; height: 13%; background: #1a120d; pointer-events: none; } /* hangs in front of the furniture */
-.bulb::after {
-  content: ''; position: absolute; left: 50%; bottom: -14px; width: 18px; height: 18px;
-  border-radius: 50%; transform: translateX(-50%); background: var(--glow);
-  box-shadow: 0 0 0 14px rgba(244, 223, 166, .12), 0 0 40px 18px rgba(244, 223, 166, .22);
-  animation: flicker 7s infinite;
-}
-.bulb::before { content: ''; position: absolute; left: 50%; bottom: 0; width: 10px; height: 8px; transform: translateX(-50%); background: #6b6157; border-radius: 2px; }
-.bulb-l { left: 27%; }
-.bulb-r { left: 75%; }
-.sign {
-  position: absolute; left: 57%; top: 50%; padding: .3em .9em; transform: rotate(5deg);
-  background: #a87444; border: 2px solid var(--wood-dark); box-shadow: 2px 2px 0 rgba(0, 0, 0, .4);
-  color: var(--ink); font-family: var(--font-display); font-size: clamp(9px, 1.3vw, 17px); letter-spacing: .08em; white-space: nowrap;
-}
-.beam {
-  position: absolute; top: 20%; left: 50%; width: 42%; height: 90%; transform: translateX(-50%);
-  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
-  background: linear-gradient(rgba(244, 223, 166, .13), rgba(244, 223, 166, .03) 85%, transparent);
-  pointer-events: none;
-}
-.dust { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: #c9b89a; opacity: .6; animation: drift 9s ease-in-out infinite; pointer-events: none; }
 
 /* ---------- furniture ---------- */
 /* Stands on the floor, sized so the whole attic fits under the nav without scrolling */
@@ -218,8 +173,8 @@ function open(drawer) {
 
 .floor {
   position: relative; z-index: 1; display: grid; place-items: center; height: 64px; padding: 0 16px;
-  border-top: 3px solid var(--wood-dark);
-  background: repeating-linear-gradient(90deg, #3f2b1d 0 118px, #2c1e14 118px 121px), #3f2b1d;
+  border-top: 4px solid #5d4326;
+  background: radial-gradient(ellipse 34% 62% at 50% 0%, #b4472f 0 96%, transparent 97%), #56623d; /* a rug on the groundsheet */
 }
 
 /* ---------- drawers ---------- */
@@ -271,18 +226,16 @@ function open(drawer) {
 }
 .pickable:hover .swap-hint, .pickable:focus-visible .swap-hint { opacity: 1; }
 
-@keyframes flicker { 0%, 92%, 100% { opacity: 1; } 94% { opacity: .75; } 96% { opacity: .95; } }
-@keyframes drift { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(8px, -14px); } }
 @keyframes pin-in { from { opacity: 0; transform: scale(.5) rotate(-8deg); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .bulb::after, .dust, .fresh .tag { animation: none; }
+  .fresh .tag { animation: none; }
   .drawer { transition: none; }
 }
 
 /* Phones: stack the furniture, roof scales down with the width. */
 @media (max-width: 720px) {
-  .attic { padding-top: 26%; }
+  .attic { padding-top: 34%; }
   .furniture { flex-direction: column; align-items: center; gap: 36px; width: 100%; padding: 0 16px; }
   .dresser, .chest { width: 100%; max-width: 420px; }
   .crown { height: 48px; }
@@ -293,6 +246,5 @@ function open(drawer) {
   .handle { width: 44px; height: 10px; }
   .stuck { width: 30px; }
   .stuck.bl { left: 4%; }
-  .bulb { height: 40%; }
 }
 </style>
