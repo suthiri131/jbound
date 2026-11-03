@@ -213,13 +213,9 @@ const canMemories = computed(() =>
         <strong>This trip is in the Archives.</strong>
         <RouterLink to="/archives">Open its drawer in the tent →</RouterLink>
       </div>
-      <p class="row live" style="gap: 6px; font-size: 12px" :class="isLive ? '' : 'offline'">
-  <span :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: isLive ? 'var(--jungle)' : 'var(--brick)' }" aria-hidden="true"></span>
-  {{ isLive ? 'Live' : 'Offline — syncing every 15s' }}
-</p>
       <p v-if="crewNotice" class="hand" role="status">{{ crewNotice }}</p>
 
-      <CrewBar :trip="trip" @changed="loadTrip" @joined="crewNotice = $event" />
+      <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @joined="crewNotice = $event" />
 
       <div class="split">
         <div class="paper-map">
@@ -304,17 +300,6 @@ const canMemories = computed(() =>
 }
 .back {
   flex: none;
-}
-.live {
-  width: fit-content;
-  margin: 0;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: #fffdf7;
-  color: #1f2a24;
-}
-.live.offline {
-  color: var(--brick);
 }
 .planner > .muted,
 .planner > .hand {

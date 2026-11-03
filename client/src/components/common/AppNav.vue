@@ -4,13 +4,15 @@ import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { initials } from "@/utils/format";
 import UserAvatar from "@/components/common/UserAvatar.vue";
+import { useNotificationsStore } from "@/stores/notifications";
  
-defineEmits(["open-satchel"]);
+const notifications = useNotificationsStore();
+const emit = defineEmits(["open-satchel", "open-notifications"]);
 const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
  
-// Account menu (avatar -> name, @username, Sign out)
+// Account menu (avatar -> name, email, Profile, Sign out)
 const menuOpen = ref(false);
 const menuRoot = ref(null);
 // Below 860px the page links fold into a hamburger. navOpen = the dropdown is showing.
@@ -34,6 +36,7 @@ const closeOnEscape = (e) => {
   }
 };
 onMounted(() => {
+  if (auth.isLoggedIn) notifications.fetchInviteCount();
   document.addEventListener("click", closeOnOutsideClick);
   document.addEventListener("keydown", closeOnEscape);
   mobileMedia = window.matchMedia(MOBILE_QUERY);
@@ -62,6 +65,13 @@ const links = [
   { to: "/archives", label: "Archives" },
   { to: "/explorer", label: "Explorer" },
 ];
+function openNotifications() {
+  if (mobileMedia?.matches) {
+    router.push('/notifications');
+  } else {
+    emit('open-notifications');
+  }
+}
  
 async function logout() {
   menuOpen.value = false;
@@ -69,6 +79,7 @@ async function logout() {
   await auth.logout();
   router.push("/login");
 }
+
 </script>
  
 <template>
@@ -102,6 +113,22 @@ async function logout() {
       </nav>
  
       <div class="actions">
+        <button v-if="auth.isLoggedIn" type="button" class="satchel" @click="openNotifications">
+          <svg 
+            width="22" 
+            height="22"
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            stroke-width="2" 
+            stroke-linecap="round" 
+            stroke-linejoin="round" 
+            aria-hidden="true">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+          <span v-if="notifications.inviteCount" class="badge-dot">{{ notifications.inviteCount }}</span>
+          </button>
         <button v-if="auth.isLoggedIn" type="button" class="satchel" @click="$emit('open-satchel')">
           <svg
             width="22"
@@ -133,7 +160,6 @@ async function logout() {
           </button>
           <div v-if="menuOpen" class="menu" role="menu">
             <p class="menu-name">{{ auth.profile?.name }}</p>
-            <p v-if="auth.profile?.username" class="menu-meta">@{{ auth.profile.username }}</p>
             <p v-if="auth.user?.email" class="menu-meta">{{ auth.user.email }}</p>
             <RouterLink to="/profile" class="btn btn-sm menu-link" role="menuitem">Profile</RouterLink>
             <button type="button" class="btn btn-sm menu-out" role="menuitem" @click="logout">Sign out</button>
@@ -226,6 +252,7 @@ async function logout() {
   font-weight: 700;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
+  position:relative;
 }
 .avatar {
   display: grid;
@@ -339,6 +366,24 @@ async function logout() {
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
+  }
+
+  .badge-dot { 
+    position: absolute;
+    top: 2px; 
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--brick);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    border: 2px solid var(--paper); 
   }
  
   /* three bars → an X when open */

@@ -5,11 +5,13 @@ import AppNav from '@/components/common/AppNav.vue';
 import SatchelDrawer from '@/components/common/SatchelDrawer.vue';
 import { hasSupabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth';
+import NotificationsPanel from '../components/common/NotificationsPanel.vue';
 
 const route = useRoute();
 const auth = useAuthStore();
 const satchelOpen = ref(false);
 watch(() => auth.user?.id, () => { satchelOpen.value = false; });
+const notifOpen = ref(false)
 // The sign-in / sign-up pages have their own header, so the app nav + footer are hidden there.
 const showChrome = computed(() => route.name && !['login', 'sign-in', 'sign-up'].includes(route.name));
 const fullBleed = computed(() => Boolean(route.meta.fullBleed));
@@ -20,10 +22,11 @@ const fullBleed = computed(() => Boolean(route.meta.fullBleed));
     <p v-if="!hasSupabase" class="setup-banner" role="status">
       Setup needed: add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to <code>client/.env.local</code> (see README).
     </p>
-    <AppNav v-if="showChrome" @open-satchel="satchelOpen = true" />
+    <AppNav v-if="showChrome" @open-satchel="satchelOpen = true"  @open-notifications="notifOpen = true"/>
     <RouterView :key="auth.user?.id || 'guest'" />
     <footer v-if="showChrome && !fullBleed" class="footer hand">JBound · Singapore ⇄ Johor Bahru</footer>
     <SatchelDrawer v-if="satchelOpen" @close="satchelOpen = false" />
+    <NotificationsPanel v-if="notifOpen" @close="notifOpen = false" />
   </div>
 </template>
 
