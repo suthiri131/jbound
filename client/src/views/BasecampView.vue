@@ -12,6 +12,19 @@ import CampScene from "@/components/basecamp/CampScene.vue";
 const auth = useAuthStore();
 const trips = useTripsStore();
 const router = useRouter();
+const PRIVATE_STATIONS = ['trips', 'tales', 'ledger', 'archives'];
+const locked = computed(() => (auth.user ? [] : PRIVATE_STATIONS));
+
+function onLocked(station) {
+  if (props.preview) emit('locked', station);
+  else router.push({ name: 'sign-in', query: { next: station.to } });
+};
+
+const props = defineProps({
+  preview: { type: Boolean, default: false },
+  viewShift: { type: Object, default: () => ({ x: 0, y: 0 }) }
+});
+const emit = defineEmits(["locked"]);
 
 // Which station you just walked out of (nav link, back button...), so the camera can pull back from it.
 const STATION_FOR_PATH = [
@@ -62,28 +75,33 @@ function onEnter(station) {
   router.push(station.to);
 }
 
-onMounted(async () => {
-  if (!auth.user) return;
-
-  await trips.fetch().catch(() => {});
+// Open to everyone, signed in or not: the queue (bubble + Causeway traffic) and how many tales are new.
+async function loadPublic() {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const [cong, congBack, posts, arch, bal, mates] = await Promise.allSettled([
+  const [cong, congBack, posts] = await Promise.allSettled([
     api.get("/checkpoints/woodlands/congestion", { params: { direction: "to_jb" } }),
-    api.get("/checkpoints/woodlands/congestion" ,{ params: { direction: "to_sg"}}),
+    api.get("/checkpoints/woodlands/congestion", { params: { direction: "to_sg" } }),
     api.get("/posts", { params: { limit: 50 } }),
-    api.get("/archives"),
-    trips.defaultTrip ? api.get(`/trips/${trips.defaultTrip.id}/balances`) : Promise.reject(),
-    api.get("/auth/crew"),
   ]);
   if (cong.status === "fulfilled") {
-    subtitles.watcher =  `Woodlands now: ${cong.value.data.selected.level}`;
+    subtitles.watcher = `Woodlands now: ${cong.value.data.selected.level}`;
     traffic.toJb = cong.value.data.selected.score;
-  };
-  if (congBack.status === 'fulfilled') traffic.toSg = congBack.value.data.selected.score;
+  }
+  if (congBack.status === "fulfilled") traffic.toSg = congBack.value.data.selected.score;
   if (posts.status === "fulfilled") {
     const n = posts.value.data.items.filter((p) => p.created_at > weekAgo).length;
     subtitles.tales = n ? `${n} new tale${n === 1 ? "" : "s"} this week` : "Be the first to share";
   }
+}
+
+// Only for you: trips, archives, balances, crew.
+async function loadPrivate() {
+  await trips.fetch().catch(() => {});
+  const [arch, bal, mates] = await Promise.allSettled([
+    api.get("/archives"),
+    trips.defaultTrip ? api.get(`/trips/${trips.defaultTrip.id}/balances`) : Promise.reject(),
+    api.get("/auth/crew"),
+  ]);
   if (arch.status === "fulfilled") {
     const { totalTrips, years } = arch.value.data;
     subtitles.archives = totalTrips ? `${totalTrips} trips in ${years.length} year${years.length === 1 ? "" : "s"}` : "Empty for now";
@@ -97,12 +115,17 @@ onMounted(async () => {
     const tripIds = [...new Set(trips.trips.filter((t) => t.phase !== "archived").map((t) => t.id))];
     presence.start(me.value, tripIds);
   }
+}
+
+onMounted(() => {
+  loadPublic();
+  if (auth.user) loadPrivate();
 });
 </script>
 
 <template>
-  <main class="basecamp" :class="{ night: isNight }">
-    <h1 class="sr-only">{{ auth.firstName ? `${auth.firstName}'s` : "Your" }} basecamp</h1>
+  <component :is="preview ? 'div' : 'main'" class="basecamp" :class=" { night: isNight, preview }">
+  <h1 v-if="!preview" class="sr-only">{{ auth.firstName ? `${auth.firstName}'s` : "Your" }} basecamp</h1>
 
     <CampScene
       :me="me"
@@ -113,6 +136,9 @@ onMounted(async () => {
       :condition="condition"
       :return-from="returnFrom"
       :traffic="traffic"
+      :locked="locked"
+      :view-shift="viewShift"
+      @locked="onLocked"
       @enter="onEnter"
       @move="presence.send"
       @wave="presence.wave"
@@ -142,7 +168,7 @@ onMounted(async () => {
         <strong>{{ nextTrip.name }}</strong>
         <span>{{ nextTrip.start_date ? shortDate(nextTrip.start_date) : "No date yet" }}</span>
       </RouterLink>
-      <RouterLink v-else-if="!auth.user" to="/sign-in" class="hud card next-trip">
+      <RouterLink v-else-if="!auth.user && !preview" to="/sign-in" class="hud card next-trip">        
         <span class="eyebrow-camp">Welcome, traveller</span>
         <strong>Sign in to pitch your tent</strong>
         <span>Your crew will show up here</span>
@@ -154,7 +180,7 @@ onMounted(async () => {
         <p v-if="onlineCount" class="online"><i class="dot" />{{ onlineCount }} crewmate{{ onlineCount === 1 ? "" : "s" }} at camp</p>
       </div>
     </CampScene>
-  </main>
+  </component>
 </template>
 
 <style scoped>
@@ -290,6 +316,49 @@ kbd {
   margin-right: 4px;
   border-radius: 50%;
   background: #3fbf6a;
+}
+/* phones: Pocket Camp-style corners, so nothing sits on top of the "Enter …" button at the bottom */
+.preview .help {
+  right: auto;
+  left: 18px;
+}
+
+@media (max-width: 640px) {
+  .top-right {
+    top: 12px;
+    right: 12px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .top-right .round {
+    order: -1; /* the sky button stays in the corner, the weather chip tucks under it */
+  }
+  .chip-weather {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+  .next-trip {
+    top: 12px;
+    left: 12px;
+    bottom: auto;
+    min-width: 0;
+    max-width: 55%;
+    padding: 8px 12px 9px;
+    border-radius: 14px;
+  }
+  .next-trip strong {
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .next-trip span:last-child {
+    font-size: 12px;
+  }
+  .eyebrow-camp {
+    font-size: 11px;
+  }
 }
 @media (max-width: 700px), (pointer: coarse) {
   .help p:not(.online) {

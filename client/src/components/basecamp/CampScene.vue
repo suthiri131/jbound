@@ -21,8 +21,10 @@ const props = defineProps({
   condition: { type: String, default: 'clear' },
   returnFrom: { type: String, default: null },
   traffic: { type: Object, default: () => ({}) },
+  locked: { type: Array, default: () => [] },
+  viewShift : { type: Object, default: () => ({ x: 0, y: 0}) },
 });
-const emit = defineEmits(['enter', 'move', 'wave']);
+const emit = defineEmits(['enter', 'move', 'wave', 'locked']);
 
 const host = ref(null);
 const canvasWrap = ref(null);
@@ -56,17 +58,59 @@ let arrivalResolve = null;
 const OVERVIEW_POS = new THREE.Vector3(0, 13, 27);
 const OVERVIEW_TARGET = new THREE.Vector3(0, 2.4, -2);
 
-/** Pull back on narrow screens so the whole camp still fits. */
-function overview(out = { pos: new THREE.Vector3(), target: new THREE.Vector3() }) {
+// Narrow screens (phones held upright) don't zoom out to fit the whole camp any more. Like Pocket Camp, the
+// camera stays close, looks down a little more, follows you around, and you can drag to look around.
+const CAM_DIST = OVERVIEW_POS.distanceTo(OVERVIEW_TARGET);
+const WIDE_PITCH = Math.atan2(OVERVIEW_POS.y - OVERVIEW_TARGET.y, OVERVIEW_POS.z - OVERVIEW_TARGET.z); 
+const TALL_PITCH = THREE.MathUtils.degToRad(30); // phones: more ground, less sky (the Causeway still shows)
+const MIN_HALF_W = 8.5; // world units kept visible either side of centre, about one station and its neighbours
+const MAX_ZOOM_OUT = 1.35; // the old code went to 2.3, which is what made the camp tiny
+const CAMP_HALF_W = 13; // left/right edge of the camp the view may slide to
+const CAMP_Z = [-9, 7]; // back/front limits for where the camera looks
+const pan = new THREE.Vector2(); // drag offset: x = sideways, y = forwards/back (world z)
+
+const WIDE_HALF_W = 16; // landscape: the whole camp, even with a panel (sign-in card) covering one side
+
+function framing() {
   const aspect = camera ? camera.aspect : 1.6;
-  const k = THREE.MathUtils.clamp(1.6 / aspect, 1, 2.3);
-  out.target.copy(OVERVIEW_TARGET);
-  out.pos.copy(OVERVIEW_TARGET).addScaledVector(OVERVIEW_POS.clone().sub(OVERVIEW_TARGET), k);
-  // drift a little with the player so it feels alive, Overcooked-style
-  out.target.x += player.pos.x * 0.18;
-  out.pos.x += player.pos.x * 0.18;
-  out.target.z += (player.pos.z - 6) * 0.08;
-  out.pos.z += (player.pos.z - 6) * 0.08;
+  const el = renderer?.domElement;
+  const w = el?.clientWidth || 1;
+  const h = el?.clientHeight || 1;
+  const sx = props.viewShift?.x || 0;
+  const sy = props.viewShift?.y || 0;
+  // the part of the screen not covered by a panel: that's what has to frame the camp
+  const freeW = Math.max(0.3, 1 - (2 * sx) / w);
+  const freeAspect = (w * freeW) / Math.max(1, h - 2 * sy);
+  const tall = THREE.MathUtils.clamp((1.3 - freeAspect) / 0.8, 0, 1); // 0 = landscape, 1 = phone upright
+  const halfTan = Math.tan(THREE.MathUtils.degToRad((camera?.fov ?? 40) / 2));
+  const wantHalfW = THREE.MathUtils.lerp(WIDE_HALF_W, MIN_HALF_W, tall);
+  const k = THREE.MathUtils.clamp(wantHalfW / (CAM_DIST * halfTan * aspect * freeW), 1, MAX_ZOOM_OUT);
+
+  const halfW = CAM_DIST * k * halfTan * aspect; // half the visible width, at the point we look at
+  return {
+    tall,
+    k,
+    pitch: THREE.MathUtils.lerp(WIDE_PITCH, TALL_PITCH, tall),
+    roam: Math.max(0, CAMP_HALF_W - halfW), // how far the view can slide before showing past the camp
+    worldPerPx: (2 * CAM_DIST * k * halfTan) / (renderer?.domElement.clientHeight || 800),
+  };
+}
+
+function overview(out = { pos: new THREE.Vector3(), target: new THREE.Vector3() }) {
+  const f = framing();
+  // follow you: barely on a wide screen (just enough to feel alive), properly on a phone
+  const followX = THREE.MathUtils.lerp(0.18, 1, f.tall);
+  const followZ = THREE.MathUtils.lerp(0.08, 0.6, f.tall);
+  const limitX = f.roam + 2.5;
+  const cx = THREE.MathUtils.clamp(player.pos.x * followX + pan.x, -limitX, limitX);
+  const lookAhead = -2.5 * f.tall; // on a phone, look a little past you so the camp fills the screen, not the grass in front
+  const cz = THREE.MathUtils.clamp(OVERVIEW_TARGET.z + lookAhead + (player.pos.z - 6) * followZ + pan.y, CAMP_Z[0], CAMP_Z[1]);
+  // keep the drag inside the same limits, so it never builds up past the edge
+  pan.set(cx - player.pos.x * followX, cz - OVERVIEW_TARGET.z - lookAhead - (player.pos.z - 6) * followZ);
+
+  out.target.set(cx, THREE.MathUtils.lerp(OVERVIEW_TARGET.y, 1.2, f.tall), cz);
+  const d = CAM_DIST * f.k;
+  out.pos.set(cx, out.target.y + Math.sin(f.pitch) * d, cz + Math.cos(f.pitch) * d);
   return out;
 }
 
@@ -242,28 +286,60 @@ function pick(e) {
   return { stationId: stationHit?.object.userData.station || null, ray: raycaster.ray };
 }
 
+// A press is a tap (walk / go in) unless it moves more than a few px: then it's a drag that slides the view.
+let drag = null; // { id, x, y, panX, panY, moved }
+
 function onPointerMove(e) {
+  if (drag && e.pointerId === drag.id) {
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) > 8) drag.moved = true;
+    if (drag.moved) {
+      const f = framing();
+      // grab the ground: it moves with your finger
+      pan.x = drag.panX - dx * f.worldPerPx;
+      pan.y = drag.panY - (dy * f.worldPerPx) / Math.sin(f.pitch + 0.35);
+      hovered.value = null;
+    }
+    return;
+  }
   if (entering.value || e.pointerType === 'touch') return;
   hovered.value = pick(e).stationId;
 }
 
 function onPointerDown(e) {
   if (entering.value || e.button > 0) return;
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y, moved: false };
+  e.currentTarget.setPointerCapture?.(e.pointerId);
+}
+
+function onPointerCancel() {
+  drag = null;
+}
+
+function onPointerUp(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const wasDrag = drag.moved;
+  drag = null;
+  if (wasDrag || entering.value) return;
   const { stationId, ray } = pick(e);
-  if (stationId) return enter(stationId);
+  if (stationId) return enter(stationId)
   const hit = ray.intersectPlane(groundPlane, new THREE.Vector3());
   if (hit) {
     collide(hit);
     player.target = hit;
   }
 }
-
 // ---------- going in / coming out ----------
 
 async function enter(stationId) {
   if (entering.value || !camp) return;
   const station = camp.stations.find((s) => s.id === stationId);
   if (!station) return;
+  if (props.locked.includes(stationId)) {
+    emit('locked', station);
+    return;
+  }
   entering.value = stationId;
   keys.clear();
 
@@ -354,6 +430,7 @@ function frame() {
       }
     }
     if (moving) collide(player.pos);
+    if (moving && !drag) pan.multiplyScalar(1 - Math.min(1, dt * 2.5))
     player.speed += ((moving ? 1 : 0) - player.speed) * Math.min(1, dt * 10);
     placeAvatar(player.avatar, player.pos, player.ry);
     player.avatar.animate(dt, player.speed);
@@ -463,9 +540,13 @@ function resize() {
   const w = el.clientWidth;
   const h = el.clientHeight;
   renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
+   camera.aspect = w / h;
+  // slide the picture (not the camera) so the camp sits in the space beside or above a panel
+  const sx = props.viewShift?.x || 0;
+  const sy = props.viewShift?.y || 0;
+  if (sx || sy) camera.setViewOffset(w, h, sx, sy, w, h);
+  else camera.clearViewOffset();
+   camera.updateProjectionMatrix();}
 
 function wave() {
   if (!player.avatar) return;
@@ -542,6 +623,7 @@ watch(() => props.me?.look, () => scene && rebuildPlayer(), { deep: true });
 watch(() => [props.crew, props.live], syncMates, { deep: true });
 watch(() => [props.mode, props.condition], () => applyEnvironment(true));
 watch(() => props.traffic, (t) => camp?.setTraffic(t), { deep: true })
+watch(() => [props.viewShift?.x, props.viewShift?.y], () => resize())
 
 defineExpose({ enter, wave });
 
@@ -566,7 +648,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
     @pointermove="onPointerMove"
     @pointerleave="hovered = null"
   >
-    <div ref="canvasWrap" class="canvas" :style="{ cursor: hovered ? 'pointer' : 'default' }" @pointerdown="onPointerDown" />
+    <div ref="canvasWrap" class="canvas" :style="{ cursor: hovered ? 'pointer' : 'default' }" @pointerdown="onPointerDown" @pointerup="onPointerUp" @pointercancel="onPointerCancel" />
 
     <div class="overlays" :class="{ ready }">
         <button
@@ -589,9 +671,9 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
       </span>
     </div>
 
-    <p v-if="nearby && !entering" class="prompt" aria-live="polite">
+    <button v-if="nearby && !entering" class="prompt" aria-live="polite">
       <kbd>E</kbd> Enter {{ nearbyName(nearby) }}
-    </p>
+    </button>
 
     <div class="hud-slot"><slot /></div>
     <div v-if="wipe" class="wipe" :class="wipe" aria-hidden="true" @animationend="wipe === 'out' && (wipe = null)" />
@@ -605,7 +687,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   height: 100%;
   overflow: hidden;
   outline: none;
-  touch-action: manipulation;
+  touch-action: none;
   font-family: var(--font-round);
 }
 .canvas,
@@ -689,10 +771,16 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   outline-offset: 2px;
 }
 @media (max-width: 640px) {
-  /* phones: names only, or the bubbles pile on top of each other */
+  /* phones: the labels cover too much of the camp, so they fade out. The one you're standing next to
+     (or tabbed to) still shows, so the "Enter …" pill makes sense. Tapping the buildings still works. */
   .bubble {
     padding: 4px 10px 5px;
     border-width: 2px;
+    transition: opacity 0.2s;
+  }
+  .bubble:not(.hot):not(:focus-visible) {
+    opacity: 0;
+    pointer-events: none;
   }
   .bubble strong {
     font-size: 14px;
@@ -747,6 +835,17 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   font-weight: 700;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
   animation: pop 0.2s ease-out;
+}
+button.prompt {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+}
+@media (pointer: coarse) {
+  .prompt kbd {
+    display: none; /* no keyboard on a phone: the whole pill is the button */
+  }
 }
 kbd {
   display: inline-grid;
