@@ -5,7 +5,9 @@ import { useAuthStore } from "@/stores/auth";
 import { initials } from "@/utils/format";
 import UserAvatar from "@/components/common/UserAvatar.vue";
 import { useNotificationsStore } from "@/stores/notifications";
+import { useCampMusic } from '@/composables/useCampMusic';
  
+const { on: musicOn, toggle: toggleMusic } = useCampMusic();
 const notifications = useNotificationsStore();
 const emit = defineEmits(["open-satchel", "open-notifications"]);
 const auth = useAuthStore();
@@ -106,6 +108,10 @@ async function logout() {
           @click="navOpen = false"
           >{{ l.label }}</RouterLink
         >
+        <!-- no room for the music button in the bar on phones -->
+        <button type="button" class="link mobile-music" :aria-pressed="musicOn" @click="toggleMusic">
+          Music: {{ musicOn ? "on" : "off" }}
+        </button>
         <div v-if="!auth.isLoggedIn && auth.ready" class="mobile-auth">
           <RouterLink class="btn btn-ghost" :to="{ name: 'sign-in', query: { next: route.fullPath } }">Sign in</RouterLink>
           <RouterLink class="btn btn-primary" :to="{ name: 'sign-up', query: { next: route.fullPath } }">Sign up</RouterLink>
@@ -113,6 +119,24 @@ async function logout() {
       </nav>
  
       <div class="actions">
+        <button
+          type="button"
+          class="satchel sound"
+          :aria-pressed="musicOn"
+          :aria-label="musicOn ? 'Turn music off' : 'Turn music on'"
+          :title="musicOn ? 'Music on' : 'Music off'"
+          @click="toggleMusic"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9v6h4l5 4V5L8 9Z" fill="currentColor" />
+            <template v-if="musicOn">
+              <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+              <path d="M19 6a8.5 8.5 0 0 1 0 12" />
+            </template>
+            <path v-else d="M16 9l5 6M21 9l-5 6" />
+          </svg>
+        </button>
+
         <button v-if="auth.isLoggedIn" type="button" class="satchel" @click="openNotifications">
           <svg 
             width="22" 
@@ -254,6 +278,15 @@ async function logout() {
   box-shadow: var(--shadow-sm);
   position:relative;
 }
+.sound {
+  width: 46px;
+  padding: 0;
+  justify-content: center;
+  background: var(--card);
+}
+.sound[aria-pressed="true"] {
+  background: var(--mustard);
+}
 .avatar {
   display: grid;
   place-items: center;
@@ -300,6 +333,9 @@ async function logout() {
 }
  
 .burger,
+.mobile-music {
+  display: none;
+}
 .mobile-auth {
   display: none;
 }
@@ -341,6 +377,19 @@ async function logout() {
     text-underline-offset: 5px;
   }
  
+  .mobile-music {
+    display: block;
+    width: 100%;
+    border-width: 0 0 1.5px;
+    background: none;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .actions .sound {
+    display: none;
+  }
+
   .mobile-auth {
     display: flex;
     gap: 10px;

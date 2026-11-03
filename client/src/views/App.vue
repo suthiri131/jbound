@@ -5,6 +5,7 @@ import AppNav from "@/components/common/AppNav.vue";
 import SatchelDrawer from "@/components/common/SatchelDrawer.vue";
 import { hasSupabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { useCampMusic } from '@/composables/useCampMusic'
 import NotificationsPanel from "../components/common/NotificationsPanel.vue";
 import AppDialog from "@/components/common/AppDialog.vue";
 import { dismissDialogs } from "@/lib/dialog";
@@ -26,6 +27,7 @@ const showChrome = computed(
 const fullBleed = computed(() => Boolean(route.meta.fullBleed));
 const peekNav = computed(() => Boolean(route.meta.peekNav));
 watch(() => route.path, dismissDialogs); // a question about the page you just left no longer applies
+useCampMusic();
 </script>
 
 <template>
