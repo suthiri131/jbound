@@ -16,7 +16,8 @@ let loader;
  */
 export async function loadGoogleMaps() {
   if (!hasGoogleMaps) throw new Error('VITE_GOOGLE_MAPS_API_KEY is not set');
-  loader ||= new Loader({ apiKey, version: 'weekly', region: 'SG', language: 'en' });
+  // 'alpha' is a superset of 'weekly' — needed so the same loader can also serve 'maps3d' below.
+  loader ||= new Loader({ apiKey, version: 'alpha', region: 'SG', language: 'en' });
   // SymbolPath lives in 'core', not 'maps'
   const [{ Map, Polyline, InfoWindow }, { AdvancedMarkerElement }, { LatLngBounds, SymbolPath }] = await Promise.all([
     loader.importLibrary('maps'),
@@ -24,4 +25,16 @@ export async function loadGoogleMaps() {
     loader.importLibrary('core'),
   ]);
   return { Map, Polyline, AdvancedMarkerElement, LatLngBounds, InfoWindow, SymbolPath };
+}
+
+/**
+ * Load the Maps JS API's alpha "maps3d" library (Map3DElement, Marker3DElement, Polyline3DElement).
+ * Reuses the same Loader singleton as loadGoogleMaps — a second Loader with different options throws.
+ * @returns {Promise<{ Map3DElement: typeof google.maps.maps3d.Map3DElement, Marker3DElement: typeof google.maps.maps3d.Marker3DElement, Polyline3DElement: typeof google.maps.maps3d.Polyline3DElement, AltitudeMode: typeof google.maps.maps3d.AltitudeMode }>}
+ */
+export async function loadGoogleMaps3D() {
+  if (!hasGoogleMaps) throw new Error('VITE_GOOGLE_MAPS_API_KEY is not set');
+  loader ||= new Loader({ apiKey, version: 'alpha', region: 'SG', language: 'en' });
+  const { Map3DElement, Marker3DElement, Polyline3DElement, AltitudeMode } = await loader.importLibrary('maps3d');
+  return { Map3DElement, Marker3DElement, Polyline3DElement, AltitudeMode };
 }

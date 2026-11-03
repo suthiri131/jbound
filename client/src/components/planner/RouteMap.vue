@@ -4,7 +4,9 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { api, errorMessage } from '@/lib/api';
 import { loadGoogleMaps, hasGoogleMaps, MAP_ID } from '@/lib/googleMaps';
 import { dayLabel } from '@/utils/format';
+import RouteMap3D from '@/components/planner/RouteMap3D.vue';
 
+const view3d = ref(false);
 const props = defineProps({
   trip: { type: Object, required: true },
   version: { type: Number, default: 0 }, // bump to force a refetch after itinerary changes
@@ -238,12 +240,18 @@ const stopBufferMinutes = computed(() => {
             <option value="tuas">Tuas Second Link approach</option>
           </select>
         </label>
+         <div class="segmented" role="group" aria-label="Map mode">
+          <button type="button" :aria-pressed="!view3d" @click="view3d = false">2D</button>
+          <button type="button" :aria-pressed="view3d" @click="view3d = true">3D</button>
+        </div>
         <slot name="actions" />
+
       </div>
     </div>
 
     <div class="map-wrap">
-      <div ref="el" class="map" role="region" aria-label="Map of the day's stops" />
+      <div v-show="!view3d" ref="el" class="map" role="region" aria-label="Map of the day's stops" />
+      <RouteMap3D v-if="view3d" :stops="result?.stops || []" :path="(result?.route?.latlngs || []).map(([lat, lng]) => ({ lat, lng }))" />
       <p v-if="mapError" class="map-msg">{{ mapError }}</p>
     </div>
     <p v-if="error" class="error-text" role="alert" style="margin: 0; padding: 8px 18px">{{ error }}</p>
