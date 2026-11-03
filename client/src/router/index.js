@@ -60,7 +60,7 @@ const routes = [
     meta: { requiresAuth: true, title: "Trips" },
   },
   {
-    path: "/planner/:tripId",
+    path: "/planner/:tripId", 
     name: "trip-details",
     component: () => import("@/views/PlannerDetailsView.vue"),
     meta: { requiresAuth: true, title: "Trip details" },
