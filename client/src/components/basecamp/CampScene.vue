@@ -285,7 +285,7 @@ function onKeyDown(e) {
     keys.add(k);
     player.target = null;
     e.preventDefault();
-  } else if ((k === 'e' || k === ' ') && nearby.value && document.activeElement?.tagName !== 'BUTTON') {
+  } else if ((k === 'e' || (k === ' ' && document.activeElement?.tagName !== 'BUTTON')) && nearby.value) { // Space also presses a focused button
     e.preventDefault();
     enter(nearby.value);
   } else if (k === 'q') {
@@ -854,16 +854,10 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   outline-offset: 2px;
 }
 @media (max-width: 640px) {
-  /* phones: the labels cover too much of the camp, so they fade out. The one you're standing next to
-     (or tabbed to) still shows, so the "Enter …" pill makes sense. Tapping the buildings still works. */
+  /* phones: names only, or the bubbles pile on top of each other */
   .bubble {
     padding: 4px 10px 5px;
     border-width: 2px;
-    transition: opacity 0.2s;
-  }
-  .bubble:not(.hot):not(:focus-visible) {
-    opacity: 0;
-    pointer-events: none;
   }
   .bubble strong {
     font-size: 14px;
