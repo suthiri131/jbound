@@ -650,7 +650,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, scale 0.15s;
+  transition: background 0.15s;
   font: inherit;
 }
 .bubble::after {
@@ -678,8 +678,8 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
 .bubble.hot,
 .bubble:hover,
 .bubble:focus-visible {
+  /* colour only: `scale` here would also scale the translate placeOverlay sets, throwing the bubble across the screen */
   background: #f5bf4f;
-  scale: 1.06;
 }
 .bubble:focus-visible {
   outline: 3px solid #fffdf7;

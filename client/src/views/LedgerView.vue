@@ -111,6 +111,7 @@ async function loadLedger() {
   finally { loading.value = false; }
 }
 function chooseTrip() {
+  ticked.value = null;
   clearLedger();
   router.replace({ query: { ...route.query, tripId: tripId.value || undefined } });
   resetForm();
@@ -165,6 +166,9 @@ async function confirmSettlement(settlement) {
 // ---------- the stall scene beside the receipt ----------
 const formOpen = ref(false);
 const lastSettled = ref('');
+const ticked = ref(null); // settlement key whose box is checked, waiting on Confirm
+const settling = ref(false);
+const settlementKey = (settlement) => `${settlement.from}-${settlement.to}`;
 
 /** Per person: what they paid, what their share came to, and where they stand now (from the API's balances). */
 const people = computed(() => members.value.map((member) => {
@@ -218,9 +222,18 @@ function cancelForm() {
   resetForm();
   formOpen.value = false;
 }
+function toggleTick(settlement, checked) {
+  ticked.value = checked ? settlementKey(settlement) : null;
+}
 async function tickOff(settlement) {
+  if (settling.value) return;
+  settling.value = true;
   await confirmSettlement(settlement);
-  if (!errorMessage.value) lastSettled.value = `Ticked off: ${first(settlement.from)} is square with you.`;
+  settling.value = false;
+  if (!errorMessage.value) {
+    ticked.value = null;
+    lastSettled.value = `Ticked off: ${first(settlement.from)} is square with you.`;
+  }
 }
 
 watch(() => route.query.tripId, (value) => {
@@ -302,7 +315,7 @@ onMounted(loadConversionRate);
           <ul v-if="suggestedSettlements.length" class="owes">
             <li v-for="(st, index) in suggestedSettlements" :key="`${st.from}-${st.to}-${index}`">
               <label v-if="st.to === auth.user?.id" class="tick">
-                <input type="checkbox" @change="tickOff(st)" />
+                <input type="checkbox" :checked="ticked === settlementKey(st)" :disabled="settling" @change="toggleTick(st, $event.target.checked)" />
                 <span>{{ first(st.from) }} owes you</span>
               </label>
               <span v-else class="tick" :class="{ mine: st.from === auth.user?.id }">
@@ -311,6 +324,16 @@ onMounted(loadConversionRate);
               </span>
               <strong>{{ formatLedgerMoney(st.amountSgd) }}</strong>
               <small v-if="st.from === auth.user?.id" class="wait">Paid? {{ first(st.to) }} ticks it off once it lands.</small>
+              <button
+                v-if="st.to === auth.user?.id && ticked === settlementKey(st)"
+                type="button"
+                class="btn btn-primary btn-sm confirm-paid"
+                :disabled="settling"
+                :aria-label="`Confirm ${first(st.from)} has paid you ${formatLedgerMoney(st.amountSgd)}`"
+                @click="tickOff(st)"
+              >
+                {{ settling ? 'Confirming…' : 'Confirm' }}
+              </button>
             </li>
           </ul>
           <p v-else class="r-empty">{{ expenses.length ? 'Everyone is square. Nice work!' : 'Debts show up here once there is something on the tab.' }}</p>
@@ -674,6 +697,11 @@ label.tick {
   grid-column: 1 / -1;
   font-size: 12px;
   opacity: 0.7;
+}
+.confirm-paid {
+  grid-column: 1 / -1;
+  justify-self: end;
+  margin-top: 6px;
 }
 .settled-msg {
   margin: 8px 0 0;
