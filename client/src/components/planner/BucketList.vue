@@ -29,7 +29,7 @@ const ownershipLabel = computed(() => {
   if (props.trip.myRole === 'owner') return '';
   const owner = props.trip.members?.find((member) => member.id === props.trip.owner_id)
     || props.trip.members?.find((member) => member.role === 'owner');
-  const name = owner?.name?.trim() || (owner?.username ? `@${owner.username}` : '');
+  const name = owner?.name?.trim() || '';
   return name ? `Owned by ${name}` : 'You’re a member of this trip';
 });
 

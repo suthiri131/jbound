@@ -143,7 +143,7 @@ function closeBook() {
 }
 
 function authorName(post) {
-  return post.author?.name ?? post.author?.username ?? 'JB Traveller'
+  return post.author?.name ?? 'JB Traveller'
 }
 
 function authorAvatar(post) {

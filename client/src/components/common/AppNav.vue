@@ -3,6 +3,7 @@ import { ref, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { initials } from "@/utils/format";
+import UserAvatar from "@/components/common/UserAvatar.vue";
 import { useNotificationsStore } from "@/stores/notifications";
 
 
@@ -12,7 +13,7 @@ const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
  
-// Account menu (avatar -> name, @username, Sign out)
+// Account menu (avatar -> name, email, Profile, Sign out)
 const menuOpen = ref(false);
 const menuRoot = ref(null);
 // Below 860px the page links fold into a hamburger. navOpen = the dropdown is showing.
@@ -160,7 +161,6 @@ async function logout() {
           </button>
           <div v-if="menuOpen" class="menu" role="menu">
             <p class="menu-name">{{ auth.profile?.name }}</p>
-            <p v-if="auth.profile?.username" class="menu-meta">@{{ auth.profile.username }}</p>
             <p v-if="auth.user?.email" class="menu-meta">{{ auth.user.email }}</p>
             <RouterLink to="/profile" class="btn btn-sm menu-link" role="menuitem">Profile</RouterLink>
             <button type="button" class="btn btn-sm menu-out" role="menuitem" @click="logout">Sign out</button>
