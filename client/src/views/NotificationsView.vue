@@ -88,6 +88,7 @@ async function loadInvites() {
 async function respond(tripId, action) {
   await api.post(`/trips/${tripId}/invites/${action}`);
   invites.value = invites.value.filter((t) => t.id !== tripId);
+  notifications.inviteCount = invites.value.length;
 }
 </script>
 

@@ -115,9 +115,13 @@ export async function createTrip(req, res) {
   const invited = new Set();
   if (wanted.length) {
     try {
-      const profiles = check(await supabase.from('profiles').select('id, username').in('username', wanted));
+      const profiles = check(await supabase.from('profiles').select('id, username, name').in('username', wanted));
       for (const p of profiles) {
-        if (p.id !== req.user.id) await addMember(trip.id, p.id); // the owner is already in
+        if (p.id !== req.user.id) {
+          await addMember(trip.id, p.id, 'member', 'pending');// the owner is already inside
+          await postSystemMessage(trip.id, `${await displayName(req.user.id)} added ${p.name} to the crew`);
+        }
+         
         invited.add(p.username);
       }
     } catch (err) {
@@ -272,13 +276,14 @@ export async function regenerateInviteCode(req, res) {
   .from('trip_members')
   .update({status: 'accepted'})
   .eq('trip_id', req.params.tripId)
+  .eq('user_id', req.user.id)
   .eq('status', 'pending')
   .select('role')
   .maybeSingle();
   
   if (error) throw new Error(error.message)
   if (!data) throw notFound('No pending invites found!');
-  await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} Joined the crew `);
+  await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} joined the crew `);
   res.json({accepted : true});
 
  }
@@ -287,14 +292,17 @@ export async function regenerateInviteCode(req, res) {
  /** POST /api/trips:tripId/invites/decline */
 
  export async function declineInvite(req, res) {
-  const {data, error } = await supabase
+  const { error, count } = await supabase
    .from('trip_members')
-   .update({status: 'accepted'})
+   .delete({count:'exact'})
    .eq('trip_id', req.params.tripId)
-   .eq('status', 'pending')
-   .select('role')
+   .eq('user_id', req.user.id)
+   .eq('status', 'pending');
+
   if (error) throw new Error(error.message);
-  if (!data?.strength) throw notFound('No pending invite found');
+  if (!count) throw notFound('No pending invite found');
+  await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} declined the invite `);
+  
   res.status(204).end();
 
  }

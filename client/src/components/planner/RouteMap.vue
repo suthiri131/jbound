@@ -4,7 +4,9 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { api, errorMessage } from '@/lib/api';
 import { loadGoogleMaps, hasGoogleMaps, MAP_ID } from '@/lib/googleMaps';
 import { dayLabel } from '@/utils/format';
+import RouteMap3D from '@/components/planner/RouteMap3D.vue';
 
+const view3d = ref(false);
 const props = defineProps({
   trip: { type: Object, required: true },
   version: { type: Number, default: 0 }, // bump to force a refetch after itinerary changes
@@ -199,6 +201,15 @@ watch(() => props.activeStopId, (id) => {
     element.classList.toggle('active', String(result.value?.stops?.[i]?.id) === String(id));
   });
 });
+watch(view3d, (is3d) => {
+  if (is3d || !map || !gm) return;
+  nextTick(() => {
+    google.maps.event.trigger(map, 'resize');
+    const stops = result.value?.stops || [];
+    if (stops.length === 1) map.setCenter({ lat: stops[0].lat, lng: stops[0].lng });
+    else draw();
+  });
+});
 
 const caption = computed(() => {
   const r = result.value?.route;
@@ -238,13 +249,18 @@ const stopBufferMinutes = computed(() => {
             <option value="tuas">Tuas Second Link approach</option>
           </select>
         </label>
+         <div class="segmented" role="group" aria-label="Map mode">
+          <button type="button" :aria-pressed="!view3d" @click="view3d = false">2D</button>
+          <button type="button" :aria-pressed="view3d" @click="view3d = true">3D</button>
+        </div>
         <slot name="actions" />
+
       </div>
     </div>
 
     <div class="map-wrap">
-      <div ref="el" class="map" role="region" aria-label="Map of the day's stops" />
-      <p v-if="mapError" class="map-msg">{{ mapError }}</p>
+      <div v-show="!view3d" ref="el" class="map" role="region" aria-label="Map of the day's stops" />
+      <RouteMap3D v-if="view3d" :stops="result?.stops || []" :path="(result?.route?.latlngs || []).map(([lat, lng]) => ({ lat, lng }))" :legs="result?.route?.legs || []" @select-stop="emit('select-stop', $event)" />      <p v-if="mapError" class="map-msg">{{ mapError }}</p>
     </div>
     <p v-if="error" class="error-text" role="alert" style="margin: 0; padding: 8px 18px">{{ error }}</p>
 
@@ -254,7 +270,7 @@ const stopBufferMinutes = computed(() => {
           <span class="leg-arrow" aria-hidden="true">⬇ 🚗</span>
           <span class="leg-badge">{{ result.route.legs[i - 1].distanceKm }} km · {{ result.route.legs[i - 1].durationMin }} min driving</span>
         </div>
-        <div class="itinerary-stop" :class="{ selected: String(activeStopId) === String(s.id) }">
+        <div class="itinerary-stop" :class="{ selected: String(activeStopId) === String(s.id)} ">
           <span class="dot">{{ String(s.id).startsWith('checkpoint-') ? '◆' : i + (fromCheckpoint ? 0 : 1) }}</span>
           <span class="stop-copy">
             <span class="stop-order">{{ i === 0 ? 'Origin' : `Stop ${i}` }}</span>
