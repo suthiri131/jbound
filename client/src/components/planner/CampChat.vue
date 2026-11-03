@@ -125,7 +125,7 @@ async function send() {
 .who { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--line); }
 .ago { font-weight: 500; letter-spacing: 0; opacity: .7; }
 .text { margin: 2px 0 0; font-size: 15px; }
-.compose { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 2px solid var(--ink-soft); }
-.msg { width: 100%; min-height: 46px; padding: 0 12px; border: 2px solid var(--ink-soft); border-radius: 8px; background: #3A2E20; color: var(--paper); font-family: var(--font-body); font-size: 15px; }
-.send { flex: none; width: 46px; height: 46px; border: 0; border-radius: 8px; background: var(--mustard); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.compose { display: flex; align-items: center; gap: 16px; padding: 12px 16px 16px; border-top: 2px solid var(--ink-soft); }
+.msg { display: block; width: 100%; height: 46px; min-height: 46px; padding: 0 12px; border: 2px solid var(--ink-soft); border-radius: 8px; background: #3A2E20; color: var(--paper); font-family: var(--font-body); font-size: 15px; }
+.send { flex: none; width: 46px; height: 46px; min-height: 46px; border: 0; border-radius: 8px; background: var(--mustard); cursor: pointer; display: flex; align-items: center; justify-content: center; }
 </style>
