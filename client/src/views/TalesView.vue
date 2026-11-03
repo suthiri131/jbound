@@ -5,11 +5,13 @@ import { api, errorMessage, uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { VIBES, VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
 import { timeAgo, initials } from '@/utils/format';
+import TalesStorybook from '@/components/tales/TalesStorybook.vue'
 
+const auth = useAuthStore();
+const storybookRef = ref(null);
 
 const route = useRoute();
 const router = useRouter();
-const auth = useAuthStore();
 
 const feed = reactive({ items: [], nextCursor: null, loading: false, error: '' });
 const scope = ref('everyone');
@@ -114,6 +116,7 @@ async function post() {
     feed.items.unshift(data);
     Object.assign(draft, { caption: '', vibe: '', place: null, images: [] });
     placeQuery.value = '';
+    storybookRef.value?.finishComposing();
 
   } catch (err) {
     composeError.value = errorMessage(err);
@@ -257,158 +260,140 @@ function handlePhotoKeydown(event) {
   if (event.key === 'ArrowRight') nextPhoto();
   if (event.key === 'ArrowLeft') previousPhoto();
 }
+
+const composerSection = ref(null);
+
+function openComposer() {
+  composerSection.value?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
+}
+
+function changeStorybookFilter(value) {
+  scope.value = value;
+}
+
+function loadOlderTales() {
+  if (feed.nextCursor && !feed.loading) {
+    load(true);
+  }
+}
 </script>
 
 <template>
   <main class="container page">
     <span class="tag-stamp" style="color: var(--ember)">Tales</span>
     <h1 class="display display-lg" style="margin-top: 16px">Stories from the other side.</h1>
-    <p class="lead">Honest reviews from people who made the crossing. Share yours and tag the place so it shows up in the Explorer.</p>
+    <br>
 
     <div class="layout">
-      <section class="card card-pad composer" aria-label="Share a tale">
-        <h2 class="display display-sm">Tell a tale</h2>
-        <form class="stack" style="gap: 12px; margin-top: 12px" @submit.prevent="post">
-          <label class="field">
-            What happened?
-            <textarea v-model="draft.caption" class="textarea" required maxlength="2000" placeholder="The banana cake at Hiap Joo is gone by 11am. Worth the early start." data-cy="tale-caption" />
-          </label>
-          <div class="field ac">
-            <label for="tale-place">Tag a place</label>
-            <input id="tale-place" v-model="placeQuery" class="input" autocomplete="off" placeholder="Start typing…" role="combobox" :aria-expanded="suggestions.length > 0" aria-controls="tale-place-list" />
-            <ul v-if="suggestions.length" id="tale-place-list" class="ac-list" role="listbox">
-              <li v-for="s in suggestions" :key="s.id" role="option" :aria-selected="false">
-                <button type="button" @click="pickPlace(s)">{{ s.name }}</button>
-              </li>
-            </ul>
-          </div>
-
-          <label class="field">Vibe
-            <select v-model="draft.vibe" class="select">
-              <option value="">None</option>
-              <option v-for="v in VIBES" :key="v.id" :value="v.id">{{ v.label }}</option>
-            </select>
-          </label>
-          <label class="field">
-            Photos ({{ draft.images.length }}/6)
-            <input type="file" accept="image/*" multiple class="input" style="padding-top: 8px" :disabled="uploading || draft.images.length >= 6" @change="addImages($event.target.files); $event.target.value = ''" />
-          </label>
-          <div v-if="draft.images.length" class="thumbs">
-            <img v-for="(u, i) in draft.images" :key="u" :src="u" :alt="`Upload ${i + 1}`" />
-          </div>
-          <p v-if="composeError" class="error-text" role="alert">{{ composeError }}</p>
-          <button type="submit" class="btn btn-ember" :disabled="posting || uploading" data-cy="tale-post">{{ uploading ? 'Uploading…' : posting ? 'Posting…' : 'Share by the fire' }}</button>
-        </form>
-      </section>
-
-      <section aria-label="Feed">
-        <div class="row">
-          <div class="segmented" role="group" aria-label="Whose tales">
-            <button type="button" :aria-pressed="scope === 'everyone'" @click="scope = 'everyone'">Everyone</button>
-            <button type="button" :aria-pressed="scope === 'friends'" @click="scope = 'friends'">My crews</button>
-            <button type="button" :aria-pressed="scope === 'mine'" @click="scope = 'mine'">My Tales</button>
-          </div>
-          <select v-model="vibe" class="select" style="width: auto" aria-label="Filter by vibe">
-            <option value="">All vibes</option>
-            <option v-for="v in VIBES" :key="v.id" :value="v.id">{{ v.label }}</option>
-          </select>
-          <button v-if="placeFilter" type="button" class="chip" aria-pressed="true" @click="clearPlaceFilter">One place only ✕</button>
-        </div>
-
-        <p v-if="feed.error" class="error-text" role="alert">{{ feed.error }}</p>
-
-        <article v-for="p in feed.items" :key="p.id" class="card tale" data-cy="tale">
-          <header class="row" style="gap: 10px">
-            <span class="avatar" aria-hidden="true">{{ initials(p.author?.name) }}</span>
-            <div style="flex: 1">
-              <strong>{{ p.author?.name }}</strong>
-              <span class="muted" style="font-size: 13px"> · {{ timeAgo(p.created_at) }}</span>
-              <p v-if="p.place || p.custom_place_name" style="margin: 0; font-size: 13px">
-                at
-                <RouterLink
-                    v-if="p.place"
-                    :to="`/tales/place/${p.place.id}`"
-                >
-                    {{ p.place.name }}
-                </RouterLink>
-
-                <RouterLink
-                    v-else
-                    :to="`/tales/custom/${encodeURIComponent(p.custom_place_name)}`"
-                >
-                    {{ p.custom_place_name }}
-                </RouterLink>
-            </p>
-          </div>
-          <span v-if="p.vibe" class="pill" :style="{ background: VIBE_TINT[p.vibe] }">{{ VIBE_LABEL[p.vibe] }}</span>
-          </header>
-          <p class="caption">{{ p.caption }}</p>
-
-          <div v-if="p.images?.length" class="photos">
-            <img
-              v-for="(u, index) in p.images"
-              :key="u"
-              :src="u"
-              :alt="`Tale photo ${index + 1}`"
-              loading="lazy"
-              tabindex="0"
-              role="button"
-              @click="openPhotoViewer(p.images, index)"
-              @keydown.enter="openPhotoViewer(p.images, index)"
-              @keydown.space.prevent="openPhotoViewer(p.images, index)"
-            />
-          </div>
-
-          <footer class="row" style="gap: 8px; margin-top: 12px">
-            <button type="button" class="btn btn-sm" :aria-pressed="p.likedByMe" :class="{ liked: p.likedByMe }" @click="like(p)">♥ {{ p.likeCount }}</button>
-            <button type="button" class="btn btn-sm btn-ghost" :aria-expanded="Boolean(openComments[p.id])" @click="toggleComments(p)">Comments {{ p.commentCount }}</button>
-            <span class="spacer" />
-            <button v-if="p.author?.id === auth.user?.id" type="button" class="btn btn-sm btn-ghost" @click="removePost(p)">Delete</button>
-          </footer>
-
-          <div v-if="openComments[p.id]" class="comments">
-
-            <!-- Display loaded comments -->
-              <div v-for="c in openComments[p.id]?.items ?? []" :key="c.id" class="comment-row">
-                <span><strong>{{ c.author?.name }}:</strong> {{ c.text }}</span>
-                <button v-if="c.author?.id === auth.user?.id" type="button" class="btn btn-sm btn-ghost" @click="removeComment(p, c)">Delete</button>
-              </div>
-
-            <!-- Load more comments -->
-            <button
-              v-if="openComments[p.id]?.nextCursor"
-              type="button"
-              class="btn btn-ghost"
-              :disabled="openComments[p.id]?.loading"
-              @click="loadMoreComments(p)"
-            >
-              {{ openComments[p.id]?.loading ? 'Loading...' : 'Load More Comments' }}
+      <section class="storybook-feed" aria-label="Feed">
+        <TalesStorybook
+          ref="storybookRef"
+          :posts="feed.items"
+          :current-user-id="auth.user?.id"
+          :open-comment-ids="Object.keys(openComments)"
+          @like="like"
+          @comment="toggleComments"
+          @delete="removePost"
+          @filter-change="changeStorybookFilter"
+          @load-more="loadOlderTales"
+          @open-photo="openPhotoViewer"
+        >
+    
+        <template #composer>
+          <form class="notebook-form" @submit.prevent="post">
+            <label class="field">
+              What happened?
+              <textarea v-model="draft.caption" class="textarea" required maxlength="2000" placeholder="Tell us about your JB adventure..." data-cy="tale-caption"></textarea>
+            </label>
+            <div class="field ac">
+              <label for="tale-place">Tag a place</label>
+              <input id="tale-place" v-model="placeQuery" class="input" autocomplete="off" placeholder="Start typing a place..." role="combobox" :aria-expanded="suggestions.length > 0" aria-controls="tale-place-list" />
+              <ul v-if="suggestions.length" id="tale-place-list" class="ac-list" role="listbox">
+                <li v-for="s in suggestions" :key="s.id" role="option" :aria-selected="false">
+                  <button type="button" @click="pickPlace(s)">{{ s.name }}</button>
+                </li>
+              </ul>
+            </div>
+            <label class="field">
+              Vibe
+              <select v-model="draft.vibe" class="select">
+                <option value="">None</option>
+                <option v-for="v in VIBES" :key="v.id" :value="v.id">{{ v.label }}</option>
+              </select>
+            </label>
+            <label class="field">
+              Photos ({{ draft.images.length }}/6)
+              <input type="file" accept="image/*" multiple class="input" :disabled="uploading || draft.images.length >= 6" @change="addImages($event.target.files); $event.target.value = ''" />
+            </label>
+            <div v-if="draft.images.length" class="thumbs">
+              <img v-for="(u, i) in draft.images" :key="u" :src="u" :alt="`Upload ${i + 1}`" />
+            </div>
+            <p v-if="composeError" class="error-text" role="alert">{{ composeError }}</p>
+            <button type="submit" class="btn btn-ember" :disabled="posting || uploading" data-cy="tale-post">
+              {{ uploading ? 'Uploading…' : posting ? 'Posting…' : 'Share by the fire' }}
             </button>
-
-            <!-- Add a comment -->
-            <form
-              class="row"
-              style="gap: 8px; flex-wrap: nowrap"
-              @submit.prevent="comment(p)"
-            >
-              <input
-                v-model="commentDraft[p.id]"
-                class="input"
-                maxlength="1000"
-                placeholder="Add a comment…"
-                :aria-label="`Comment on ${p.author?.name}'s tale`"
-              />
-
-              <button type="submit" class="btn btn-sm btn-dark">
-                Post
-              </button>
-            </form>
+          </form>
+        </template>
+        
+      <template #comments="{ post: p }">
+        <Transition name="unroll">
+          <div v-if="openComments[p.id]" class="comment-scroll">
+            <button
+              type="button"
+              class="scroll-roller"
+              aria-label="Close Traveller's Notes"
+              title="Roll up Traveller's Notes"
+              @click="toggleComments(p)"></button>
+            <div class="scroll-paper">
+              <div class="scroll-header">✦ Traveller's Notes ✦</div>
+              <div class="scroll-comments">
+                <div v-if="!openComments[p.id].items.length" class="empty-comments">
+                  No comments yet. Be the first!
+                </div>
+                <div v-for="c in openComments[p.id].items" :key="c.id" class="scroll-comment-row">
+                  <div class="scroll-comment-content">
+                    <strong>{{ c.author?.name ?? 'Traveller' }}</strong>
+                    <p>{{ c.text }}</p>
+                  </div>
+                  <button v-if="c.author?.id === auth.user?.id" type="button" class="scroll-delete" aria-label="Delete comment" @click="removeComment(p, c)">×</button>
+                </div>
+                <button v-if="openComments[p.id].nextCursor" type="button" class="scroll-load-more" :disabled="openComments[p.id].loading" @click="loadMoreComments(p)">
+                  {{ openComments[p.id].loading ? 'Loading...' : 'Load more notes' }}
+                </button>
+              </div>
+              <form class="scroll-comment-form" @submit.prevent="comment(p)">
+                <input v-model="commentDraft[p.id]" maxlength="1000" placeholder="Leave a little note..." :aria-label="`Comment on ${p.author?.name ?? 'this traveller'}'s tale`" />
+                <button type="submit" :disabled="!commentDraft[p.id]?.trim()">Post</button>
+              </form>
+            </div>
+            <div class="scroll-bottom"></div>
           </div>
+        </Transition>
+      </template>
 
-        </article>
+      </TalesStorybook>
 
-        <p v-if="!feed.loading && !feed.items.length" class="hand muted">No tales yet. Be the first by the fire.</p>
-        <button v-if="feed.nextCursor" type="button" class="btn btn-ghost" style="margin-top: 16px" :disabled="feed.loading" @click="load(true)">Older tales</button>
+        <p v-if="feed.error" class="error-text" role="alert">
+          {{ feed.error }}
+        </p>
+
+        <p v-if="feed.loading" class="muted">
+          Loading tales...
+        </p>
+
+        <button
+          v-if="feed.nextCursor"
+          type="button"
+          class="btn btn-ghost"
+          :disabled="feed.loading"
+          @click="loadOlderTales"
+        >
+          Older Tales
+        </button>
+
       </section>
     </div>
 
@@ -465,52 +450,93 @@ function handlePhotoKeydown(event) {
   </main>
 </template>
 
-<style scoped>
-.layout { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 28px; align-items: start; margin-top: 28px; }
-.composer { position: sticky; top: 96px; }
-.ac { position: relative; }
-.ac-list { position: absolute; z-index: 5; top: 100%; left: 0; right: 0; list-style: none; margin: 4px 0 0; padding: 4px; background: var(--card); border: 2px solid var(--ink); border-radius: 8px; }
-.ac-list button { width: 100%; min-height: 40px; text-align: left; border: 0; background: none; padding: 0 10px; cursor: pointer; border-radius: 6px; }
-.ac-list button:hover { background: var(--sand); }
-.thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
-.thumbs img { width: 64px; height: 64px; object-fit: cover; border: 2px solid var(--ink); border-radius: 6px; }
-.tale { margin-top: 18px; padding: 18px 20px; }
-.avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 2px solid var(--ink); border-radius: 50%; background: var(--sand); font-weight: 800; font-size: 14px; }
-.caption { margin: 12px 0 0; white-space: pre-line; }
-.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
-.photos img { width: 100%; height: 140px; object-fit: contain; border: 2px solid var(--ink); border-radius: 8px; }
-.liked { background: var(--clay); }
-@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .composer { position: static; } }
 
-/* Make Tale photos clickable */
-.photos img { cursor: zoom-in; }
-/* Fullscreen overlay */
-.photo-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; padding: 55px 50px; }
-/* Enlarged image */
+<style scoped>
+.storybook-feed { width: 100%; min-width: 0; }
+.ac { position: relative; }
+.ac-list { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; list-style: none; margin: 4px 0 0; padding: 4px; background: #FFF8EA; border: 2px solid #75462D; border-radius: 8px; max-height: 180px; overflow-y: auto; box-shadow: 0 8px 20px rgba(0,0,0,.08); }
+.ac-list button { width: 100%; min-height: 36px; text-align: left; border: 0; background: transparent; padding: 0 10px; cursor: pointer; border-radius: 6px; color: #4A2C20; }
+.ac-list button:hover { background: #E8C99B; }
+.notebook-form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.notebook-form * { box-sizing: border-box; }
+.notebook-form .field { display: flex; flex-direction: column; gap: 4px; font-family: 'Kalam', cursive; font-size: 16px; font-weight: 700; color: #4A2C20; }
+.notebook-form .input, .notebook-form .textarea, .notebook-form .select { width: 100%; padding: 10px 12px; background: rgba(255,248,236,.88); border: 2px solid #3F2A1D; border-radius: 10px; color: #4A2C20; font-size: 15px; line-height: 1.4; box-shadow: inset 0 1px 0 rgba(255,255,255,.35); }
+.notebook-form .input::placeholder, .notebook-form .textarea::placeholder { color: #7A7A7A; }
+.notebook-form .textarea { min-height: 90px; resize: vertical; }
+.notebook-form .select { appearance: none; background-image: linear-gradient(45deg,transparent 50%,#4A2C20 50%),linear-gradient(135deg,#4A2C20 50%,transparent 50%); background-position: calc(100% - 18px) calc(50% - 3px),calc(100% - 12px) calc(50% - 3px); background-size: 6px 6px,6px 6px; background-repeat: no-repeat; padding-right: 34px; }
+.notebook-form .input:focus, .notebook-form .textarea:focus, .notebook-form .select:focus { outline: none; border-color: #A85A2A; box-shadow: 0 0 0 3px rgba(168,90,42,.18); }
+.notebook-form input[type="file"] { padding: 8px 10px; }
+.notebook-form input[type="file"]::file-selector-button { margin-right: 12px; padding: 8px 14px; background: #F7EDDA; color: #35251A; border: 2px solid #35251A; border-radius: 10px; font-family: 'Kalam', cursive; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 2px 3px 0 #3A2418; }
+.notebook-form input[type="file"]::file-selector-button:hover { background: #E8C99B; }
+.notebook-form .btn-ember { align-self: flex-start; background: #C55222; color: #FFF5E6; border: 3px solid #35251A; border-radius: 16px; padding: 10px 24px; font-family: 'Kalam', cursive; font-size: 17px; font-weight: 700; cursor: pointer; box-shadow: 4px 5px 0 #3A2418; }
+.notebook-form .btn-ember:hover:not(:disabled) { background: #D8652F; transform: translateY(-1px); }
+.notebook-form .btn-ember:disabled { opacity: .6; cursor: not-allowed; }
+.thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
+.thumbs img { width: 58px; height: 58px; object-fit: cover; border: 2px solid #75462D; border-radius: 8px; }
+.photo-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.92); display: flex; align-items: center; justify-content: center; padding: 55px 50px; }
 .photo-enlarged { max-width: 100%; max-height: 85vh; object-fit: contain; border-radius: 8px; }
-/* Close button */
-.photo-close { position: absolute; top: 18px; right: 22px; background: none; border: none; color: white; font-size: 30px; cursor: pointer; }
-/* Navigation arrows */
-.photo-prev, .photo-next { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.15); border: none; border-radius: 50%; color: white; font-size: 26px; width: 44px; height: 44px; cursor: pointer; }
+.photo-close { position: absolute; top: 18px; right: 22px; background: transparent; border: 0; color: #FFF; font-size: 30px; cursor: pointer; }
+.photo-prev, .photo-next { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.15); border: 0; border-radius: 50%; color: #FFF; font-size: 26px; width: 44px; height: 44px; cursor: pointer; }
 .photo-prev { left: 12px; }
 .photo-next { right: 12px; }
-.photo-counter { position: absolute; bottom: 20px; color: white; font-size: 14px; }
-/* Mobile responsiveness */
-@media (max-width: 600px) { .photo-overlay { padding: 60px 12px; } .photo-prev, .photo-next { width: 36px; height: 36px; font-size: 20px; } }
+.photo-counter { position: absolute; bottom: 20px; color: #FFF; font-size: 14px; }
+.comment-scroll { position: relative; flex: 0 0 195px; width: 100%; height: 195px; min-height: 0; margin-top: 9px; padding: 8px 3px 5px; font-family: 'Kalam', cursive; transform-origin: top center; }
+.scroll-roller { position: absolute; top: 0; left: -5px; right: -5px; height: 17px; z-index: 2; border: 2px solid #845331; border-radius: 12px; background: linear-gradient(to bottom,#D9B788,#F3DDB5 45%,#BC8B55 85%,#865736); box-shadow: 0 3px 5px rgba(64,35,15,.25); }
+.scroll-roller::before, .scroll-roller::after { content: ''; position: absolute; top: 2px; width: 5px; height: 9px; background: #87512E; border-radius: 3px; }
+.scroll-roller::before { left: 6px; }
+.scroll-roller::after { right: 6px; }
+.scroll-paper { display: flex; flex-direction: column; height: 176px; min-height: 0; padding: 14px 10px 7px; background: repeating-linear-gradient(to bottom,transparent 0px,transparent 22px,rgba(158,112,62,.1) 23px),linear-gradient(90deg,#E4CAA2,#F9EDD5 8%,#F9EDD5 92%,#DEBF92); border-left: 2px solid #B99266; border-right: 2px solid #B99266; box-shadow: 2px 3px 8px rgba(55,32,17,.19); overflow: visible; }
+.scroll-header { flex-shrink: 0; text-align: center; color: #8B5A38; font-size: 14px; font-weight: 700; }
+.scroll-comments { flex: 1 1 auto; min-height: 0; margin: 6px 0; padding: 3px 5px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #B88A5D transparent; }
+.scroll-comments::-webkit-scrollbar { width: 5px; }
+.scroll-comments::-webkit-scrollbar-thumb { background: #B88A5D; border-radius: 10px; }
+.scroll-comment-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(133,83,49,.28); }
+.scroll-comment-content { flex: 1; min-width: 0; }
+.scroll-comment-content strong { display: block; color: #5F3B26; font-size: 13px; line-height: 1.3; }
+.scroll-comment-content p { margin: 2px 0 0; color: #583B2A; font-size: 13px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; }
+.scroll-delete { flex-shrink: 0; border: 0; background: transparent; color: #A1674D; font-size: 19px; cursor: pointer; }
+.scroll-load-more { display: block; margin: 5px auto; padding: 4px 8px; border: 0; background: transparent; color: #87512E; font-family: 'Kalam', cursive; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.empty-comments { padding: 10px; text-align: center; color: #947151; font-size: 13px; }
+.scroll-comment-form { display: flex; flex-shrink: 0; gap: 5px; padding-top: 7px; border-top: 1px solid #D6B991; }
+.scroll-comment-form input { flex: 1; min-width: 0; padding: 6px 9px; background: rgba(255,251,239,.8); border: 1px solid #B99770; border-radius: 7px; font-size: 12px; }
+.scroll-comment-form button { flex-shrink: 0; padding: 5px 10px; border: 1px solid #4E301F; border-radius: 7px; background: #75462D; color: #FFF5E6; font-family: 'Kalam', cursive; font-size: 13px; font-weight: 700; cursor: pointer; }
+.scroll-comment-form button:disabled { opacity: .5; cursor: not-allowed; }
+.scroll-bottom { position: relative; height: 11px; margin: 0 -5px; border: 2px solid #90613D; border-radius: 10px; background: linear-gradient(to bottom,#F3DDB5,#C4935D,#865736); box-shadow: 0 3px 5px rgba(64,35,15,.2); }
+.comment-scroll { margin-top: 0; transform-origin: top center; }
+.unroll-enter-active { animation: unfurlScroll .55s cubic-bezier(.2,.75,.25,1) both; }
+.unroll-leave-active { animation: unfurlScroll .3s ease-in reverse both; }
+.book-layout { padding-bottom: 0; }
+.book-layout:has(.comment-scroll) { padding-bottom: 230px; }
+@keyframes unfurlScroll {
+  0% { opacity: 0; transform: translateY(-20px) scaleY(.02); }
+  35% { opacity: 1; }
+  70% { transform: translateY(0) scaleY(1.05); }
+  100% { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+@media (max-width: 600px) {
+  .photo-overlay { padding: 60px 12px; }
+  .photo-prev, .photo-next { width: 36px; height: 36px; font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .unroll-enter-active, .unroll-leave-active { animation: none; }
+}
 
+.storybook-section { overflow: visible; }
+.journal-stage { overflow: visible; }
+.book-layout { position: relative; padding-bottom: 0; overflow: visible; }
+.book-layout:has(.comment-scroll) { padding-bottom: 235px; }
+.book-cover { overflow: visible; }
+.open-book { overflow: visible; }
+.book-page { position: relative; overflow: visible; z-index: 1; }
+.book-page:has(.comment-scroll) { z-index: 10; }
+.tale-card { overflow: hidden; }
+.comments-drop { position: absolute; top: calc(100% - 47px); left: 24px; right: 24px; z-index: 20; pointer-events: none; }
+.comments-drop.comments-expanded { top: calc(100% + 12px); z-index: 30; }
+.comments-drop :deep(.comment-scroll) { pointer-events: auto; margin-top: 0; }
 
-.comments { margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); font-size: 14px; }
-.comment-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
-.comment-item p { margin: 0; padding: 0; flex: 1; min-width: 0; line-height: 1.4; overflow-wrap: anywhere; }
-.comment-item button { flex-shrink: 0; }
-.comment-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 2px 0; }
-.comment-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.comment-row button { flex-shrink: 0; min-height: 0; height: auto; padding: 2px 8px; line-height: 1.2; font-size: 12px; }
-
-
-
-
-.segmented { display: inline-flex; align-items: stretch; }
-.segmented button + button { border-left: 2px solid var(--ink); }
+.scroll-roller { width: auto; padding: 0; cursor: pointer; appearance: none; }
+.scroll-roller:hover { filter: brightness(1.1); }
+.scroll-roller:focus-visible { outline: 3px solid #A85A2A; outline-offset: 3px; }
 </style>
+
 
