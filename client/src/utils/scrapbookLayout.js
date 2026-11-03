@@ -189,7 +189,7 @@ export function buildScrapbookPages({ trip, memories = [], expenses = [], canUpl
   }
 
   const pages = [
-    { id: 'cover', kind: 'cover', name: trip.name, dates, color: trip.cover_color || '#70452f', year },
+    { id: 'cover', kind: 'cover', name: trip.name },
     {
       id: 'title',
       kind: 'title',
@@ -201,7 +201,7 @@ export function buildScrapbookPages({ trip, memories = [], expenses = [], canUpl
     },
     ...content,
     { id: 'endpaper', kind: 'endpaper' },
-    { id: 'back-cover', kind: 'back-cover', color: trip.cover_color || '#70452f' },
+    { id: 'back-cover', kind: 'back-cover' },
   ];
   // printed page numbers for the paper pages between the covers
   return pages.map((page, i) => (i === 0 || i === pages.length - 1 ? page : { ...page, number: i }));

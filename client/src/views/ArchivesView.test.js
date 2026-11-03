@@ -127,8 +127,8 @@ describe('ArchivesView', () => {
 
     const cover = wrapper.get('.leaf .front');
     expect(cover.text()).toContain('A little Johor adventure');
-    expect(cover.text()).toContain('Thu 1 Oct – Sat 3 Oct');
-    expect(cover.text()).toContain('JBOUND · TRAVEL JOURNAL');
+    expect(cover.text()).not.toContain('JBound Tales');
+    expect(cover.text()).toContain('THE JB TRAVEL JOURNAL');
     expect(wrapper.get('.page-label').text()).toBe('Front cover');
 
     expect(wrapper.get('.polaroid img').attributes('src')).toBe('/photo.jpg');

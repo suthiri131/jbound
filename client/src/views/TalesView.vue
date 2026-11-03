@@ -5,7 +5,9 @@ import { api, errorMessage, uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { VIBES, VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
 import { timeAgo } from '@/utils/format';
-import TalesMap from '@/components/tales/TalesMap.vue';
+import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
+import FiresideCircle from '@/components/tales/FiresideCircle.vue';
+import { useCampSky } from '@/composables/useCampSky';
 
 
 const route = useRoute();
@@ -223,17 +225,10 @@ async function removeComment(p, c) {
 }
 
 
-// ---------- postcards + map ----------
-const selectedId = ref(null); // the pin / postcard in focus
+// ---------- postcards ----------
 const flipped = reactive({}); // post id -> showing the story side
 const composing = ref(false);
-const cardEls = {};
 
-const pins = computed(() =>
-  feed.items
-    .filter((p) => Number.isFinite(p.place?.lat) && Number.isFinite(p.place?.lng))
-    .map((p) => ({ id: p.id, lat: p.place.lat, lng: p.place.lng, label: p.place.name, tint: VIBE_TINT[p.vibe], photo: p.images?.[0] || null })),
-);
 const newThisWeek = computed(() => {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   return feed.items.filter((p) => p.created_at > weekAgo).length;
@@ -242,20 +237,14 @@ const placeName = (p) => p.place?.name || p.custom_place_name || 'Somewhere in J
 
 function flip(p) {
   flipped[p.id] = !flipped[p.id];
-  selectedId.value = p.id;
-}
-function selectPin(id) {
-  selectedId.value = id;
-  flipped[id] = true;
-  cardEls[id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 async function send() {
   await post();
-  if (!composeError.value) {
-    composing.value = false;
-    selectedId.value = feed.items[0]?.id || null;
-  }
+  if (!composeError.value) composing.value = false;
 }
+
+// ---------- the fire ----------
+const { sky } = useCampSky();
 
 // click-to-enlarge section
 const selectedPhotos = ref([]);
@@ -296,20 +285,33 @@ function handlePhotoKeydown(event) {
 
 <template>
   <main class="tales-page">
-    <TalesMap :pins="pins" :selected="selectedId" @select="selectPin">
-      <RouterLink to="/" class="camp-back home">← Basecamp</RouterLink>
-    </TalesMap>
+    <SkyBackdrop :path="false" />
+    <RouterLink to="/" class="camp-back home" aria-label="Back to Basecamp">← <span class="home-label">Basecamp</span></RouterLink>
 
-    <section class="board" aria-label="Postcards from JB">
-      <header class="b-head">
-        <div>
-          <h1 class="b-title">Postcards from JB</h1>
-          <p class="b-sub">{{ newThisWeek ? `${newThisWeek} new this week` : 'Stories from people who made the crossing' }} · tap a pin or a card</p>
-        </div>
-        <button type="button" class="send" :aria-expanded="composing" @click="composing = !composing">
-          {{ composing ? 'Close' : '+ Send a postcard' }}
-        </button>
+    <section class="bubble" aria-label="Postcards from JB">
+      <header class="toolbar">
+          <div class="b-text">
+            <h1 class="b-title">Postcards from JB</h1>
+            <p class="b-sub">{{ newThisWeek ? `${newThisWeek} new this week` : 'Stories from people who made the crossing' }} · tap a card to read it</p>
+          </div>
+          <div class="filters">
+            <div class="seg" role="group" aria-label="Whose tales">
+              <button type="button" :aria-pressed="scope === 'everyone'" @click="scope = 'everyone'">Everyone</button>
+              <button type="button" :aria-pressed="scope === 'friends'" @click="scope = 'friends'">My crews</button>
+              <button type="button" :aria-pressed="scope === 'mine'" @click="scope = 'mine'">Mine</button>
+            </div>
+            <select v-model="vibe" class="vibe-select" aria-label="Filter by vibe">
+              <option value="">All vibes</option>
+              <option v-for="v in VIBES" :key="v.id" :value="v.id">{{ v.label }}</option>
+            </select>
+            <button v-if="placeFilter" type="button" class="chip-x" @click="clearPlaceFilter">One place only ✕</button>
+          </div>
+          <button type="button" class="send" :aria-expanded="composing" @click="composing = !composing">
+            <template v-if="composing">Close</template><template v-else>+ Send<span class="send-more"> a postcard</span></template>
+          </button>
       </header>
+
+      <div class="scroller">
 
       <!-- composer: a blank postcard -->
       <form v-if="composing" class="postcard blank" @submit.prevent="send">
@@ -350,23 +352,10 @@ function handlePhotoKeydown(event) {
         </button>
       </form>
 
-      <div class="filters">
-        <div class="seg" role="group" aria-label="Whose tales">
-          <button type="button" :aria-pressed="scope === 'everyone'" @click="scope = 'everyone'">Everyone</button>
-          <button type="button" :aria-pressed="scope === 'friends'" @click="scope = 'friends'">My crews</button>
-          <button type="button" :aria-pressed="scope === 'mine'" @click="scope = 'mine'">Mine</button>
-        </div>
-        <select v-model="vibe" class="vibe-select" aria-label="Filter by vibe">
-          <option value="">All vibes</option>
-          <option v-for="v in VIBES" :key="v.id" :value="v.id">{{ v.label }}</option>
-        </select>
-        <button v-if="placeFilter" type="button" class="chip-x" @click="clearPlaceFilter">One place only ✕</button>
-      </div>
-
       <p v-if="feed.error" class="error-text" role="alert">{{ feed.error }}</p>
 
       <ul class="cards">
-        <li v-for="p in feed.items" :key="p.id" :ref="(el) => (cardEls[p.id] = el)" class="card-slot" :class="{ on: selectedId === p.id }" data-cy="tale">
+        <li v-for="p in feed.items" :key="p.id" class="card-slot" data-cy="tale">
           <button
             type="button"
             class="postcard flip"
@@ -421,7 +410,13 @@ function handlePhotoKeydown(event) {
       <p v-if="!feed.loading && !feed.items.length" class="empty">No postcards yet. Be the first by the fire.</p>
       <p v-if="feed.loading" class="empty" role="status">Checking the mailbox…</p>
       <button v-if="feed.nextCursor" type="button" class="send older" :disabled="feed.loading" @click="load(true)">Older postcards</button>
+      </div>
     </section>
+
+    <!-- the whole ring is thinking the one thought bubble above -->
+    <div class="fireside" aria-hidden="true">
+      <FiresideCircle :night="sky.night" />
+    </div>
 
     <!-- enlarged photo viewer -->
     <div
@@ -446,45 +441,100 @@ function handlePhotoKeydown(event) {
 
 <style scoped>
 .tales-page {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(370px, 470px);
+  /* the button sits beside the bubble, which takes the full height above the fire */
+  grid-template-columns: 1fr minmax(0, 1180px) 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  column-gap: 14px;
+  padding: 12px 20px 10px;
   font-family: var(--font-round);
   color: #1f2a24;
-  overflow: hidden !important; /* the map stays put, the postcards scroll */
+  overflow: hidden !important; /* the fire stays put, the postcards scroll inside the bubble */
 }
 .home {
-  position: absolute;
-  z-index: 6;
-  top: 16px;
-  left: 16px;
+  position: relative;
+  z-index: 3;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  justify-self: start;
 }
-/* a wooden postcard rack beside the map */
-.board {
+/* a cloud of a thought bubble: the scalloped outline is a 9-slice image, so it fits any size of bubble */
+.bubble {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  grid-row: 1;
   min-height: 0;
-  overflow-y: auto;
-  align-content: start;
-  padding: 18px 18px 30px;
-  background: #e8d7b4;
-  border-left: 3px solid #6b4426;
-  box-shadow: inset 8px 0 14px -10px rgba(60, 30, 10, 0.6);
-  display: grid;
-  gap: 14px;
-}
-.b-head {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 4px 22px 12px;
+  border: 34px solid transparent;
+  border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath d='M40 18A21 15 0 0 1 80 18A16.5 16.5 0 1 1 102 40A15 21 0 0 1 102 80A16.5 16.5 0 1 1 80 102A21 15 0 0 1 40 102A16.5 16.5 0 1 1 18 80A15 21 0 0 1 18 40A16.5 16.5 0 1 1 40 18Z' fill='%23fdf3da' stroke='%231f2a24' stroke-width='2'/%3E%3C/svg%3E") 40 fill / 60px round;
+}
+.toolbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 0 6px 10px;
+  border-bottom: 2px dashed rgba(31, 42, 36, 0.35);
+}
+/* a size container: the postcards use its height so the first row always fits, buttons and all */
+.scroller {
+  --fade: 28px; /* matches the bottom padding, so the first row's buttons stay clear of the fade */
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  overflow: hidden auto;
+  scrollbar-gutter: stable;
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  padding: 14px 6px var(--fade) 6px;
+  /* postcards fade out into the cloud rather than stopping at a hard line */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+}
+/* a slim thumb with no track or arrows, so nothing sits on the cloud's edge */
+.scroller::-webkit-scrollbar {
+  width: 8px;
+}
+.scroller::-webkit-scrollbar-button {
+  display: none;
+}
+.scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroller::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(31, 42, 36, 0.28);
+}
+.scroller::-webkit-scrollbar-thumb:hover {
+  background: rgba(31, 42, 36, 0.45);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .scroller {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(31, 42, 36, 0.28) transparent;
+  }
+}
+.b-text {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 .b-title {
   margin: 0;
   font-family: var(--font-story);
   font-weight: 800;
-  font-size: 28px;
-  line-height: 1.05;
+  font-size: 24px;
+  line-height: 1.1;
 }
 .b-sub {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   font-size: 13px;
   opacity: 0.75;
 }
@@ -553,14 +603,23 @@ function handlePhotoKeydown(event) {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start; /* opening one card's comments doesn't stretch its neighbours */
+  gap: 30px 26px;
 }
 .card-slot {
+  position: relative;
   display: grid;
-  gap: 6px;
-  scroll-margin: 20px;
+  grid-template-columns: minmax(0, 1fr); /* a long place name truncates instead of widening the card */
+  gap: 8px;
 }
 .card-slot:nth-child(odd) .postcard {
+  rotate: -1.2deg;
+}
+.card-slot:nth-child(even) .postcard {
+  rotate: 1deg;
+}
+.postcard {
   rotate: -1.2deg;
 }
 .card-slot:nth-child(even) .postcard {
@@ -581,7 +640,7 @@ function handlePhotoKeydown(event) {
 }
 .flip {
   display: block;
-  height: 210px;
+  height: clamp(120px, calc(100cqh - 84px), 210px);
   padding: 0;
   font: inherit;
   color: inherit;
@@ -614,9 +673,6 @@ function handlePhotoKeydown(event) {
 .flip.flipped .back {
   transform: rotateY(0deg);
 }
-.card-slot.on .face {
-  box-shadow: 0 0 0 4px #f5bf4f, 0 6px 0 rgba(0, 0, 0, 0.18);
-}
 .flip:focus-visible {
   outline: none;
 }
@@ -626,6 +682,7 @@ function handlePhotoKeydown(event) {
 }
 .front {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 1fr auto;
   padding: 10px 10px 0;
 }
@@ -658,6 +715,7 @@ function handlePhotoKeydown(event) {
   padding: 7px 2px 9px;
 }
 .pc-caption strong {
+  min-width: 0;
   font-family: var(--font-story);
   font-weight: 800;
   font-size: 18px;
@@ -754,8 +812,9 @@ function handlePhotoKeydown(event) {
   display: grid;
   gap: 6px;
   padding: 10px 12px;
+  border: 2px solid #1f2a24;
   border-radius: 10px;
-  background: #f3ead3;
+  background: #fffaf0;
   font-size: 14px;
 }
 .comment-row {
@@ -778,6 +837,8 @@ function handlePhotoKeydown(event) {
 
 /* composer */
 .blank {
+  width: min(100%, 680px);
+  justify-self: center;
   display: grid;
   grid-template-columns: 1.3fr 1fr;
   gap: 12px;
@@ -852,6 +913,18 @@ function handlePhotoKeydown(event) {
   background: #f6e2b3;
 }
 
+/* ---------- the fire and the people around it ---------- */
+.fireside {
+  position: relative;
+  z-index: 2;
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: center;
+  width: min(100%, 720px);
+  margin-top: -14px; /* the biggest thought clouds drift up against the bubble */
+  pointer-events: none;
+}
+
 /* photo viewer */
 .photo-overlay {
   position: fixed;
@@ -905,16 +978,88 @@ function handlePhotoKeydown(event) {
   color: white;
   font-size: 14px;
 }
-@media (max-width: 900px) {
-  .tales-page {
-    grid-template-columns: 1fr;
-    grid-template-rows: 58vh auto;
-    overflow-y: auto !important;
+@media (max-width: 1180px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .board {
-    overflow: visible;
-    border-left: 0;
-    border-top: 3px solid #6b4426;
+}
+@media (max-width: 960px) {
+  /* the button gets its own row, so the bubble is centred on the page */
+  .tales-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    row-gap: 8px;
+    padding: 10px 10px 8px;
+  }
+  .home {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .bubble {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 2px 8px 8px;
+    border-width: 24px;
+    border-image-width: 40px;
+  }
+  .fireside {
+    grid-column: 1;
+    grid-row: 3;
+    margin-top: -16px;
+  }
+  .toolbar {
+    padding: 0 2px 8px;
+  }
+  .scroller {
+    --fade: 20px;
+    padding: 12px 2px var(--fade) 2px;
+  }
+}
+@media (max-width: 680px) {
+  .cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* a compact header, so a whole postcard and its buttons still fit on a small phone */
+  .b-text {
+    flex: 1 1 0;
+  }
+  .b-title {
+    font-size: 20px;
+  }
+  .b-sub,
+  .send-more {
+    display: none;
+  }
+  .send {
+    order: 1;
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .filters {
+    order: 2;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+  }
+  .seg button {
+    padding: 0 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .vibe-select {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 12px;
+  }
+}
+@media (max-height: 640px) {
+  .fireside {
+    width: min(100%, 460px);
+  }
+}
+@media (max-height: 640px) {
+  .fireside {
+    --k: 0.66;
   }
 }
 @media (max-width: 520px) {
