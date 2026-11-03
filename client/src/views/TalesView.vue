@@ -5,8 +5,7 @@ import { api, errorMessage, uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { VIBES, VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
 import { timeAgo } from '@/utils/format';
-import StationShell from '@/components/basecamp/StationShell.vue';
-import JbMiniMap from '@/components/tales/JbMiniMap.vue';
+import TalesMap from '@/components/tales/TalesMap.vue';
 
 
 const route = useRoute();
@@ -233,7 +232,7 @@ const cardEls = {};
 const pins = computed(() =>
   feed.items
     .filter((p) => Number.isFinite(p.place?.lat) && Number.isFinite(p.place?.lng))
-    .map((p) => ({ id: p.id, lat: p.place.lat, lng: p.place.lng, label: p.place.name, tint: VIBE_TINT[p.vibe] })),
+    .map((p) => ({ id: p.id, lat: p.place.lat, lng: p.place.lng, label: p.place.name, tint: VIBE_TINT[p.vibe], photo: p.images?.[0] || null })),
 );
 const newThisWeek = computed(() => {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
@@ -296,8 +295,12 @@ function handlePhotoKeydown(event) {
 </script>
 
 <template>
-  <StationShell station="tales" sign="The Campfire" label="Postcards from JB">
-    <section class="board">
+  <main class="tales-page">
+    <TalesMap :pins="pins" :selected="selectedId" @select="selectPin">
+      <RouterLink to="/" class="camp-back home">← Basecamp</RouterLink>
+    </TalesMap>
+
+    <section class="board" aria-label="Postcards from JB">
       <header class="b-head">
         <div>
           <h1 class="b-title">Postcards from JB</h1>
@@ -359,8 +362,6 @@ function handlePhotoKeydown(event) {
         </select>
         <button v-if="placeFilter" type="button" class="chip-x" @click="clearPlaceFilter">One place only ✕</button>
       </div>
-
-      <JbMiniMap :pins="pins" :selected="selectedId" @select="selectPin" />
 
       <p v-if="feed.error" class="error-text" role="alert">{{ feed.error }}</p>
 
@@ -440,25 +441,34 @@ function handlePhotoKeydown(event) {
       <button v-if="selectedPhotos.length > 1" type="button" class="photo-next" aria-label="Next photo" @click="nextPhoto">❯</button>
       <div class="photo-counter">{{ selectedPhotoIndex + 1 }} / {{ selectedPhotos.length }}</div>
     </div>
-  </StationShell>
+  </main>
 </template>
 
 <style scoped>
+.tales-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(370px, 470px);
+  font-family: var(--font-round);
+  color: #1f2a24;
+  overflow: hidden !important; /* the map stays put, the postcards scroll */
+}
+.home {
+  position: absolute;
+  z-index: 6;
+  top: 16px;
+  left: 16px;
+}
+/* a wooden postcard rack beside the map */
 .board {
-  padding: 20px 20px 26px;
-  background: #fffdf7;
-  border: 2.5px solid #1f2a24;
-  border-radius: 18px;
-  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.15);
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  padding: 18px 18px 30px;
+  background: #e8d7b4;
+  border-left: 3px solid #6b4426;
+  box-shadow: inset 8px 0 14px -10px rgba(60, 30, 10, 0.6);
   display: grid;
   gap: 14px;
-  animation: pop-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
-}
-@keyframes pop-in {
-  from {
-    opacity: 0;
-    transform: translateX(30px) scale(0.96);
-  }
 }
 .b-head {
   display: flex;
@@ -468,9 +478,9 @@ function handlePhotoKeydown(event) {
 }
 .b-title {
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 26px;
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 28px;
   line-height: 1.05;
 }
 .b-sub {
@@ -636,8 +646,8 @@ function handlePhotoKeydown(event) {
   line-height: 1.1;
 }
 .blank-photo b {
-  font-family: var(--font-display);
-  font-weight: 400;
+  font-family: var(--font-story);
+  font-weight: 800;
   font-size: 24px;
 }
 .pc-caption {
@@ -648,8 +658,8 @@ function handlePhotoKeydown(event) {
   padding: 7px 2px 9px;
 }
 .pc-caption strong {
-  font-family: var(--font-display);
-  font-weight: 400;
+  font-family: var(--font-story);
+  font-weight: 800;
   font-size: 18px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -894,6 +904,18 @@ function handlePhotoKeydown(event) {
   bottom: 20px;
   color: white;
   font-size: 14px;
+}
+@media (max-width: 900px) {
+  .tales-page {
+    grid-template-columns: 1fr;
+    grid-template-rows: 58vh auto;
+    overflow-y: auto !important;
+  }
+  .board {
+    overflow: visible;
+    border-left: 0;
+    border-top: 3px solid #6b4426;
+  }
 }
 @media (max-width: 520px) {
   .blank {

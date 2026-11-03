@@ -4,7 +4,6 @@
  * to go in: the camera swoops to it, its door opens, and `enter` fires so the page can change route.
  *
  * Props:
- *  - focus: render one station close up with its door open and no controls (e.g. the Ledger page)
  *  - returnFrom: start zoomed in on this station and pull back (you just walked out of it)
  */
 import { onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
@@ -20,8 +19,6 @@ const props = defineProps({
   subtitles: { type: Object, default: () => ({}) }, // station id -> one-liner under its name
   mode: { type: String, default: 'auto' }, // 'auto' | 'day' | 'night'
   condition: { type: String, default: 'clear' },
-  focus: { type: String, default: null },
-  focusShift: { type: Number, default: 0 }, // slide the close-up sideways (screen-widths) to leave room for a panel
   returnFrom: { type: String, default: null },
 });
 const emit = defineEmits(['enter', 'move', 'wave']);
@@ -73,19 +70,7 @@ function overview(out = { pos: new THREE.Vector3(), target: new THREE.Vector3() 
 }
 
 function closeUp(station) {
-  const target = station.camTarget.clone();
-  // beside a panel the shot is wider than the swoop-in close-up
-  const zoom = props.focus ? station.focusZoom : 1;
-  const pos = station.camPos.clone().sub(target).multiplyScalar(zoom).add(target);
-  if (props.focusShift && camera) {
-    // move camera + target sideways along the screen's x axis so the station sits off-centre
-    const right = new THREE.Vector3().subVectors(target, pos).cross(camera.up).normalize();
-    const dist = pos.distanceTo(target);
-    const shift = right.multiplyScalar(-props.focusShift * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
-    pos.add(shift);
-    target.add(shift);
-  }
-  return { pos, target };
+  return { pos: station.camPos.clone(), target: station.camTarget.clone() };
 }
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -222,7 +207,7 @@ function typing(e) {
 }
 
 function onKeyDown(e) {
-  if (props.focus || entering.value || typing(e)) return;
+  if (entering.value || typing(e)) return;
   const k = e.key.toLowerCase();
   if (MOVE_KEYS[k]) {
     // arrows only move you when focus is on the camp itself, so they still scroll / work in other controls
@@ -257,12 +242,12 @@ function pick(e) {
 }
 
 function onPointerMove(e) {
-  if (props.focus || entering.value || e.pointerType === 'touch') return;
+  if (entering.value || e.pointerType === 'touch') return;
   hovered.value = pick(e).stationId;
 }
 
 function onPointerDown(e) {
-  if (props.focus || entering.value || e.button > 0) return;
+  if (entering.value || e.button > 0) return;
   const { stationId, ray } = pick(e);
   if (stationId) return enter(stationId);
   const hit = ray.intersectPlane(groundPlane, new THREE.Vector3());
@@ -341,7 +326,7 @@ function frame() {
 
   // --- you ---
   let moving = false;
-  if (!props.focus && player.avatar) {
+  if (player.avatar) {
     let ix = 0;
     let iz = 0;
     for (const k of keys) {
@@ -409,7 +394,7 @@ function frame() {
         else if (!stepToward(mate, mate.target, 6.5, dt)) speed = 1;
         else if (mate.liveRy !== undefined) mate.ry = turn(mate.ry, mate.liveRy, dt);
       }
-    } else if (!props.focus) {
+    } else {
       // offline: amble between doorsteps
       if (mate.target) {
         if (stepToward(mate, mate.target, 2.2, dt)) {
@@ -443,7 +428,7 @@ function frame() {
       cam.tween = null;
       tw.done();
     }
-  } else if (!props.focus && !entering.value) {
+  } else if (!entering.value) {
     const o = overview();
     const k = Math.min(1, dt * 3);
     cam.pos.lerp(o.pos, k);
@@ -479,16 +464,10 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  if (props.focus) {
-    const station = camp.stations.find((s) => s.id === props.focus);
-    const c = closeUp(station);
-    cam.pos.copy(c.pos);
-    cam.target.copy(c.target);
-  }
 }
 
 function wave() {
-  if (props.focus || !player.avatar) return;
+  if (!player.avatar) return;
   player.waveT = 0;
   emit('wave');
 }
@@ -517,22 +496,17 @@ onMounted(() => {
   resizeObs = new ResizeObserver(resize);
   resizeObs.observe(canvasWrap.value);
 
-  const start = props.focus || props.returnFrom;
-  const station = start && camp.stations.find((s) => s.id === start);
+  const station = props.returnFrom && camp.stations.find((s) => s.id === props.returnFrom);
   if (station) {
-    // stand on the doorstep, door open, camera close
+    // you just walked out of it: stand on the doorstep, door open, camera close, then pull back
     player.pos.copy(station.approachPoint);
-    player.ry = props.focus ? Math.atan2(cam.pos.x - player.pos.x, cam.pos.z - player.pos.z) : Math.atan2(-player.pos.x, 12 - player.pos.z);
+    player.ry = Math.atan2(-player.pos.x, 12 - player.pos.z);
     setDoor(station.id, 1);
     const c = closeUp(station);
     cam.pos.copy(c.pos);
     cam.target.copy(c.target);
-    if (props.focus) player.ry = Math.atan2(c.pos.x - player.pos.x, c.pos.z - player.pos.z);
-    if (!props.focus) {
-      // walk out: pull back to the overview and shut the door behind you
-      tweenDoor(station.id, 0, 0.7, 0.2);
-      tweenCamera(overview(), 1.3);
-    }
+    tweenDoor(station.id, 0, 0.7, 0.2);
+    tweenCamera(overview(), 1.3);
   } else {
     const o = overview();
     cam.pos.copy(o.pos);
@@ -584,7 +558,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   <div
     ref="host"
     class="camp"
-    :class="{ 'is-focus': focus, 'is-entering': entering }"
+    :class="{ 'is-entering': entering }"
     tabindex="-1"
     @pointermove="onPointerMove"
     @pointerleave="hovered = null"
@@ -592,7 +566,6 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
     <div ref="canvasWrap" class="canvas" :style="{ cursor: hovered ? 'pointer' : 'default' }" @pointerdown="onPointerDown" />
 
     <div class="overlays" :class="{ ready }">
-      <template v-if="!focus">
         <button
           v-for="s in stationList"
           :key="s.id"
@@ -606,7 +579,6 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
           <strong>{{ s.name }}</strong>
           <span v-if="subtitles[s.id]">{{ subtitles[s.id] }}</span>
         </button>
-      </template>
 
       <span v-if="me" :ref="(el) => (tagEls.me = el)" class="tag me" aria-hidden="true">{{ me.id === 'guest' ? 'You' : `${(me.name || 'You').split(' ')[0]} (you)` }}</span>
       <span v-for="p in people" :key="p.id" :ref="(el) => (tagEls[p.id] = el)" class="tag" aria-hidden="true">
@@ -614,7 +586,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
       </span>
     </div>
 
-    <p v-if="!focus && nearby && !entering" class="prompt" aria-live="polite">
+    <p v-if="nearby && !entering" class="prompt" aria-live="polite">
       <kbd>E</kbd> Enter {{ nearbyName(nearby) }}
     </p>
 

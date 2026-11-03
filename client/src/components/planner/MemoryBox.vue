@@ -170,7 +170,7 @@ async function archiveNow() {
       <div class="spacer" />
       <div class="foot">
         <span class="hand" style="color: var(--jungle); font-size: 23px">{{ data.memories.length }} photo{{ data.memories.length === 1 ? '' : 's' }} packed</span>
-        <button v-if="data.window.phase === 'memory_box'" type="button" class="btn btn-ember" data-cy="archive-now" @click="archiveNow">Done · send it up to the attic</button>
+        <button v-if="data.window.phase === 'memory_box'" type="button" class="btn btn-ember" data-cy="archive-now" @click="archiveNow">Done · pack it into the tent</button>
       </div>
     </div>
   </section>

@@ -186,7 +186,7 @@ function startMemories() {
 async function onArchived() {
   await trips.fetch(true);
   notify(
-    `${trip.value.name} is now a drawer in the attic.`,
+    `${trip.value.name} is now a drawer in the archive tent.`,
     "/archives",
     "Open the Archives",
   );
@@ -199,7 +199,8 @@ const canMemories = computed(() =>
 </script>
 
 <template>
-  <main class="container page planner">
+  <main class="planner">
+    <RouterLink to="/planner" class="camp-back back">← All expeditions</RouterLink>
     <p v-if="loading" class="muted" role="status">Opening your trip…</p>
     <div v-else-if="loadError" class="card-flat card-pad" role="alert">
       <h1 class="display display-sm">This trip is unavailable</h1>
@@ -210,9 +211,9 @@ const canMemories = computed(() =>
     <template v-if="trip">
       <div v-if="trip.phase === 'archived'" class="card-flat card-pad archived">
         <strong>This trip is in the Archives.</strong>
-        <RouterLink to="/archives">Open its drawer in the attic →</RouterLink>
+        <RouterLink to="/archives">Open its drawer in the tent →</RouterLink>
       </div>
-      <p class="row" style="gap: 6px; font-size: 12px" :class="isLive ? 'muted' : 'error-text'">
+      <p class="row live" style="gap: 6px; font-size: 12px" :class="isLive ? '' : 'offline'">
   <span :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: isLive ? 'var(--jungle)' : 'var(--brick)' }" aria-hidden="true"></span>
   {{ isLive ? 'Live' : 'Offline — syncing every 15s' }}
 </p>
@@ -221,19 +222,8 @@ const canMemories = computed(() =>
       <CrewBar :trip="trip" @changed="loadTrip" @joined="crewNotice = $event" />
 
       <div class="split">
-        <BucketList
-          :trip="trip"
-          :legs="feas?.legs || {}"
-          :active-stop-id="activeStopId"
-          class="left"
-          @changed="refresh"
-          @error="notify"
-          @select-stop="activeStopId = $event"
-          @edit="editing = true"
-          @delete="requestDelete"
-        />
-
-        <div class="right">
+        <div class="paper-map">
+          <i class="tape" aria-hidden="true" />
           <MemoryBox
             v-if="rightTab === 'memories' && canMemories"
             :trip="trip"
@@ -264,6 +254,18 @@ const canMemories = computed(() =>
             </template>
           </RouteMap>
         </div>
+
+        <BucketList
+          :trip="trip"
+          :legs="feas?.legs || {}"
+          :active-stop-id="activeStopId"
+          class="left"
+          @changed="refresh"
+          @error="notify"
+          @select-stop="activeStopId = $event"
+          @edit="editing = true"
+          @delete="requestDelete"
+        />
       </div>
     </template>
 
@@ -289,19 +291,34 @@ const canMemories = computed(() =>
 </template>
 
 <style scoped>
+/* A wooden expedition table. The components keep their logic; this page dresses them as paper. */
 .planner {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-top: 22px;
+  gap: 16px;
+  padding: 18px clamp(14px, 2.4vw, 34px) 34px;
+  font-family: var(--font-round);
+  background: repeating-linear-gradient(90deg, #7a4d2c 0 150px, #6c4326 150px 153px, #744829 153px 300px, #6c4326 300px 303px);
+  box-shadow: inset 0 0 90px rgba(40, 20, 5, 0.55);
 }
-
-.empty {
-  text-align: center;
+.back {
+  flex: none;
 }
-.empty .lead {
-  margin-left: auto;
-  margin-right: auto;
+.live {
+  width: fit-content;
+  margin: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #fffdf7;
+  color: #1f2a24;
+}
+.live.offline {
+  color: var(--brick);
+}
+.planner > .muted,
+.planner > .hand {
+  color: #fbf1dc;
 }
 .archived {
   display: flex;
@@ -309,24 +326,154 @@ const canMemories = computed(() =>
   gap: 12px;
   background: var(--paper-deep);
 }
-/* Itinerary : map = 2 : 3, equal heights */
+
+/* the crew: a luggage label */
+.planner :deep(.crew) {
+  border: 0;
+  border-radius: 8px;
+  background: #f4e6c4;
+  box-shadow: 0 6px 12px rgba(40, 20, 5, 0.4);
+}
+.planner :deep(.crew h2),
+.planner :deep(.bucket h1),
+.planner :deep(.bucket h2),
+.planner :deep(.map-card h2) {
+  font-family: var(--font-story);
+  font-weight: 800;
+}
+
+/* Map : day plan = 3 : 2 */
 .split {
   display: flex;
   flex-wrap: wrap;
-  align-items: stretch;
-  gap: 24px;
+  align-items: flex-start;
+  gap: 22px;
 }
-.left {
-  flex: 2 1 0;
-  min-width: min(360px, 100%);
-}
-.right {
+.paper-map {
+  position: relative;
   flex: 3 1 0;
   min-width: min(440px, 100%);
   display: flex;
   flex-direction: column;
+  padding: 12px;
+  background: #f1dfb6;
+  box-shadow: 0 10px 22px rgba(40, 20, 5, 0.45), inset 0 0 50px rgba(120, 85, 40, 0.28);
+  border-radius: 3px;
 }
-.right > * {
+.paper-map > :not(.tape) {
   flex: 1;
+}
+.tape {
+  position: absolute;
+  z-index: 3;
+  top: -11px;
+  left: 50%;
+  width: 110px;
+  height: 26px;
+  margin-left: -55px;
+  rotate: -2deg;
+  background: rgba(224, 182, 96, 0.8);
+}
+.paper-map :deep(.map-card) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.paper-map :deep(.bar) {
+  padding: 4px 4px 12px;
+  background: transparent;
+  border-bottom: 0;
+}
+.paper-map :deep(.map-wrap) {
+  border: 2.5px solid #4a3a24;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.paper-map :deep(.legend) {
+  margin-top: 12px;
+  background: transparent;
+  border-top: 2px dashed #8a6a3a;
+}
+.paper-map :deep(.itinerary-stop.selected) {
+  background: rgba(255, 253, 247, 0.6);
+}
+.paper-map :deep(.leg-badge),
+.paper-map :deep(.timing-badge span) {
+  background: #fff8e6;
+}
+
+/* the day plan: a page torn from a lined notebook, taped down */
+.planner :deep(.bucket) {
+  flex: 2 1 0;
+  min-width: min(360px, 100%);
+  border: 0;
+  border-radius: 2px;
+  background: repeating-linear-gradient(#fffdf7 0 33px, #d5e4ee 33px 34.5px);
+  box-shadow: 0 10px 22px rgba(40, 20, 5, 0.45);
+}
+.planner :deep(.bucket::before) {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: -12px;
+  left: 44%;
+  width: 96px;
+  height: 26px;
+  rotate: 2deg;
+  background: rgba(224, 182, 96, 0.8);
+}
+.planner :deep(.bucket .progress) {
+  background: #fffaf0;
+  border-color: #c7ad78;
+}
+.planner :deep(.bucket .stop) {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+.planner :deep(.bucket .stop.selected) {
+  background: rgba(245, 191, 79, 0.28);
+  box-shadow: inset 4px 0 #c2412d;
+}
+.planner :deep(.bucket .stop-title) {
+  font-family: var(--font-hand);
+  font-size: 25px;
+  line-height: 1.05;
+}
+.planner :deep(.bucket .time) {
+  border-style: dashed;
+  background: #fffdf7;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+}
+.planner :deep(.bucket .tick) {
+  background: #fffdf7;
+}
+.planner :deep(.bucket .day-head) {
+  background: #fffdf7;
+}
+/* adding a stop: the kraft backpack pocket at the bottom of the page */
+.planner :deep(.bucket .scribble) {
+  background: #e7c48e;
+  border-color: #4a2c1a;
+  box-shadow: 0 5px 0 #4a2c1a;
+}
+.planner :deep(.bucket .location-field) {
+  background: #fff8e6;
+}
+
+/* camp chat: the leather notebook at the end of the table */
+.planner :deep(.chat) {
+  background: #3f2616;
+  border-color: #2a1810;
+  box-shadow: 0 8px 18px rgba(40, 20, 5, 0.45);
+}
+
+@media (max-width: 600px) {
+  .tape {
+    display: none;
+  }
 }
 </style>

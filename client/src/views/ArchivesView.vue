@@ -26,7 +26,7 @@ const busy = ref(false);
 const actionError = ref('');
 let listRequest = 0;
 
-// the open drawer's scrapbook, shown over the attic
+// the open drawer's scrapbook, shown over the tent
 const bookError = ref('');
 const openTrip = ref(null);
 const memories = ref([]);
@@ -35,7 +35,7 @@ const memoryWindow = ref(null);
 const view = ref(null);
 const frame = ref(null);
 const closeBtn = ref(null);
-const navBottom = ref(0); // the drawer covers the attic, not the nav
+const navBottom = ref(0); // the drawer covers the tent, not the nav
 let bookRequest = 0;
 let closing = false;
 
@@ -54,7 +54,7 @@ const openDrawerInfo = computed(() => attic.value.drawers.find((d) => d.trip.id 
 const fromChest = computed(() => openDrawerInfo.value?.slot >= 4);
 const provenance = computed(() => {
   const d = openDrawerInfo.value;
-  if (!d) return 'From the attic';
+  if (!d) return 'From the tent';
   const year = (d.trip.start_date || d.trip.archived_at || '').slice(0, 4);
   return `From the ${fromChest.value ? 'old map chest' : 'mahogany dresser'}${year ? `, ${year}` : ''}`;
 });
@@ -177,7 +177,7 @@ function clearPending() {
 
 function swapInto(drawer) {
   if (busy.value) return;
-  const ok = window.confirm(`Swap “${drawer.trip.name}” out for “${pendingTrip.value.name}”? “${drawer.trip.name}” will be cleared out of your attic.`);
+  const ok = window.confirm(`Swap “${drawer.trip.name}” out for “${pendingTrip.value.name}”? “${drawer.trip.name}” will be cleared out of your tent.`);
   if (!ok) return;
   atticAction(async () => {
     await api.put(`/archives/${pendingTrip.value.id}/drawer`, { slot: drawer.slot });
@@ -189,6 +189,7 @@ function swapInto(drawer) {
 <template>
   <main class="attic-page">
     <h1 class="sr-only">Archives</h1>
+    <RouterLink to="/" class="camp-back out">← Step outside</RouterLink>
 
     <div
       v-if="tripId"
@@ -242,7 +243,7 @@ function swapInto(drawer) {
       @pick="swapInto"
     >
       <p v-if="!loading && !loadError && !attic.drawers.length && !pendingTrip" class="hand empty">
-        Nothing up here yet. Finished trips move into a drawer a week after they end.
+        Nothing in here yet. Finished trips move into a drawer a week after they end.
       </p>
     </AtticScene>
 
@@ -260,17 +261,19 @@ function swapInto(drawer) {
 </template>
 
 <style scoped>
-/* The attic fills everything under the nav, edge to edge */
-.attic-page { position: relative; flex: 1 0 auto; display: flex; flex-direction: column; }
+/* The tent fills everything under the nav, edge to edge */
+.attic-page { position: relative; display: flex; flex-direction: column; }
+.attic-page > :deep(.attic) { flex: 1 0 auto; }
+.out { position: absolute; z-index: 4; top: 16px; left: 16px; }
 .overlay {
   position: sticky; top: 12px; z-index: 5; display: grid; gap: 8px;
   width: min(560px, calc(100% - 32px)); height: 0; margin: 0 auto; overflow: visible;
 }
 .overlay > * { margin: 12px 0 0; }
 .swap-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--sand); }
-.empty { margin: 0; color: #f3e6c8; font-size: clamp(17px, 2vw, 21px); text-align: center; }
+.empty { margin: 0; color: #fff8e6; font-size: clamp(17px, 2vw, 21px); text-align: center; }
 
-/* ---------- an open drawer, pulled out over the attic ---------- */
+/* ---------- an open drawer, pulled out over the tent ---------- */
 .drawer-view {
   position: fixed; inset: 0; z-index: 60; overflow-y: auto;
   display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 14px 24px 32px;

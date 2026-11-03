@@ -38,7 +38,6 @@ const sgd = (n) => `S$${Number(n || 0).toFixed(2)}`;
 
 // ---------- sky: Singapore's clock + NEA forecast, with a manual day/night override ----------
 const { mode, condition, forecast, forced, isNight, modeLabel, cycleMode, conditionLabel } = useCampSky();
-const previewFocus = import.meta.env.DEV ? new URLSearchParams(location.search).get("focus") : null; // dev only: ?focus=ledger
 
 // ---------- you + your crew ----------
 const me = computed(() =>
@@ -106,7 +105,6 @@ onMounted(async () => {
       :mode="mode"
       :condition="condition"
       :return-from="returnFrom"
-      :focus="previewFocus"
       @enter="onEnter"
       @move="presence.send"
       @wave="presence.wave"

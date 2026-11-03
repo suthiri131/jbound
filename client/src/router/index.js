@@ -38,7 +38,7 @@ const routes = [
     path: "/watcher",
     name: "watcher",
     component: WatcherView,
-    meta: { title: "Watcher" },
+    meta: { title: "Watcher", fullBleed: true },
   },
 
   // Place Tales (from Version 1)
@@ -57,13 +57,13 @@ const routes = [
     path: "/planner",
     name: "planner",
     component: () => import("@/views/PlannerView.vue"),
-    meta: { requiresAuth: true, title: "Trips" },
+    meta: { requiresAuth: true, title: "Trips", fullBleed: true },
   },
   {
     path: "/planner/:tripId",
     name: "trip-details",
     component: () => import("@/views/PlannerDetailsView.vue"),
-    meta: { requiresAuth: true, title: "Trip details" },
+    meta: { requiresAuth: true, title: "Trip details", fullBleed: true },
   },
   {
     path: "/ledger",
@@ -87,7 +87,7 @@ const routes = [
     path: "/archives/:tripId?",
     name: "archives",
     component: () => import("@/views/ArchivesView.vue"),
-    meta: { requiresAuth: true, title: "Archives" },
+    meta: { requiresAuth: true, title: "Archives", fullBleed: true },
   },
   {
     path: "/notifications",
