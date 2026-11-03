@@ -211,6 +211,7 @@ watch(view3d, (is3d) => {
   });
 });
 
+const LONGEST_CAPTION = '000.0 km · about 000 min driving · Driving estimate; excludes checkpoint queue time.';
 const caption = computed(() => {
   const r = result.value?.route;
   if (r) return `${r.distanceKm} km · about ${r.durationMin} min driving · ${r.note}`;
@@ -229,11 +230,15 @@ const stopBufferMinutes = computed(() => {
 <template>
   <section class="map-card" aria-label="Route map">
     <div class="bar">
-      <div>
+      <div class="summary">
         <h2 class="display display-sm">Route map</h2>
-        <p class="muted cap">{{ loading ? 'Plotting the route…' : caption }}</p>
-        <p v-if="result?.route" class="timing-badge">
-          <span>Drive · {{ result.route.durationMin }} min</span>
+        <!-- the invisible longest caption and the hidden badges hold their space, so the controls below never move -->
+        <p class="muted cap">
+          <span class="cap-size" aria-hidden="true">{{ LONGEST_CAPTION }}</span>
+          <span>{{ loading ? 'Plotting the route…' : caption }}</span>
+        </p>
+        <p class="timing-badge" :class="{ blank: !result?.route }">
+          <span>Drive · {{ result?.route?.durationMin ?? 0 }} min</span>
           <span>Stop buffers · {{ stopBufferMinutes }} min</span>
         </p>
       </div>
@@ -285,8 +290,12 @@ const stopBufferMinutes = computed(() => {
 <style scoped>
 .map-card { display: flex; flex-direction: column; height: 100%; border: 2px solid var(--ink); border-radius: 16px; background: var(--map); overflow: hidden; box-shadow: 8px 8px 0 var(--ink); }
 .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: var(--card); border-bottom: 2px solid var(--ink); }
-.cap { margin: 2px 0 0; font-size: 13px; }
+.summary { flex: 1 1 100%; min-width: 0; }
+.cap { display: grid; margin: 2px 0 0; font-size: 13px; }
+.cap > * { grid-area: 1 / 1; }
+.cap-size { visibility: hidden; }
 .timing-badge { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.timing-badge.blank { visibility: hidden; }
 .timing-badge span { padding: 3px 9px; border: 1.5px dashed #3C2A21; border-radius: 999px; background: #FDFBF7; font-size: 12px; font-weight: 800; }
 .map-wrap { position: relative; flex: 1; min-height: 440px; display: flex; }
 .map { flex: 1; min-height: 440px; }

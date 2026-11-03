@@ -4,6 +4,7 @@ import { api, assetUrl, errorMessage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { initials } from '@/utils/format';
 import { useTripPresence } from '../../composables/useTripPresence';
+import { askConfirm } from '@/lib/dialog';
 
 const props = defineProps({ trip: { type: Object, required: true },isLive: { type: Boolean, default: true }});
 const emit = defineEmits(['changed', 'joined']);
@@ -62,7 +63,12 @@ async function copy(kind) {
 }
 
 async function newCode() {
-  if (!window.confirm('Make a new invite code? The old code and link will stop working.')) return;
+  const yes = await askConfirm({
+    title: 'Make a new invite code?',
+    message: 'The old code and link will stop working.',
+    confirmLabel: 'Make new code',
+  });
+  if (!yes) return;
   msg.value = '';
   try {
     await api.post(`/trips/${props.trip.id}/invite-code`);
@@ -77,12 +83,12 @@ async function newCode() {
 
 async function removeMember(m) {
   const isSelf = m.id === auth.user?.id;
-  const confirmText = isSelf
-    ? 'Leave this crew? You can be invited back later.'
+  const question = isSelf
+    ? { title: 'Leave this crew?', message: 'You can be invited back later.', confirmLabel: 'Leave crew' }
     : m.status === 'pending'
-      ? `Cancel the invite to ${m.name}?`
-      : `Remove ${m.name} from the crew?`;
-  if (!window.confirm(confirmText)) return;
+      ? { title: `Cancel the invite to ${m.name}?`, confirmLabel: 'Cancel invite', cancelLabel: 'Keep invite' }
+      : { title: `Remove ${m.name} from the crew?`, confirmLabel: 'Remove' };
+  if (!(await askConfirm({ ...question, danger: true }))) return;
   msg.value = '';
   try {
     await api.delete(`/trips/${props.trip.id}/members/${m.id}`);

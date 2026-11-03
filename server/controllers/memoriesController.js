@@ -59,7 +59,6 @@ export async function addMemory(req, res) {
       .select(MEMORY_FIELDS)
       .single(),
   );
-  // TODO(team): batch these so 10 uploads post one chat message instead of ten
   await postSystemMessage(tripId, `${await displayName(req.user.id)} added a photo to the memory box`);
   res.status(201).json(data);
 }

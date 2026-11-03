@@ -6,6 +6,8 @@ import SatchelDrawer from '@/components/common/SatchelDrawer.vue';
 import { hasSupabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth';
 import NotificationsPanel from '../components/common/NotificationsPanel.vue';
+import AppDialog from '@/components/common/AppDialog.vue';
+import { dismissDialogs } from '@/lib/dialog';
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -15,6 +17,7 @@ const notifOpen = ref(false)
 // The sign-in / sign-up pages have their own header, so the app nav + footer are hidden there.
 const showChrome = computed(() => route.name && !['login', 'sign-in', 'sign-up'].includes(route.name));
 const fullBleed = computed(() => Boolean(route.meta.fullBleed));
+watch(() => route.path, dismissDialogs); // a question about the page you just left no longer applies
 </script>
 
 <template>
@@ -27,6 +30,7 @@ const fullBleed = computed(() => Boolean(route.meta.fullBleed));
     <footer v-if="showChrome && !fullBleed" class="footer hand">JBound · Singapore ⇄ Johor Bahru</footer>
     <SatchelDrawer v-if="satchelOpen" @close="satchelOpen = false" />
     <NotificationsPanel v-if="notifOpen" @close="notifOpen = false" />
+    <AppDialog />
   </div>
 </template>
 

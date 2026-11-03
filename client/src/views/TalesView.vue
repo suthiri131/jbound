@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
 import { api, errorMessage, uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { VIBES, VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
@@ -8,6 +8,7 @@ import { timeAgo } from '@/utils/format';
 import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
 import FiresideCircle from '@/components/tales/FiresideCircle.vue';
 import { useCampSky } from '@/composables/useCampSky';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
 
 const route = useRoute();
@@ -15,9 +16,17 @@ const router = useRouter();
 const auth = useAuthStore();
 
 const feed = reactive({ items: [], nextCursor: null, loading: false, error: '' });
-const scope = ref('everyone');
-const vibe = ref('');
-const placeFilter = ref(route.query.placeId || '');
+
+// Coming back from a place's tales on the notice board picks up where you left off.
+const SPOT_KEY = 'jbound.talesSpot';
+const cameBack = router.options.history.state?.forward?.startsWith('/explorer/tales');
+const spot = cameBack ? JSON.parse(sessionStorage.getItem(SPOT_KEY) || 'null') : null;
+sessionStorage.removeItem(SPOT_KEY);
+const scrollerEl = ref(null);
+
+const scope = ref(spot?.scope ?? 'everyone');
+const vibe = ref(spot?.vibe ?? '');
+const placeFilter = ref(spot?.placeFilter ?? (route.query.placeId || ''));
 
 // composer
 const draft = reactive({ caption: '', vibe: '', place: null, images: [] });
@@ -55,7 +64,24 @@ async function load(more = false) {
   }
 }
 watch([scope, vibe, placeFilter], () => load());
-onMounted(() => load());
+onMounted(async () => {
+  await load();
+  if (!spot) return;
+  while (feed.items.length < spot.count && feed.nextCursor && !feed.error) await load(true);
+  await nextTick();
+  if (scrollerEl.value) scrollerEl.value.scrollTop = spot.scrollTop;
+});
+onBeforeRouteLeave((to) => {
+  if (!to.path.startsWith('/explorer/tales')) return;
+  sessionStorage.setItem(SPOT_KEY, JSON.stringify({
+    scope: scope.value,
+    vibe: vibe.value,
+    placeFilter: placeFilter.value,
+    count: feed.items.length,
+    scrollTop: scrollerEl.value?.scrollTop ?? 0,
+    flipped,
+  }));
+});
 
 function clearPlaceFilter() {
   placeFilter.value = '';
@@ -152,7 +178,7 @@ async function toggleComments(p) {
 
   } catch (error) {
     console.log(error);
-    alert(errorMessage(error));
+    showAlert(errorMessage(error));
   }
 }
 
@@ -176,7 +202,7 @@ async function loadMoreComments(p) {
 
   } catch (error) {
     console.log(error);
-    alert(errorMessage(error));
+    showAlert(errorMessage(error));
   } finally {
     state.loading = false;
   }
@@ -192,7 +218,7 @@ async function comment(p) {
 }
 
 async function removePost(p) {
-  if (!window.confirm('Delete this tale?')) return;
+  if (!(await askConfirm({ title: 'Delete this tale?', confirmLabel: 'Delete tale', danger: true }))) return;
 
   try {
     await api.delete(`/posts/${p.id}`);
@@ -201,13 +227,13 @@ async function removePost(p) {
 
     delete openComments[p.id];
   } catch (error) {
-    alert(errorMessage(error));
+    showAlert(errorMessage(error));
   }
 }
 
 
 async function removeComment(p, c) {
-  if (!window.confirm('Delete this comment?')) return;
+  if (!(await askConfirm({ title: 'Delete this comment?', confirmLabel: 'Delete comment', danger: true }))) return;
 
   try {
     await api.delete(`/posts/${p.id}/comments/${c.id}`);
@@ -220,13 +246,13 @@ async function removeComment(p, c) {
     p.commentCount = Math.max(0, p.commentCount - 1);
 
   } catch (error) {
-    alert(errorMessage(error));
+    showAlert(errorMessage(error));
   }
 }
 
 
 // ---------- postcards ----------
-const flipped = reactive({}); // post id -> showing the story side
+const flipped = reactive({ ...spot?.flipped }); // post id -> showing the story side
 const composing = ref(false);
 
 const newThisWeek = computed(() => {
@@ -234,6 +260,10 @@ const newThisWeek = computed(() => {
   return feed.items.filter((p) => p.created_at > weekAgo).length;
 });
 const placeName = (p) => p.place?.name || p.custom_place_name || 'Somewhere in JB';
+const moreLink = (p) => {
+  if (p.place) return `/explorer/tales/place/${p.place.id}`;
+  return p.custom_place_name ? `/explorer/tales/custom/${encodeURIComponent(p.custom_place_name)}` : null;
+};
 
 function flip(p) {
   flipped[p.id] = !flipped[p.id];
@@ -311,7 +341,7 @@ function handlePhotoKeydown(event) {
           </button>
       </header>
 
-      <div class="scroller">
+      <div ref="scrollerEl" class="scroller">
 
       <!-- composer: a blank postcard -->
       <form v-if="composing" class="postcard blank" @submit.prevent="send">
@@ -386,7 +416,7 @@ function handlePhotoKeydown(event) {
             <button type="button" class="mini" :aria-pressed="p.likedByMe" :class="{ liked: p.likedByMe }" @click="like(p)">♥ {{ p.likeCount }}</button>
             <button type="button" class="mini" :aria-expanded="Boolean(openComments[p.id])" @click="toggleComments(p)">💬 {{ p.commentCount }}</button>
             <button v-if="p.images?.length > 1" type="button" class="mini" @click="openPhotoViewer(p.images, 0)">📷 {{ p.images.length }}</button>
-            <RouterLink v-if="p.place" class="mini" :to="`/tales/place/${p.place.id}`">More here</RouterLink>
+            <RouterLink v-if="moreLink(p)" class="mini" :to="moreLink(p)">More here</RouterLink>
             <span class="spacer" />
             <button v-if="p.author?.id === auth.user?.id" type="button" class="mini ghost" @click="removePost(p)">Delete</button>
           </div>

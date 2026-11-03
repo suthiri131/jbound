@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, assetUrl } from "@/lib/api";
 import { useTripsStore } from "@/stores/trips";
@@ -145,25 +145,48 @@ function changeVibe() {
   stage.value = "board";
 }
 
+// "+ Pin to trip" on a place page asks for the pin dialog with ?pin=<googlePlaceId>
+async function openPinFromUrl() {
+  const pinId = route.query.pin;
+  if (!pinId) return;
+  try {
+    await trips.fetch().catch(() => {});
+    const { data } = await api.get(
+      `/places/google/details/${encodeURIComponent(pinId)}`,
+    );
+    openPin({
+      id: data.id,
+      googlePlaceId: data.googlePlaceId,
+      name: data.name,
+    });
+  } catch (err) {
+    toast.value = { message: errorMessage(err) };
+  }
+  const { pin: _used, ...rest } = route.query; // so the same place can be pinned again
+  router.replace({ query: rest });
+}
+watch(() => route.query.pin, openPinFromUrl);
+
 onMounted(async () => {
   if (stage.value === "feed") search();
   await trips.fetch().catch(() => {});
-  // "+ Pin to trip" on a place page sends people here with ?pin=<googlePlaceId>
-  if (route.query.pin) {
-    try {
-      const { data } = await api.get(
-        `/places/google/details/${encodeURIComponent(route.query.pin)}`,
-      );
-      openPin({
-        id: data.id,
-        googlePlaceId: data.googlePlaceId,
-        name: data.name,
-      });
-    } catch (err) {
-      toast.value = { message: errorMessage(err) };
-    }
-  }
+  openPinFromUrl();
 });
+
+// ---------- a place page or its tales, taking over the board ----------
+const onPlacePage = computed(() => Boolean(route.meta.onBoard));
+const placePage = ref(null);
+watch(
+  () => route.path,
+  async () => {
+    if (!onPlacePage.value) return;
+    await nextTick();
+    placePage.value?.focus({ preventScroll: true }); // keyboard and screen reader users start on the new content
+  },
+  { immediate: true }, // arriving straight from Tales
+);
+/** Keeps ?vibes and ?q in the URL, so the way back lands on the same board. */
+const keepQuery = (path) => ({ path, query: route.query });
 
 /** Place page link. Google results have googlePlaceId; our own rows keep it in google_place_id. */
 const placeLink = (p) => {
@@ -353,7 +376,15 @@ function pinFromBackpack(item) {
 
       <div class="frame">
         <div class="cork">
-          <div :key="stage" class="cork-scroll">
+          <div v-if="onPlacePage" :key="route.path" ref="placePage" class="cork-scroll" tabindex="-1">
+            <article class="sheet">
+              <i class="pin red" aria-hidden="true" />
+              <RouterView />
+            </article>
+          </div>
+
+          <!-- hidden rather than removed, so coming back keeps the results and your place in them -->
+          <div v-show="!onPlacePage" :key="stage" class="cork-scroll">
             <!-- 1. what's the vibe? -->
             <VibeBoard
               v-if="stage === 'board'"
@@ -447,7 +478,7 @@ function pinFromBackpack(item) {
                           <span v-if="p.isHiddenGem" class="pill" style="background: var(--mustard)">✦ Hidden gem</span>
                         </p>
                         <h3 class="f-name">
-                          <RouterLink v-if="placeLink(p)" :to="placeLink(p)" class="place-link" data-cy="place-link">{{ p.name }}</RouterLink>
+                          <RouterLink v-if="placeLink(p)" :to="keepQuery(placeLink(p))" class="place-link" data-cy="place-link">{{ p.name }}</RouterLink>
                           <template v-else>{{ p.name }}</template>
                         </h3>
                         <p v-if="p.rating" class="f-meta">
@@ -462,9 +493,9 @@ function pinFromBackpack(item) {
                         <p v-if="p.description" class="f-desc">{{ p.description }}</p>
                         <span class="spacer" />
                         <div class="f-actions">
-                          <RouterLink v-if="placeLink(p)" :to="placeLink(p)" class="btn btn-sm btn-ghost">View place</RouterLink>
+                          <RouterLink v-if="placeLink(p)" :to="keepQuery(placeLink(p))" class="btn btn-sm btn-ghost">View place</RouterLink>
                           <button type="button" class="btn btn-primary btn-sm" data-cy="pin" @click="openPin(p)">+ Pin to trip</button>
-                          <RouterLink v-if="p.id" :to="`/tales/place/${p.id}`" class="btn btn-sm btn-ghost">Read tales</RouterLink>
+                          <RouterLink v-if="p.id" :to="keepQuery(`/explorer/tales/place/${p.id}`)" class="btn btn-sm btn-ghost">Read tales</RouterLink>
                         </div>
                       </div>
                       <span class="stamp keep-stamp" aria-hidden="true">PACK IT</span>
@@ -622,6 +653,27 @@ function pinFromBackpack(item) {
   .cork-scroll {
     scrollbar-width: thin;
     scrollbar-color: rgba(60, 30, 10, 0.45) transparent;
+  }
+}
+/* a place page: one big sheet pinned over the whole board */
+.cork-scroll:focus {
+  outline: none;
+}
+.sheet {
+  position: relative;
+  flex: none;
+  min-width: 0;
+  padding: 24px clamp(14px, 3vw, 34px) 30px;
+  background: #fffdf7;
+  color: var(--ink);
+  font-family: var(--font-body);
+  box-shadow: 0 8px 18px rgba(50, 25, 5, 0.35);
+  animation: pin-up 0.25s ease-out;
+}
+@keyframes pin-up {
+  from {
+    opacity: 0;
+    translate: 0 10px;
   }
 }
 .post {

@@ -4,7 +4,9 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import ArchivesView from './ArchivesView.vue';
 import { api } from '@/lib/api';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
+vi.mock('@/lib/dialog', () => ({ askConfirm: vi.fn(), showAlert: vi.fn() }));
 vi.mock('@/lib/api', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
   errorMessage: (_error, fallback) => fallback || 'Something went wrong',
@@ -83,33 +85,99 @@ describe('ArchivesView', () => {
 
     beforeEach(() => {
       let pending = [eighth];
-      api.get.mockImplementation(async () => ({ data: { capacity: 7, drawers: full, pending } }));
+      api.get.mockImplementation(async (path) => {
+        if (path === '/archives') return { data: { capacity: 7, drawers: full, pending } };
+        if (path === '/trips/old-5') return { data: { ...trip, id: 'old-5', name: 'Old trip 5' } };
+        if (path === '/trips/old-5/memories') return { data: { memories: [], window: { phase: 'archived' } } };
+        if (path === '/trips/old-5/expenses') return { data: { expenses: [] } };
+        throw new Error(`Unexpected API request: ${path}`);
+      });
       api.post.mockImplementation(async () => { pending = []; });
       api.put.mockImplementation(async () => { pending = []; });
     });
 
-    it('asks the user to clear it out or swap it, and can clear it', async () => {
+    const dialogButton = (label) => [...document.querySelectorAll('[role="alertdialog"] button')].find((b) => b.textContent.includes(label));
+    const button = (wrapper, label) => wrapper.findAll('button').find((b) => b.text().includes(label));
+
+    it('asks the user to discard it or swap it', async () => {
       const wrapper = await open('/archives');
       const dialog = document.querySelector('[role="alertdialog"]');
       expect(dialog.textContent).toContain('Kukup Seafood Day Trip');
-      [...dialog.querySelectorAll('button')].find((b) => b.textContent.includes('Clear it out')).click();
+      expect(dialogButton('Discard it')).toBeTruthy();
+      expect(dialogButton('Swap')).toBeTruthy();
+      wrapper.unmount();
+    });
+
+    it('only discards after the user confirms', async () => {
+      const wrapper = await open('/archives');
+      dialogButton('Discard it').click();
+      await flushPromises();
+      expect(api.post).not.toHaveBeenCalled();
+      expect(document.querySelector('[role="alertdialog"]').textContent).toContain('Are you sure?');
+
+      dialogButton('Go back').click();
+      await flushPromises();
+      expect(api.post).not.toHaveBeenCalled();
+      expect(document.querySelector('[role="alertdialog"]').textContent).toContain('The tent is full');
+
+      dialogButton('Discard it').click();
+      await flushPromises();
+      dialogButton('Yes, discard it').click();
       await flushPromises();
       expect(api.post).toHaveBeenCalledWith('/archives/eighth/clear');
       expect(document.querySelector('[role="alertdialog"]')).toBeNull();
       wrapper.unmount();
     });
 
-    it('swaps it into the drawer the user picks', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
-      const wrapper = await open('/archives');
-      [...document.querySelectorAll('[role="alertdialog"] button')].find((b) => b.textContent.includes('Swap')).click();
+    async function openDrawerToSwap(wrapper) {
+      dialogButton('Swap').click();
       await flushPromises();
-      expect(wrapper.text()).toContain('Pick a drawer to swap out');
+      expect(wrapper.text()).toContain('Pick a drawer to look inside');
       await wrapper.get('button.drawer[data-slot="5"]').trigger('click');
       await flushPromises();
+    }
+
+    it('opens the picked drawer to look through without changing anything', async () => {
+      const wrapper = await open('/archives');
+      await openDrawerToSwap(wrapper);
+      expect(router.currentRoute.value.path).toBe('/archives/old-5');
+      expect(wrapper.find('.scrapbook').exists()).toBe(true);
+      expect(wrapper.get('.decide').text()).toContain('Kukup Seafood Day Trip');
+      expect(api.put).not.toHaveBeenCalled();
+      wrapper.unmount();
+    });
+
+    it('keeps the drawer and goes back to choosing', async () => {
+      const wrapper = await open('/archives');
+      await openDrawerToSwap(wrapper);
+      await button(wrapper, 'Keep').trigger('click');
+      await flushPromises();
+      expect(api.put).not.toHaveBeenCalled();
+      expect(router.currentRoute.value.path).toBe('/archives');
+      expect(wrapper.find('.swap-banner').exists()).toBe(true);
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+      wrapper.unmount();
+    });
+
+    it('swaps the 8th trip into the drawer once the user decides', async () => {
+      const wrapper = await open('/archives');
+      await openDrawerToSwap(wrapper);
+      await button(wrapper, 'Discard this').trigger('click');
+      await flushPromises();
       expect(api.put).toHaveBeenCalledWith('/archives/eighth/drawer', { slot: 5 });
+      expect(router.currentRoute.value.path).toBe('/archives');
       expect(wrapper.find('.swap-banner').exists()).toBe(false);
-      window.confirm.mockRestore();
+      wrapper.unmount();
+    });
+
+    it('stays on the drawer and says so if the swap fails', async () => {
+      api.put.mockRejectedValueOnce(new Error('nope'));
+      const wrapper = await open('/archives');
+      await openDrawerToSwap(wrapper);
+      await button(wrapper, 'Discard this').trigger('click');
+      await flushPromises();
+      expect(router.currentRoute.value.path).toBe('/archives/old-5');
+      expect(wrapper.get('.decide [role="alert"]').exists()).toBe(true);
       wrapper.unmount();
     });
   });
@@ -150,6 +218,77 @@ describe('ArchivesView', () => {
     expect(wrapper.text()).toContain('Add a photo from the Memory Box');
     expect(wrapper.get('.upload a').attributes('href')).toBe('/planner/trip-42');
     wrapper.unmount();
+  });
+
+  describe('deleting a scrapbook', () => {
+    beforeEach(() => {
+      mockTrip();
+      askConfirm.mockReset();
+      showAlert.mockReset();
+    });
+    const clickDelete = async (wrapper) => {
+      await wrapper.get('.delete-book').trigger('click');
+      await flushPromises();
+    };
+
+    it('stops if the user says no to the first question', async () => {
+      askConfirm.mockResolvedValueOnce(false);
+      const wrapper = await open('/archives/trip-42');
+      await clickDelete(wrapper);
+      expect(askConfirm).toHaveBeenCalledTimes(1);
+      expect(api.post).not.toHaveBeenCalled();
+      expect(router.currentRoute.value.path).toBe('/archives/trip-42');
+      wrapper.unmount();
+    });
+
+    it('stops if the user says no to the second question', async () => {
+      askConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      const wrapper = await open('/archives/trip-42');
+      await clickDelete(wrapper);
+      expect(askConfirm).toHaveBeenCalledTimes(2);
+      expect(api.post).not.toHaveBeenCalled();
+      wrapper.unmount();
+    });
+
+    it('deletes after both yeses, closes the drawer and refreshes the tent', async () => {
+      askConfirm.mockResolvedValue(true);
+      api.post.mockResolvedValue({});
+      const wrapper = await open('/archives/trip-42');
+      api.get.mockImplementation(async () => ({ data: { capacity: 7, drawers: [], pending: [] } }));
+      await clickDelete(wrapper);
+      expect(api.post).toHaveBeenCalledWith('/archives/trip-42/clear');
+      expect(router.currentRoute.value.path).toBe('/archives');
+      expect(wrapper.find('a.drawer[data-trip="trip-42"]').exists()).toBe(false);
+      wrapper.unmount();
+    });
+
+    it('stays open and explains if the delete fails', async () => {
+      askConfirm.mockResolvedValue(true);
+      api.post.mockRejectedValue(new Error('nope'));
+      const wrapper = await open('/archives/trip-42');
+      await clickDelete(wrapper);
+      expect(showAlert).toHaveBeenCalledTimes(1);
+      expect(router.currentRoute.value.path).toBe('/archives/trip-42');
+      wrapper.unmount();
+    });
+
+    it('is not offered while choosing a drawer to swap', async () => {
+      const full = [...Array(7).keys()].map((slot) => ({ slot, trip: { ...trip, id: slot === 5 ? 'trip-42' : `old-${slot}` } }));
+      api.get.mockImplementation(async (path) => {
+        if (path === '/archives') return { data: { capacity: 7, drawers: full, pending: [{ ...trip, id: 'eighth', name: 'Eighth' }] } };
+        if (path === '/trips/trip-42') return { data: trip };
+        if (path === '/trips/trip-42/memories') return { data: { memories: [], window: { phase: 'archived' } } };
+        return { data: { expenses: [] } };
+      });
+      const wrapper = await open('/archives');
+      [...document.querySelectorAll('[role="alertdialog"] button')].find((b) => b.textContent.includes('Swap')).click();
+      await flushPromises();
+      await wrapper.get('button.drawer[data-slot="5"]').trigger('click');
+      await flushPromises();
+      expect(wrapper.find('.decide').exists()).toBe(true);
+      expect(wrapper.find('.delete-book').exists()).toBe(false);
+      wrapper.unmount();
+    });
   });
 
   it('closes the drawer back into the attic', async () => {

@@ -292,11 +292,40 @@ kbd {
   background: #3fbf6a;
 }
 @media (max-width: 700px), (pointer: coarse) {
+  /* the joystick takes this corner; trips are one walk away at the trailer */
+  .next-trip {
+    display: none;
+  }
   .help p:not(.online) {
     display: none;
   }
   .help:not(:has(.online)) {
     display: none;
+  }
+  /* the top of the screen is for the tall stations' bubbles, so the weather moves to the bottom corner */
+  .top-right {
+    position: static;
+  }
+  .round {
+    position: absolute;
+    z-index: 2;
+    top: 18px;
+    right: 18px;
+  }
+  .chip-weather {
+    position: absolute;
+    z-index: 2;
+    right: 18px;
+    bottom: 14px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+  .help {
+    top: 18px;
+    right: auto;
+    bottom: auto;
+    left: 18px;
+    padding: 4px 10px;
   }
 }
 </style>

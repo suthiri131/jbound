@@ -1,10 +1,12 @@
 <script setup>
 /**
  * The Archives, inside a canvas tent: a mahogany dresser (drawers 0-3) and an old map chest (drawers 4-6).
+ * On phones they combine into one big dresser holding all 7.
  * Filled drawers carry a name tag and open into the trip's scrapbook; empty ones stay shut.
- * In `picking` mode every filled drawer can be chosen to swap out instead.
+ * In `picking` mode a filled drawer opens for a look, so the user can decide whether to swap it out.
  */
 import { computed, ref } from 'vue';
+import { useOneCupboard } from '@/composables/useOneCupboard';
 import DrawerSticker from './DrawerSticker.vue';
 import TentInterior from './TentInterior.vue';
 
@@ -16,6 +18,10 @@ const emit = defineEmits(['open', 'pick']);
 
 const DRESSER = [0, 1, 2, 3];
 const CHEST = [4, 5, 6];
+const oneCupboard = useOneCupboard();
+const pieces = computed(() => (oneCupboard.value
+  ? [{ id: 'dresser', slots: [...DRESSER, ...CHEST] }]
+  : [{ id: 'dresser', slots: DRESSER }, { id: 'chest', slots: CHEST }]));
 const STICKERS = ['star', 'sun', 'palm', 'chili', 'heart', 'car', 'bowl', 'compass'];
 const SPOTS = ['tl', 'bl', 'tr', 'br'];
 
@@ -54,7 +60,7 @@ function open(drawer) {
     <TentInterior />
 
     <div class="furniture">
-      <div v-for="piece in [{ id: 'dresser', slots: DRESSER }, { id: 'chest', slots: CHEST }]" :key="piece.id" class="piece" :class="piece.id">
+      <div v-for="piece in pieces" :key="piece.id" class="piece" :class="piece.id">
         <div v-if="piece.id === 'dresser'" class="crown" aria-hidden="true" />
         <div v-else class="props" aria-hidden="true">
           <span class="scroll" />
@@ -74,6 +80,7 @@ function open(drawer) {
                 type="button"
                 class="drawer filled pickable"
                 :data-slot="slot"
+                :data-trip="bySlot.get(slot).trip.id"
                 @click="emit('pick', bySlot.get(slot))"
               >
                 <span class="tag">
@@ -81,7 +88,7 @@ function open(drawer) {
                   <span class="tag-date">{{ tagDate(bySlot.get(slot).trip) }}</span>
                 </span>
                 <span class="handle" aria-hidden="true" />
-                <span class="swap-hint" aria-hidden="true">swap this one</span>
+                <span class="swap-hint" aria-hidden="true">look inside</span>
               </button>
               <a
                 v-else
@@ -233,13 +240,12 @@ function open(drawer) {
   .drawer { transition: none; }
 }
 
-/* Phones: stack the furniture, roof scales down with the width. */
+/* Phones: one big cupboard, roof scales down with the width. */
 @media (max-width: 720px) {
   .attic { padding-top: 34%; }
-  .furniture { flex-direction: column; align-items: center; gap: 36px; width: 100%; padding: 0 16px; }
-  .dresser, .chest { width: 100%; max-width: 420px; }
+  .furniture { flex-direction: column; align-items: center; width: 100%; padding: 0 16px; }
+  .dresser { width: 100%; max-width: 420px; }
   .crown { height: 48px; }
-  .props { height: 84px; }
   .drawer { min-height: 84px; padding: 10px 16%; }
   .tag-name { font-size: 19px; }
   .tag-date { font-size: 10px; }

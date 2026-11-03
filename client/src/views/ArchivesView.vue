@@ -7,6 +7,8 @@ import AtticFullModal from '@/components/archives/AtticFullModal.vue';
 import ScrapbookBook from '@/components/archives/ScrapbookBook.vue';
 import ScrapbookPage from '@/components/archives/ScrapbookPage.vue';
 import { buildScrapbookPages } from '@/utils/scrapbookLayout';
+import { useOneCupboard } from '@/composables/useOneCupboard';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
 // phases in which the server still accepts memory uploads
 const UPLOAD_PHASES = ['on_the_road', 'memory_box'];
@@ -48,10 +50,13 @@ const pages = computed(() => buildScrapbookPages({
 }));
 
 const pendingTrip = computed(() => attic.value.pending[0] || null);
+// swapping: this drawer is open so the user can decide whether to keep it or make room
+const reviewing = computed(() => (picking.value && pendingTrip.value && openDrawerInfo.value) || null);
 const drawers = computed(() => attic.value.drawers.map((d) => (d.slot === freshSlot.value ? { ...d, isNew: true } : d)));
 
 const openDrawerInfo = computed(() => attic.value.drawers.find((d) => d.trip.id === tripId.value) || null);
-const fromChest = computed(() => openDrawerInfo.value?.slot >= 4);
+const oneCupboard = useOneCupboard();
+const fromChest = computed(() => !oneCupboard.value && openDrawerInfo.value?.slot >= 4);
 const provenance = computed(() => {
   const d = openDrawerInfo.value;
   if (!d) return 'From the tent';
@@ -141,7 +146,7 @@ async function closeDrawer() {
 }
 
 function onKeydown(event) {
-  if (event.key === 'Escape' && tripId.value) closeDrawer();
+  if (event.key === 'Escape' && tripId.value && !busy.value) closeDrawer();
 }
 
 onMounted(() => {
@@ -175,21 +180,59 @@ function clearPending() {
   atticAction(() => api.post(`/archives/${pendingTrip.value.id}/clear`));
 }
 
-function swapInto(drawer) {
-  if (busy.value) return;
-  const ok = window.confirm(`Swap “${drawer.trip.name}” out for “${pendingTrip.value.name}”? “${drawer.trip.name}” will be cleared out of your tent.`);
-  if (!ok) return;
-  atticAction(async () => {
-    await api.put(`/archives/${pendingTrip.value.id}/drawer`, { slot: drawer.slot });
-    freshSlot.value = drawer.slot;
+/** Removes the open scrapbook from this user's tent, after asking twice: it cannot be undone. */
+async function deleteScrapbook() {
+  if (busy.value || !openTrip.value) return;
+  const { id, name } = openTrip.value;
+  const sure = await askConfirm({
+    title: `Delete the “${name}” scrapbook?`,
+    message: 'It will be removed from your tent and its drawer will be empty. The rest of the crew keeps their copy.',
+    confirmLabel: 'Delete scrapbook',
+    danger: true,
   });
+  if (!sure) return;
+  const certain = await askConfirm({
+    title: 'Are you absolutely sure?',
+    message: `You won't be able to bring “${name}” back afterwards. This can't be undone.`,
+    confirmLabel: 'Yes, delete it for good',
+    cancelLabel: 'Keep it',
+    danger: true,
+  });
+  if (!certain) return;
+
+  busy.value = true;
+  try {
+    await api.post(`/archives/${id}/clear`);
+    await closeDrawer();
+    await loadList();
+  } catch (err) {
+    showAlert(errorMessage(err, 'We could not delete this scrapbook. Please try again.'));
+  } finally {
+    busy.value = false;
+  }
+}
+
+/** Swap mode: open the drawer so the user can look through it before deciding. Nothing changes yet. */
+function reviewDrawer(drawer) {
+  if (busy.value) return;
+  actionError.value = '';
+  router.push(`/archives/${drawer.trip.id}`);
+}
+
+async function swapOutReviewed() {
+  const { slot } = reviewing.value;
+  await atticAction(async () => {
+    await api.put(`/archives/${pendingTrip.value.id}/drawer`, { slot });
+    freshSlot.value = slot;
+  });
+  if (!actionError.value) closeDrawer();
 }
 </script>
 
 <template>
   <main class="attic-page">
     <h1 class="sr-only">Archives</h1>
-    <RouterLink to="/" class="camp-back out">← Step outside</RouterLink>
+    <RouterLink v-if="!tripId" to="/" class="camp-back out">← Step outside</RouterLink>
 
     <div
       v-if="tripId"
@@ -202,7 +245,7 @@ function swapInto(drawer) {
     >
       <header class="drawer-head">
         <p class="hand from">{{ provenance }}</p>
-        <button ref="closeBtn" type="button" class="close-drawer" @click="closeDrawer">
+        <button ref="closeBtn" type="button" class="close-drawer" :disabled="busy" @click="closeDrawer">
           <span aria-hidden="true">✕</span> Close the drawer
         </button>
       </header>
@@ -219,19 +262,35 @@ function swapInto(drawer) {
           </ScrapbookBook>
         </div>
 
-        <p v-if="canUpload" class="upload">
+        <div v-if="reviewing" class="decide" role="group" aria-label="Keep this drawer or swap it out">
+          <p>Keep this trip, or make room for <strong>“{{ pendingTrip.name }}”</strong>?</p>
+          <p v-if="actionError" class="error-text" role="alert">{{ actionError }}</p>
+          <div class="decide-actions">
+            <button type="button" class="btn" :disabled="busy" @click="closeDrawer">Keep “{{ openTrip.name }}”</button>
+            <button type="button" class="btn btn-ember" :disabled="busy" @click="swapOutReviewed">
+              {{ busy ? 'Swapping…' : `Discard this and put “${pendingTrip.name}” here` }}
+            </button>
+          </div>
+        </div>
+
+        <p v-else-if="canUpload" class="upload">
           <RouterLink :to="`/planner/${openTrip.id}`" class="btn btn-sm">Add photos in the Memory Box →</RouterLink>
+        </p>
+
+        <p v-if="openDrawerInfo && !reviewing" class="remove-book">
+          <button type="button" class="delete-book" :disabled="busy" @click="deleteScrapbook">
+            {{ busy ? 'Deleting…' : 'Delete scrapbook' }}
+          </button>
         </p>
       </template>
     </div>
 
-    <div v-if="loadError || picking" class="overlay">
+    <div v-if="loadError || (picking && !tripId)" class="overlay">
       <p v-if="loadError" class="error-text card-flat card-pad" role="alert">{{ loadError }}</p>
-      <div v-if="picking" class="swap-banner card-flat" role="status">
-        <span>Pick a drawer to swap out for <strong>“{{ pendingTrip?.name }}”</strong>.</span>
+      <div v-if="picking && !tripId" class="swap-banner card-flat" role="status">
+        <span>Pick a drawer to look inside. You can then keep it, or swap it for <strong>“{{ pendingTrip?.name }}”</strong>.</span>
         <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="picking = false">Back</button>
       </div>
-      <p v-if="picking && actionError" class="error-text card-flat card-pad" role="alert">{{ actionError }}</p>
     </div>
 
     <AtticScene
@@ -240,7 +299,7 @@ function swapInto(drawer) {
       :aria-busy="loading"
       :inert="tripId ? '' : null"
       @open="openDrawer"
-      @pick="swapInto"
+      @pick="reviewDrawer"
     >
       <p v-if="!loading && !loadError && !attic.drawers.length && !pendingTrip" class="hand empty">
         Nothing in here yet. Finished trips move into a drawer a week after they end.
@@ -249,6 +308,7 @@ function swapInto(drawer) {
 
     <AtticFullModal
       v-if="pendingTrip && !picking && !tripId"
+      :key="pendingTrip.id"
       :trip="pendingTrip"
       :capacity="attic.capacity"
       :waiting="attic.pending.length - 1"
@@ -304,6 +364,22 @@ function swapInto(drawer) {
 .drawer-frame :deep(.hint) { color: #d9c7a3; }
 .drawer-frame :deep(.close-book) { border-color: #d9c7a3; background: transparent; color: #f3e6c8; }
 .upload { margin: 0; text-align: center; }
+.remove-book { margin: 0; text-align: center; }
+.delete-book {
+  padding: 8px 16px; border: 2px dashed #e9b7a4; border-radius: 999px; background: transparent;
+  color: #fbe3d8; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s;
+}
+.delete-book:hover:not(:disabled) { background: #fbe3d8; color: #7a2d14; }
+.delete-book:focus-visible { outline: 3px solid var(--mustard); outline-offset: 3px; }
+.delete-book:disabled { opacity: .6; cursor: not-allowed; }
+/* stays in view while the user flips through the book */
+.decide {
+  position: sticky; bottom: 0; z-index: 2; width: min(100%, 1180px); padding: 12px 16px;
+  background: var(--card); border: 2px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, .4);
+}
+.decide p { margin: 0 0 10px; }
+.decide-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.decide-actions .btn { height: auto; padding-block: 8px; }
 
 @keyframes dim { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .drawer-view { animation: none; } }
