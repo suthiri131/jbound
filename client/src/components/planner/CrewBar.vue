@@ -65,6 +65,25 @@ async function newCode() {
     isError.value = true;
   }
 }
+
+async function removeMember(m) {
+  const isSelf = m.id === auth.user?.id;
+  const confirmText = isSelf
+    ? 'Leave this crew? You can be invited back later.'
+    : m.status === 'pending'
+      ? `Cancel the invite to ${m.name}?`
+      : `Remove ${m.name} from the crew?`;
+  if (!window.confirm(confirmText)) return;
+  msg.value = '';
+  try {
+    await api.delete(`/trips/${props.trip.id}/members/${m.id}`);
+    isError.value = false;
+    emit('changed');
+  } catch (err) {
+    msg.value = errorMessage(err);
+    isError.value = true;
+  }
+}
 </script>
 
 <template>
@@ -82,8 +101,9 @@ async function newCode() {
     
     <ul class="members">
       <li v-for="(m, i) in trip.members" :key="m.id">
-        <span class="avatar" :style="{ background: AVATAR_TINTS[i % AVATAR_TINTS.length] }"  :class="{ online: viewerIds.includes(m.id) }" aria-hidden="true">{{ initials(m.name) }}</span>
-        <span class="name">{{ m.name }}<template v-if="m.id === auth.user?.id"> (you)</template><template v-if="m.status === 'pending'"> Pending</template></span>
+     <span class="avatar" :style="{ background: AVATAR_TINTS[i % AVATAR_TINTS.length] }"  :class="{ online: viewerIds.includes(m.id) }" aria-hidden="true">{{ initials(m.name) }}</span>
+  <span class="name">{{ m.name }}<template v-if="m.id === auth.user?.id"> (you)</template><template v-if="m.status === 'pending'"> Pending</template></span>
+  <button v-if="m.id === auth.user?.id ? !isOwner : isOwner" type="button" class="btn btn-sm btn-ghost" :aria-label="m.id === auth.user?.id ? 'Leave crew' : `Remove ${m.name}`" @click="removeMember(m)">{{ m.id === auth.user?.id ? 'Leave' : (m.status === 'pending' ? 'Cancel' : 'Remove') }}</button>
       </li>
     </ul>
 
