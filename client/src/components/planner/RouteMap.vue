@@ -201,6 +201,15 @@ watch(() => props.activeStopId, (id) => {
     element.classList.toggle('active', String(result.value?.stops?.[i]?.id) === String(id));
   });
 });
+watch(view3d, (is3d) => {
+  if (is3d || !map || !gm) return;
+  nextTick(() => {
+    google.maps.event.trigger(map, 'resize');
+    const stops = result.value?.stops || [];
+    if (stops.length === 1) map.setCenter({ lat: stops[0].lat, lng: stops[0].lng });
+    else draw();
+  });
+});
 
 const caption = computed(() => {
   const r = result.value?.route;
@@ -251,8 +260,7 @@ const stopBufferMinutes = computed(() => {
 
     <div class="map-wrap">
       <div v-show="!view3d" ref="el" class="map" role="region" aria-label="Map of the day's stops" />
-      <RouteMap3D v-if="view3d" :stops="result?.stops || []" :path="(result?.route?.latlngs || []).map(([lat, lng]) => ({ lat, lng }))" />
-      <p v-if="mapError" class="map-msg">{{ mapError }}</p>
+      <RouteMap3D v-if="view3d" :stops="result?.stops || []" :path="(result?.route?.latlngs || []).map(([lat, lng]) => ({ lat, lng }))" :legs="result?.route?.legs || []" @select-stop="emit('select-stop', $event)" />      <p v-if="mapError" class="map-msg">{{ mapError }}</p>
     </div>
     <p v-if="error" class="error-text" role="alert" style="margin: 0; padding: 8px 18px">{{ error }}</p>
 
@@ -262,7 +270,7 @@ const stopBufferMinutes = computed(() => {
           <span class="leg-arrow" aria-hidden="true">⬇ 🚗</span>
           <span class="leg-badge">{{ result.route.legs[i - 1].distanceKm }} km · {{ result.route.legs[i - 1].durationMin }} min driving</span>
         </div>
-        <div class="itinerary-stop" :class="{ selected: String(activeStopId) === String(s.id) }">
+        <div class="itinerary-stop" :class="{ selected: String(activeStopId) === String(s.id)} ">
           <span class="dot">{{ String(s.id).startsWith('checkpoint-') ? '◆' : i + (fromCheckpoint ? 0 : 1) }}</span>
           <span class="stop-copy">
             <span class="stop-order">{{ i === 0 ? 'Origin' : `Stop ${i}` }}</span>

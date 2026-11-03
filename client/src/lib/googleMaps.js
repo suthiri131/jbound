@@ -35,6 +35,9 @@ export async function loadGoogleMaps() {
 export async function loadGoogleMaps3D() {
   if (!hasGoogleMaps) throw new Error('VITE_GOOGLE_MAPS_API_KEY is not set');
   loader ||= new Loader({ apiKey, version: 'alpha', region: 'SG', language: 'en' });
-  const { Map3DElement, Marker3DElement, Polyline3DElement, AltitudeMode } = await loader.importLibrary('maps3d');
-  return { Map3DElement, Marker3DElement, Polyline3DElement, AltitudeMode };
+  const [{ Marker3DInteractiveElement, Polyline3DElement, AltitudeMode, Map3DElement }, { PinElement }] = await Promise.all([
+    loader.importLibrary('maps3d'),
+    loader.importLibrary('marker'),
+  ]);
+  return { Map3DElement, Marker3DInteractiveElement, Polyline3DElement, AltitudeMode, PinElement };
 }
