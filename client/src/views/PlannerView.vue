@@ -80,9 +80,8 @@ watch(() => route.query.join, async (code) => {
 }
 .trips-page > :deep(.satchel) { flex: 1; }
 /* the heading is a sheet of paper on the table; each trip is a folder lying on it */
-.trips-page :deep(.head), .trips-page :deep(.toolbar) { padding: 16px 20px; background: #f1dfb6; border-radius: 3px; }
-.trips-page :deep(.head) { margin-bottom: -28px; padding-bottom: 8px; }
-.trips-page :deep(.toolbar) { padding-top: 8px; box-shadow: 0 8px 16px rgba(40, 20, 5, 0.4); }
+.trips-page :deep(.head) { padding: 16px 20px; background: #f1dfb6; border-radius: 3px; box-shadow: 0 8px 16px rgba(40, 20, 5, 0.4); }
+.trips-page :deep(.toolbar) { margin-top: -4px; padding: 0; }
 .trips-page :deep(.head h1) { font-family: var(--font-story); font-weight: 800; font-size: 30px; text-align: left; }
 .trips-page :deep(.head), .trips-page :deep(.trip-count), .trips-page :deep(.heading p) { color: #2a1b0e; }
 .trips-page :deep(.empty) { background: #f1dfb6; border-color: #4a2c1a; }
@@ -99,6 +98,14 @@ watch(() => route.query.join, async (code) => {
 .filters .field:first-child { flex: 1 1 240px; min-width: 0; }
 .filters .field:last-child { flex: 0 0 170px; }
 .filters .input { height: 46px; min-height: 46px; margin: 0; line-height: normal; }
+.filters select.input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%232a1b0e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
 @media (max-width: 800px) {
   .filters { flex: auto; width: 100%; }
 }

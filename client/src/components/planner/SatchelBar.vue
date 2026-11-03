@@ -94,7 +94,7 @@ function created(trip) {
       <div class="heading">
         <div class="heading-title">
           <h1 class="display display-md">Your trips</h1>
-          <span v-if="!loading && !loadError" class="trip-count muted" role="status">· {{ total }} {{ search.trim() || phase ? 'matching ' : '' }}trip{{ total === 1 ? '' : 's' }}</span>
+          <span v-if="!loading && !loadError && total > 0" class="trip-count muted" role="status">· {{ total }} {{ search.trim() || phase ? 'matching ' : '' }}trip{{ total === 1 ? '' : 's' }}</span>
         </div>
         <p class="muted">Your next adventure starts here. Pick a trip to keep planning.</p>
       </div>
@@ -145,15 +145,15 @@ function created(trip) {
 .heading-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
 .trip-count { font-size: 15px; }
 .heading p { margin: 0; font-size: 15px; }
-.actions { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+.actions { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 28px; }
 .actions .btn { min-height: 46px; white-space: nowrap; }
 .toolbar { display: flex; align-items: flex-start; gap: 16px; }
-.join { width: 260px; min-width: 0; }
-.join-controls { display: flex; gap: 10px; }
-.join-controls .input, .join-controls .btn { height: 46px; min-height: 46px; }
-.join-controls .input { min-width: 0; flex: 1; }
-.join-controls .btn { flex-shrink: 0; }
-.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 20px; padding: 0 4px 20px 0; }
+.join { width: 268px; min-width: 0; }
+.join :deep(.row) { align-items: center; }
+.join :deep(.input), .join :deep(.btn) { height: 46px; min-height: 46px; }
+.join :deep(.input) { min-width: 0; flex: 1; }
+.join :deep(.btn) { flex-shrink: 0; }
+.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(240px, calc((100% - 60px) / 4))), 1fr)); gap: 20px; padding: 0 4px 20px 0; }
 .empty { text-align: center; padding: 48px 20px; border: 2px dashed var(--ink); border-radius: var(--radius); background: var(--paper-deep); }
 .slot { min-width: 0; text-decoration: none; }
 .slot :deep(.cover) { height: 100%; }
