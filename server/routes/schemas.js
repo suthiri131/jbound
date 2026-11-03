@@ -1,6 +1,7 @@
 /** Request validation schemas (zod). Shared by all routers. */
 import { z } from 'zod';
 import { VIBES } from '../services/logic/vibeMatching.js';
+import { ATTIC_SLOTS } from '../services/logic/attic.js';
 
 export const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
@@ -33,13 +34,42 @@ export const commentParam = z.object({ id: uuid, commentId: uuid });
 export const checkpointParam = z.object({ id: z.enum(['woodlands', 'tuas']) });
 
 // ---------- auth / users ----------
+// Usernames are generated server-side (see authController.signup), so sign-up only asks for a first + last name.
 export const signupBody = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8, 'At least 8 characters'),
-  name: z.string().trim().min(1).max(60),
-  username,
+  firstName: z.string().trim().min(1, 'First name is required').max(30, 'First name is too long'),
+  lastName: z.string().trim().min(1, 'Last name is required').max(30, 'Last name is too long'),
 });
 export const loginBody = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1) });
+// Name change: same limits as sign-up. Email/password changes re-check the current password (like deleting an account).
+export const updateProfileBody = z.object({
+  firstName: z.string().trim().min(1, 'First name is required').max(30, 'First name is too long'),
+  lastName: z.string().trim().min(1, 'Last name is required').max(30, 'Last name is too long'),
+});
+// The camp character's look. Colours are hex; styles must match the client's builder (client/src/lib/camp/avatar.js).
+const hex = z.string().regex(/^#[0-9a-f]{6}$/i, 'Use a #rrggbb colour');
+export const lookBody = z.object({
+  skin: hex,
+  hair: hex,
+  hairStyle: z.enum(['short', 'long', 'bun', 'buzz', 'curly']),
+  top: hex,
+  bottom: hex,
+  hat: z.enum(['none', 'cap', 'bucket', 'beanie']),
+});
+export const changeEmailBody = z.object({
+  email: z.string({ required_error: 'Enter your new email' }).trim().toLowerCase().email('Enter a valid email address'),
+  password: z.string({ required_error: 'Enter your password to confirm' }).min(1, 'Enter your password to confirm').max(200),
+});
+export const changePasswordBody = z.object({
+  currentPassword: z.string({ required_error: 'Enter your current password' }).min(1, 'Enter your current password').max(200),
+  // 72: longer passwords are not usable with bcrypt, which is what the auth service stores
+  newPassword: z.string({ required_error: 'Enter a new password' }).min(8, 'At least 8 characters').max(72, 'Use 72 characters or fewer'),
+});
+// Deleting an account re-checks the password, so a session left open on a shared computer cannot erase it.
+export const deleteAccountBody = z.object({
+  password: z.string({ required_error: 'Enter your password to confirm' }).min(1, 'Enter your password to confirm').max(200),
+});
 export const refreshBody = z.object({ refresh_token: z.string().min(1) });
 export const userSearchQuery = z.object({ q: z.string().trim().min(1).max(30) });
 export const updateMeBody = z
@@ -181,6 +211,7 @@ export const memoryFields = z.object({
 });
 export const STICKER_KINDS = ['star', 'sun', 'palm', 'chili', 'heart', 'car', 'bowl', 'compass'];
 export const stickersBody = z.object({ stickers: z.array(z.enum(STICKER_KINDS)).max(4) });
+export const drawerBody = z.object({ slot: z.number().int().min(0).max(ATTIC_SLOTS - 1) });
 
 // ---------- chat ----------
 export const messagesQuery = z.object({

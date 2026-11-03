@@ -1,11 +1,5 @@
 <script setup>
-// CHANGES FOR EXPLORER: new component
-/**
- * "Filters" button next to the Explorer search bar. Tapping it pops up checkpoint, distance,
- * max price and hidden gems. Changes apply straight away (v-model).
- *   <FilterMenu v-model="filters" :defaults="DEFAULT_FILTERS" />
- * On phones the menu opens as a sheet from the bottom of the screen.
- */
+
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 
 const props = defineProps({

@@ -7,7 +7,7 @@ const routes = [
     path: "/",
     name: "home",
     component: () => import("@/views/BasecampView.vue"),
-    meta: { title: "Home" },
+    meta: { title: "Home", fullBleed: true }, // the 3D camp fills the window: no footer, no page scroll
   },
 
   {
@@ -31,14 +31,14 @@ const routes = [
     path: "/tales",
     name: "tales",
     component: () => import("@/views/TalesView.vue"),
-    meta: { requiresAuth: true, title: "Tales" },
+    meta: { requiresAuth: true, title: "Tales", fullBleed: true },
   },
 
   {
     path: "/watcher",
     name: "watcher",
     component: WatcherView,
-    meta: { title: "Watcher" },
+    meta: { title: "Watcher", fullBleed: true },
   },
 
   // Place Tales (from Version 1)
@@ -57,25 +57,25 @@ const routes = [
     path: "/planner",
     name: "planner",
     component: () => import("@/views/PlannerView.vue"),
-    meta: { requiresAuth: true, title: "Trips" },
+    meta: { requiresAuth: true, title: "Trips", fullBleed: true },
   },
   {
-    path: "/planner/:tripId",
+    path: "/planner/:tripId", 
     name: "trip-details",
     component: () => import("@/views/PlannerDetailsView.vue"),
-    meta: { requiresAuth: true, title: "Trip details" },
+    meta: { requiresAuth: true, title: "Trip details", fullBleed: true },
   },
   {
     path: "/ledger",
     name: "ledger",
     component: () => import("@/views/LedgerView.vue"),
-    meta: { requiresAuth: true, title: "Ledger" },
+    meta: { requiresAuth: true, title: "Ledger", fullBleed: true },
   },
   {
     path: "/explorer",
     name: "explorer",
     component: () => import("@/views/ExplorerView.vue"),
-    meta: { title: "Explorer" },
+    meta: { title: "Explorer", fullBleed: true },
   },
   {
     path: "/explorer/place/:googlePlaceId",
@@ -87,13 +87,27 @@ const routes = [
     path: "/archives/:tripId?",
     name: "archives",
     component: () => import("@/views/ArchivesView.vue"),
-    meta: { requiresAuth: true, title: "Archives" },
+    meta: { requiresAuth: true, title: "Archives", fullBleed: true },
   },
   {
     path: "/notifications",
     name: "notifications",
     component: () => import("@/views/NotificationsView.vue"),
     meta: { requiresAuth: true, title: "Notifications" },
+  },
+
+  {
+    path: "/profile",
+    name: "profile",
+    component: () => import("@/views/ProfileView.vue"),
+    meta: { requiresAuth: true, title: "Profile" },
+  },
+  // public on purpose: this is where people land right after their account is gone
+  {
+    path: "/account-deleted",
+    name: "account-deleted",
+    component: () => import("@/views/AccountDeletedView.vue"),
+    meta: { title: "Account deleted" },
   },
 ];
 

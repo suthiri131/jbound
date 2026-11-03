@@ -34,6 +34,9 @@
   --font-display: "Alfa Slab One", Georgia, serif;
   --font-body: "Archivo", system-ui, sans-serif;
   --font-hand: "Caveat", cursive;
+  --font-round: "Fredoka", "Archivo", system-ui, sans-serif; /* the camp / game UI */
+  --font-story: "Fraunces", Georgia, serif; /* titles in the 2D storybook scenes */
+  --font-mono: "Space Mono", ui-monospace, Menlo, monospace; /* receipts */
 
   --radius: 14px;
   --shadow: 5px 5px 0 var(--ink);
@@ -96,6 +99,27 @@ button {
 }
 .spacer {
   flex: 1;
+}
+
+/* the way back to basecamp, on every camp page */
+.camp-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 8px 14px;
+  border: 2.5px solid #1f2a24;
+  border-radius: 12px;
+  background: #fffdf7;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.22);
+  color: #1f2a24;
+  font-family: var(--font-round);
+  font-weight: 700;
+  text-decoration: none;
+}
+.camp-back:hover {
+  color: #1f2a24;
+  translate: 0 -1px;
 }
 
 /* ---------- type ---------- */

@@ -19,6 +19,7 @@ const upload = multer({
 const router = Router();
 router.get('/currency/rate', validate({ query: rateQuery }), c.currencyRate);
 router.get('/currency/convert', validate({ query: convertQuery }), c.currencyConvert);
+router.get('/weather', c.weather);
 router.post('/routing', validate({ body: routingBody }), c.route);
 router.post('/uploads', requireAuth, validate({ query: uploadQuery }), upload.single('image'), c.upload);
 

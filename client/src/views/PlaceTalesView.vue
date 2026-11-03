@@ -13,6 +13,15 @@
     const commentDraft = reactive({});
 
     const posts = ref([]);
+
+    // Profile photos. Your own comes from the auth store so a new photo shows straight away;
+    // a photo that fails to load falls back to the initials.
+    const brokenAvatars = reactive({});
+    const avatarUrl = (person) => (person?.id === auth.user?.id && auth.profile ? auth.profile.avatar_url : person?.avatar_url);
+    const avatarSrc = (person) => {
+        const url = avatarUrl(person);
+        return url && !brokenAvatars[url] ? assetUrl(url) : '';
+    };
     const place = ref(null);
     const googlePhotos = ref([]);
     const currentPlacePhoto = ref(0);
@@ -262,7 +271,8 @@
     <article v-for="post in posts" :key="post.id" class="card tale">
         <header class="row" style="gap: 10px">
             <span class="avatar" aria-hidden="true">
-            {{ initials(post.author?.name) }}
+            <img v-if="avatarSrc(post.author)" :src="avatarSrc(post.author)" alt="" @error="brokenAvatars[avatarUrl(post.author)] = true" />
+            <template v-else>{{ initials(post.author?.name) }}</template>
             </span>
 
             <div style="flex: 1">
@@ -420,7 +430,8 @@
 
 <style scoped>
 .tale { margin-top: 18px; padding: 18px 20px; }
-.avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 2px solid var(--ink); border-radius: 50%; background: var(--sand); font-weight: 800; font-size: 14px; }
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 2px solid var(--ink); border-radius: 50%; background: var(--sand); font-weight: 800; font-size: 14px; overflow: hidden; }
+.avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .caption { margin: 12px 0 0; white-space: pre-line; }
 .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
 .photos img { width: 100%; height: 140px; object-fit: contain; border: 2px solid var(--ink); border-radius: 8px; cursor: zoom-in; }

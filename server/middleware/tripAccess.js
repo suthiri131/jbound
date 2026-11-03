@@ -12,11 +12,12 @@ export async function requireTripMember(req, _res, next) {
 
   const { data: member } = await supabase
     .from('trip_members')
-    .select('role')
+    .select('role, status')
     .eq('trip_id', tripId)
     .eq('user_id', req.user.id)
     .maybeSingle();
   if (!member) return next(forbidden('You are not a member of this trip'));
+  if (member.status !== 'accepted') return next(forbidden('You are not a member of this trip'));
 
   req.trip = trip;
   req.membership = member;

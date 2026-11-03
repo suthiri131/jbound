@@ -7,6 +7,7 @@ import { notFoundHandler, errorHandler } from "./middleware/errorHandler.js";
 import routesRouter from "./routes/routes.js";
 import expensesRouter from "./routes/expensesRoutes.js";
 import tripRoutes from "./routes/trips.js";
+import archiveRoutes from "./routes/archives.js";
 import authRoutes from "./routes/auth.js";
 import utilityRoutes from "./routes/utility.js";
 import placeRoutes from "./routes/places.js";
@@ -14,6 +15,9 @@ import postsRouter from './routes/posts.js';
 import checkpointRouter from './routes/checkpoint.js';
 
 export const app = express();
+
+// Behind Render's proxy, trust one hop so req.ip is the visitor's IP (the auth rate limiter keys on it).
+if (config.env === "production") app.set("trust proxy", 1);
 
 app.use(helmet());
 app.use(
@@ -55,6 +59,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api", utilityRoutes);
 app.use("/api/routes", routesRouter);
 app.use("/api/trips", tripRoutes);
+app.use("/api/archives", archiveRoutes);
 app.use("/api/trips/:tripId/expenses", expensesRouter);
 app.use("/api/places", placeRoutes);
 

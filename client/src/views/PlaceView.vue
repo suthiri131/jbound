@@ -1,20 +1,6 @@
 <script setup>
-/**
- * Place page: what you see after clicking a place in the Explorer (like a Google Maps place page).
- * Route: /explorer/place/:googlePlaceId
- * GET /api/places/google/details/:googlePlaceId → Google details + reviews (+ our own id / Tales count)
- *
- * Skeleton: each section below is its own block, so it's easy to add more.
- * TODO(team): see the TODO notes in each section.
- */
-import {
-  ref,
-  computed,
-  watch,
-  onMounted,
-  onBeforeUnmount,
-  nextTick,
-} from "vue";
+
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, assetUrl } from "@/lib/api";
 import { loadGoogleMaps, hasGoogleMaps, MAP_ID } from "@/lib/googleMaps";

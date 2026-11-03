@@ -1,19 +1,20 @@
+import { randomBytes } from 'node:crypto';
 import { supabase } from '../db/supabase.js';
 import { badRequest, check, conflict, forbidden, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
 import { tripPhase, sgToday, addDays, MEMORY_WINDOW_DAYS } from '../services/logic/memoryWindow.js';
 
 const PROFILE = 'id, username, name, avatar_url';
-const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
+export const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
 
-async function addMember(tripId, userId, role = 'member') {
-  const { error } = await supabase.from('trip_members').insert({ trip_id: tripId, user_id: userId, role });
+async function addMember(tripId, userId, role = 'member' , status = 'accepted') {
+  const { error } = await supabase.from('trip_members').insert({ trip_id: tripId, user_id: userId, role, status });
   if (error?.code === '23505') throw conflict('Already a member of this trip');
   if (error) throw new Error(error.message);
 }
 
 /** Attach phase info and lazily archive trips whose 7-day memory window has passed. */
-async function withPhase(trip, today = sgToday()) {
+export async function withPhase(trip, today = sgToday()) {
   const info = tripPhase(trip, today);
   if (info.autoArchive) {
     const archivedAt = new Date().toISOString();
@@ -101,15 +102,33 @@ export async function createTrip(req, res) {
       .select(TRIP_FIELDS)
       .single(),
   );
-  await addMember(trip.id, req.user.id, 'owner');
-
-  const skipped = [];
-  if (inviteUsernames?.length) {
-    const profiles = check(await supabase.from('profiles').select('id, username').in('username', inviteUsernames));
-    for (const p of profiles) if (p.id !== req.user.id) await addMember(trip.id, p.id);
-    const found = new Set(profiles.map((p) => p.username));
-    skipped.push(...inviteUsernames.filter((u) => !found.has(u)));
+  try {
+    await addMember(trip.id, req.user.id, 'owner');
+  } catch (err) {
+    // The satchel lists trips through trip_members, so a trip without its owner row could never be opened.
+    await supabase.from('trips').delete().eq('id', trip.id);
+    throw err;
   }
+
+  // Inviting friends is a bonus: if it fails the trip still exists, and we report who we could not add.
+  const wanted = [...new Set(inviteUsernames || [])];
+  const invited = new Set();
+  if (wanted.length) {
+    try {
+      const profiles = check(await supabase.from('profiles').select('id, username, name').in('username', wanted));
+      for (const p of profiles) {
+        if (p.id !== req.user.id) {
+          await addMember(trip.id, p.id, 'member', 'pending');// the owner is already inside
+          await postSystemMessage(trip.id, `${await displayName(req.user.id)} added ${p.name} to the crew`);
+        }
+         
+        invited.add(p.username);
+      }
+    } catch (err) {
+      console.warn('[createTrip] inviting the crew failed:', err.message);
+    }
+  }
+  const skipped = wanted.filter((u) => !invited.has(u));
 
   await postSystemMessage(trip.id, `${await displayName(req.user.id)} packed the trip "${trip.name}"`);
   res.status(201).json({ ...(await withPhase(trip)), skippedUsernames: skipped });
@@ -120,7 +139,7 @@ export async function getTrip(req, res) {
   const tripId = req.params.tripId;
   const [trip, members, itinerary] = await Promise.all([
     supabase.from('trips').select(TRIP_FIELDS).eq('id', tripId).single(),
-    supabase.from('trip_members').select(`role, joined_at, user:profiles(${PROFILE})`).eq('trip_id', tripId),
+    supabase.from('trip_members').select(`role, status,joined_at, user:profiles(${PROFILE})`).eq('trip_id', tripId),
     supabase
       .from('itinerary_items')
       .select('id, title, day, time, position, notes, dwell_minutes, lat, lng, crossing, crossing_dir, done, place:places(id, name, lat, lng, vibes, photos)')
@@ -179,15 +198,17 @@ export async function inviteMember(req, res) {
     await supabase.from('profiles').select(PROFILE).eq('username', req.valid.body.username).single(),
     'No user with that username',
   );
-  await addMember(req.params.tripId, profile.id);
+  await addMember(req.params.tripId, profile.id, 'member', 'pending');
   await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} added ${profile.name} to the crew`);
   res.status(201).json(profile);
 }
 
 /** POST /api/trips/join  { inviteCode } */
 export async function joinByCode(req, res) {
+  // Codes are lowercase letters/digits; forgive capitals and stray spaces from copy-paste.
+  const code = req.valid.body.inviteCode.replace(/\s+/g, '').toLowerCase();
   const trip = check(
-    await supabase.from('trips').select(TRIP_FIELDS).eq('invite_code', req.valid.body.inviteCode.trim()).single(),
+    await supabase.from('trips').select(TRIP_FIELDS).eq('invite_code', code).single(),
     'Invite code not valid',
   );
   const { data: existing } = await supabase
@@ -196,11 +217,19 @@ export async function joinByCode(req, res) {
     .eq('trip_id', trip.id)
     .eq('user_id', req.user.id)
     .maybeSingle();
+
+  let alreadyMember = Boolean(existing);
   if (!existing) {
-    await addMember(trip.id, req.user.id);
-    await postSystemMessage(trip.id, `${await displayName(req.user.id)} joined the crew`);
+    try {
+      await addMember(trip.id, req.user.id);
+      await postSystemMessage(trip.id, `${await displayName(req.user.id)} joined the crew`);
+    } catch (err) {
+      // Double-tapped Join: the other request won the race and added us, which is still a success.
+      if (err.status !== 409) throw err;
+      alreadyMember = true;
+    }
   }
-  res.json({ ...trip, alreadyMember: Boolean(existing) });
+  res.json({ ...trip, alreadyMember });
 }
 
 /** DELETE /api/trips/:tripId/members/:userId */
@@ -220,9 +249,60 @@ export async function removeMember(req, res) {
 
 /** POST /api/trips/:tripId/invite-code — owner regenerates the share code */
 export async function regenerateInviteCode(req, res) {
-  const code = Math.random().toString(36).slice(2, 10);
+  const code = randomBytes(4).toString('hex'); // 8 chars, same shape as the database default
   const data = check(
     await supabase.from('trips').update({ invite_code: code }).eq('id', req.params.tripId).select('invite_code').single(),
   );
   res.json(data);
 }
+
+/** GET /api/trips/invites  Trips where the current user has a pending invite */
+ export async function listMyInvites(req,res) {
+  const rows = check(
+    await supabase
+    .from('trip_members')
+    .select(`trip:trips(${TRIP_FIELDS})`)
+    .eq('user_id',req.user.id)
+    .eq('status','pending'),
+
+  );
+  res.json(rows.filter((r) => r.trip).map((r) => r.trip))
+ }
+
+
+ /** POST /api/trips/:tripID/invite/accept */
+ export async function acceptInvite(req,res) {
+  const {data, error } = await supabase
+  .from('trip_members')
+  .update({status: 'accepted'})
+  .eq('trip_id', req.params.tripId)
+  .eq('user_id', req.user.id)
+  .eq('status', 'pending')
+  .select('role')
+  .maybeSingle();
+  
+  if (error) throw new Error(error.message)
+  if (!data) throw notFound('No pending invites found!');
+  await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} joined the crew `);
+  res.json({accepted : true});
+
+ }
+
+
+ /** POST /api/trips:tripId/invites/decline */
+
+ export async function declineInvite(req, res) {
+  const { error, count } = await supabase
+   .from('trip_members')
+   .delete({count:'exact'})
+   .eq('trip_id', req.params.tripId)
+   .eq('user_id', req.user.id)
+   .eq('status', 'pending');
+
+  if (error) throw new Error(error.message);
+  if (!count) throw notFound('No pending invite found');
+  await postSystemMessage(req.params.tripId, `${await displayName(req.user.id)} declined the invite `);
+  
+  res.status(204).end();
+
+ }

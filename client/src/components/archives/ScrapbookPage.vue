@@ -1,13 +1,10 @@
 <script setup>
 
-import { useId } from 'vue';
 import { assetUrl } from '@/lib/api';
 
 defineProps({
   page: { type: Object, required: true },
 });
-
-const ringId = `badge-ring-${useId()}`;
 
 function decorStyle(decor) {
   const style = { top: `${decor.top}%`, left: `${decor.left}%`, '--tilt': `${decor.rotation}deg`, '--ink': decor.ink };
@@ -29,29 +26,30 @@ function decorStyle(decor) {
     >{{ decor.text }}</span>
 
     <!-- front cover -->
-    <div v-if="page.kind === 'cover'" class="leather" :style="{ '--cover': page.color }">
-      <div class="stitching">
-        <svg class="badge" viewBox="0 0 100 100" aria-hidden="true">
-          <defs><path :id="ringId" d="M50 50 m-35 0 a35 35 0 1 1 70 0 a35 35 0 1 1 -70 0" /></defs>
-          <circle cx="50" cy="50" r="47" />
-          <circle cx="50" cy="50" r="27" />
-          <text class="badge-ring"><textPath :href="`#${ringId}`" textLength="216" lengthAdjust="spacing">JBOUND · TRAVEL JOURNAL · {{ page.year }} ·</textPath></text>
-          <text class="badge-mark" x="50" y="50">✦</text>
-        </svg>
-        <h2 class="display cover-title">{{ page.name }}</h2>
-        <p class="cover-dates">{{ page.dates }}</p>
-        <span class="cover-label hand">Our scrapbook</span>
+    <div v-if="page.kind === 'cover'" class="notebook">
+      <div class="notebook-front">
+        <span class="notebook-rings" aria-hidden="true"><i v-for="n in 9" :key="n" /></span>
+        <div class="notebook-label">
+          <span class="notebook-edition">THE JB TRAVEL JOURNAL</span>
+          <h2 class="notebook-title">{{ page.name }}</h2>
+          <span class="notebook-divider" aria-hidden="true">✦ ───── ✦</span>
+          <span class="notebook-subtitle">Stories from the other side</span>
+          <span class="notebook-stamp">EST. 2026 · JOHOR BAHRU</span>
+        </div>
+        <span class="notebook-prompt">✧ Click to open the notebook ✧</span>
       </div>
     </div>
 
     <!-- back cover -->
-    <div v-else-if="page.kind === 'back-cover'" class="leather back" :style="{ '--cover': page.color }">
-      <div class="stitching">
-        <svg class="badge small" viewBox="0 0 100 100" aria-hidden="true">
-          <circle cx="50" cy="50" r="47" />
-          <text class="badge-mark" x="50" y="50">✦</text>
-        </svg>
-        <p class="hand back-line">Made together · kept forever</p>
+    <div v-else-if="page.kind === 'back-cover'" class="notebook">
+      <div class="notebook-front">
+        <span class="notebook-rings" aria-hidden="true"><i v-for="n in 9" :key="n" /></span>
+        <div class="notebook-label">
+          <span class="notebook-edition">THE JB TRAVEL JOURNAL</span>
+          <span class="notebook-divider" aria-hidden="true">✦ ───── ✦</span>
+          <span class="notebook-subtitle">Made together · kept forever</span>
+          <span class="notebook-stamp">EST. 2026 · JOHOR BAHRU</span>
+        </div>
       </div>
     </div>
 
@@ -94,7 +92,7 @@ function decorStyle(decor) {
           <span class="plus" aria-hidden="true">+</span>
           <span>{{ item.prompt }}</span>
         </div>
-        <figcaption class="hand">
+        <figcaption class="hand" :title="item.author ? `${item.caption} — ${item.author}` : item.caption">
           <span class="caption">{{ item.caption }}</span>
           <span v-if="item.author" class="by">— {{ item.author }}</span>
         </figcaption>
@@ -164,19 +162,22 @@ function decorStyle(decor) {
 .eyebrow-ink { position: relative; z-index: 1; align-self: flex-start; margin: 0; color: #70452f; font-size: 2.6cqw; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
 .page-number { position: absolute; bottom: 3.6cqw; left: 50%; z-index: 2; color: #5A4A36; font-size: 4cqw; transform: translateX(-50%); }
 
-/* leather covers */
-.leather { position: absolute; inset: 0; padding: 4cqw; color: #FDFBF7; background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.12), transparent 55%), repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 2px, transparent 2px 5px) left / 5cqw 100% no-repeat, var(--cover); }
-.stitching { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: 4cqh; padding: 6cqw; border: 2px dashed rgba(253,251,247,.6); border-radius: 1.5cqw; text-align: center; box-shadow: inset 0 0 0 1.4cqw rgba(44,24,16,.12); }
-.badge { width: 36cqw; height: 36cqw; overflow: visible; transform: rotate(-12deg); }
-.badge.small { width: 20cqw; height: 20cqw; }
-.badge circle { fill: none; stroke: #FDFBF7; stroke-width: 1.6; }
-.badge circle + circle { stroke-width: .8; stroke-dasharray: 2 2; }
-.badge-ring { fill: #FDFBF7; font-size: 8.4px; font-weight: 900; letter-spacing: .5px; }
-.badge-mark { fill: #FDFBF7; font-size: 26px; text-anchor: middle; dominant-baseline: central; }
-.cover-title { max-width: 100%; margin: 0; font-size: 9.5cqw; line-height: 1.05; overflow-wrap: anywhere; text-shadow: 2px 3px 0 rgba(44,24,16,.3); }
-.cover-dates { margin: 0; font-size: 3.4cqw; letter-spacing: .1em; text-transform: uppercase; }
-.cover-label { padding: .6cqw 3cqw; border-radius: 1cqw; color: #3C2A21; font-size: 5.6cqw; background: #F3EAD3; box-shadow: 2px 2px 0 rgba(44,24,16,.35); transform: rotate(-2deg); }
-.back-line { margin: 0; font-size: 6cqw; }
+/* notebook covers */
+.notebook { position: absolute; inset: 0; background: #533522; }
+.notebook-front { position: absolute; inset: 0 0 2.4cqw 2.4cqw; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3.2cqw; padding: 6cqw 8cqw 6cqw 10cqw; border: .7cqw solid #5C3925; border-left: 3.4cqw solid #75462D; border-radius: 1.6cqw 3.6cqw 3.6cqw 1.6cqw; color: #4A2C20; font-family: 'Kalam', cursive; background: repeating-linear-gradient(0deg, rgba(92,56,27,.035) 0 2px, transparent 2px 5px), linear-gradient(140deg, #D7B485, #BF9160 55%, #A8794E); box-shadow: -1.6cqw 1.6cqw 0 #F4E5CA; }
+.notebook-rings { position: absolute; top: 5cqh; bottom: 5cqh; left: -2.2cqw; z-index: 1; display: flex; flex-direction: column; justify-content: space-between; }
+.notebook-rings i { display: block; width: 6.6cqw; height: 2.9cqw; border: .9cqw solid #3C342D; border-radius: 50%; background: linear-gradient(180deg, #D9D3C6, #746B60); box-shadow: 0 2px 3px rgba(0,0,0,.35); }
+.notebook-label { display: flex; width: 100%; flex-direction: column; align-items: center; gap: 1.8cqw; padding: 4.5cqw 5cqw; border: 3px double #75462D; border-radius: 2cqw; background: rgba(255,242,216,.42); text-align: center; }
+.notebook-edition { font-size: 2.6cqw; font-weight: 700; letter-spacing: .14em; color: #75462D; }
+.notebook-title { max-width: 100%; margin: 0; font-family: inherit; font-size: 8.4cqw; font-weight: 700; line-height: 1.1; overflow-wrap: anywhere; color: #4A2C20; }
+.notebook-divider { font-size: 3.6cqw; letter-spacing: .25em; color: #875335; }
+.notebook-subtitle { font-size: 3.6cqw; color: #65432C; }
+.notebook-stamp { font-size: 2.4cqw; font-weight: 700; letter-spacing: .08em; color: #875335; }
+.notebook-prompt { font-size: 3.1cqw; font-weight: 700; }
+
+/* a back cover on the left-hand page has its spine on the right, so the rings swap sides */
+.face.back .notebook-front { inset: 0 2.4cqw 2.4cqw 0; padding: 6cqw 10cqw 6cqw 8cqw; border-left: .7cqw solid #5C3925; border-right: 3.4cqw solid #75462D; border-radius: 3.6cqw 1.6cqw 1.6cqw 3.6cqw; box-shadow: 1.6cqw 1.6cqw 0 #F4E5CA; }
+.face.back .notebook-rings { right: -2.2cqw; left: auto; }
 
 /* inside front cover */
 .title { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3.2cqh; text-align: center; }
@@ -193,9 +194,11 @@ function decorStyle(decor) {
 .photo-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4cqw; padding: 2cqw; border: 2px dashed rgba(60,42,33,.35); color: #5A4A36; font-family: var(--font-hand); font-size: 4.2cqw; line-height: 1.1; text-align: center; }
 .plus { display: grid; width: 8cqw; height: 8cqw; place-items: center; border: 2px solid currentColor; border-radius: 50%; font-family: inherit; font-size: 5cqw; }
 .polaroid.blank { border-style: dashed; }
-.polaroid figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 2cqw; margin-top: 1.2cqw; font-size: 4.4cqw; line-height: 1.1; }
-.caption { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.by { flex: none; color: #5A4A36; font-size: .8em; }
+/* the caption gets up to two handwritten lines (the full text is in the tooltip); the author always shows */
+.polaroid figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 0 2cqw; min-height: 2.1em; margin-top: 1cqw; font-size: 4cqw; line-height: 1.05; }
+.caption { display: -webkit-box; flex: 0 1 auto; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+/* sits beside a short caption, or tucks under the last line of a long one */
+.by { flex: none; margin-left: auto; color: #5A4A36; font-size: .8em; line-height: 1; }
 .tape { position: absolute; z-index: 2; top: -2.2cqw; width: 14cqw; height: 4.4cqw; opacity: .85; box-shadow: 0 1px 2px rgba(44,24,16,.15); transform: rotate(var(--tape-tilt)); }
 .tape-l { left: -4cqw; }
 .tape-r { right: -4cqw; }
@@ -203,7 +206,8 @@ function decorStyle(decor) {
 .hold-corners::before, .hold-corners::after { position: absolute; z-index: 2; width: 5cqw; height: 5cqw; content: ''; background: #3C2A21; }
 .hold-corners::before { top: -1cqw; left: -1cqw; clip-path: polygon(0 0, 100% 0, 0 100%); }
 .hold-corners::after { right: -1cqw; bottom: -1cqw; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
-.margin-note { position: absolute; top: 44%; z-index: 1; max-width: 72%; margin: 0; padding: 0 2cqw; font-size: 5.4cqw; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: linear-gradient(transparent 60%, rgba(223,208,168,.8) 60%); transform: rotate(var(--tilt)); }
+/* centred in the gap between the polaroids; a long note takes a second, highlighted line */
+.margin-note { position: absolute; top: 48%; z-index: 1; display: -webkit-box; max-width: 72%; margin: 0; padding: 0 2cqw; overflow: hidden; font-size: 5cqw; line-height: 1.2; overflow-wrap: anywhere; background: repeating-linear-gradient(transparent 0 .72em, rgba(223,208,168,.8) .72em 1.2em); -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; transform: translateY(-50%) rotate(var(--tilt)); }
 
 /* bucket list */
 .note-card { position: relative; z-index: 1; display: flex; width: 86%; gap: 3cqw; padding: 3.4cqw 4cqw; background: #FDFBF7; box-shadow: 1px 4px 10px rgba(44,24,16,.17); transform: translateX(var(--shift)) rotate(var(--tilt)); }

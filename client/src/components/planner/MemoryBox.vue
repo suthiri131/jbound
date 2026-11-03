@@ -1,9 +1,5 @@
 <script setup>
-/**
- * Memory box: shown on the right of the Planner while a trip is in its 7-day
- * window after it ends (also usable while on the road).
- * Every photo here becomes a scrapbook page in the trip's Archives drawer.
- */
+
 import { ref, computed, watch } from 'vue';
 import { api, errorMessage } from '@/lib/api';
 // import { useAuthStore } from '@/stores/auth';
@@ -174,7 +170,7 @@ async function archiveNow() {
       <div class="spacer" />
       <div class="foot">
         <span class="hand" style="color: var(--jungle); font-size: 23px">{{ data.memories.length }} photo{{ data.memories.length === 1 ? '' : 's' }} packed</span>
-        <button v-if="data.window.phase === 'memory_box'" type="button" class="btn btn-ember" data-cy="archive-now" @click="archiveNow">Done · send it up to the attic</button>
+        <button v-if="data.window.phase === 'memory_box'" type="button" class="btn btn-ember" data-cy="archive-now" @click="archiveNow">Done · pack it into the tent</button>
       </div>
     </div>
   </section>

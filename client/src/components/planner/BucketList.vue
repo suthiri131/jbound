@@ -1,8 +1,5 @@
 <script setup>
-/**
- * The trip's bucket list: stops grouped by day, tick boxes, times, drag reorder.
- * Every change goes straight to the API; the parent reloads (and Realtime syncs the crew).
- */
+
 import { ref, computed, watch } from 'vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import { api, errorMessage } from '@/lib/api';
@@ -32,7 +29,7 @@ const ownershipLabel = computed(() => {
   if (props.trip.myRole === 'owner') return '';
   const owner = props.trip.members?.find((member) => member.id === props.trip.owner_id)
     || props.trip.members?.find((member) => member.role === 'owner');
-  const name = owner?.name?.trim() || (owner?.username ? `@${owner.username}` : '');
+  const name = owner?.name?.trim() || '';
   return name ? `Owned by ${name}` : 'You’re a member of this trip';
 });
 

@@ -1,8 +1,5 @@
 <script setup>
-/**
- * Camp chat. Primary: Supabase Realtime INSERTs on `messages`.
- * Fallback: poll GET /messages?after=<last created_at> every 4 s.
- */
+
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue';
 import { api, errorMessage } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
