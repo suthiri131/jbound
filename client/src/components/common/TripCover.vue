@@ -19,7 +19,7 @@ const progress = computed(() => {
 <template>
   <div class="cover" :class="{ selected }" :style="{ background: trip.cover_color || '#2E5A3C' }">
     <span class="eyebrow">{{ dateRange(trip.start_date, trip.end_date) }}</span>
-    <span class="display name">{{ trip.name }}</span>
+    <span class="display name" :title="trip.name">{{ trip.name }}</span>
     <span class="foot">
       <span class="hand">{{ progress }}</span>
       <span class="badge">{{ stamp.label }}</span>
@@ -28,10 +28,10 @@ const progress = computed(() => {
 </template>
 
 <style scoped>
-.cover { display: block; text-align: left; padding: 16px 16px 18px; border: 2px solid var(--ink); border-radius: 14px 14px 6px 6px; color: var(--card); box-shadow: inset 0 -10px 0 rgba(0,0,0,.2), 2px 2px 0 var(--ink); transition: transform .15s; }
+.cover { display: flex; flex-direction: column; text-align: left; padding: 16px 16px 28px; border: 2px solid var(--ink); border-radius: 14px 14px 6px 6px; color: var(--card); box-shadow: inset 0 -10px 0 rgba(0,0,0,.2), 2px 2px 0 var(--ink); transition: transform .15s; }
 .cover.selected { transform: translateY(-8px); box-shadow: inset 0 -10px 0 rgba(0,0,0,.2), 5px 5px 0 var(--ink); }
 .eyebrow { display: block; font-size: 11px; letter-spacing: 1.5px; }
-.name { display: block; margin-top: 4px; font-size: 20px; line-height: 1.15; }
-.foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; }
+.name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; min-height: 2.3em; max-height: 2.3em; margin-top: 4px; font-size: 20px; line-height: 1.15; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 12px; }
 .badge { flex: none; padding: 3px 7px; border: 2px solid currentColor; border-radius: 4px; font-size: 10px; font-weight: 800; letter-spacing: 1px; transform: rotate(5deg); }
 </style>
