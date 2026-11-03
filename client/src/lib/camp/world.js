@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { buildCauseway } from './causeway';
+import { buildFairyLights } from './fairyLights'
 
 // ---------- helpers ----------
 
@@ -191,13 +192,77 @@ function buildTower() {
   bino.position.set(0, 5.1, 0.5);
   g.add(bino);
 
+  // ---- night lights: glowing windows, a warm room behind the door, a lantern, and a searchlight ----
+const glowMat = lambert('#ffd98a', { emissive: '#ffae42', emissiveIntensity: 0 });
+for (const x of [-0.97, 0.97]) g.add(box(0.04, 0.5, 0.8, glowMat, x, 5.15, -0.1)); // side windows
+g.add(box(0.8, 0.5, 0.04, glowMat, 0, 5.15, -0.97)); // back window
+g.add(box(0.86, 1.16, 0.03, glowMat, 0, 5.0, 0.86)); // warm room seen through the doorway (the door covers it)
+const lanternMat = lambert('#fff1c4', { emissive: '#ffc25a', emissiveIntensity: 0.2 });
+g.add(cyl(0.015, 0.015, 0.35, 4, P.woodDark, 0.75, 5.6, 1.15)); // hook
+const lantern = new THREE.Group(); // swings from its hook
+lantern.position.set(0.75, 5.42, 1.15);
+lantern.add(box(0.14, 0.18, 0.14, lanternMat, 0, -0.1, 0));
+lantern.add(box(0.2, 0.05, 0.2, P.woodDark, 0, 0.01, 0)); // cap
+lantern.add(box(0.18, 0.04, 0.18, P.woodDark, 0, -0.21, 0)); // base
+g.add(lantern);
+const roomLight = new THREE.PointLight('#ffb35c', 0, 9, 1.6);
+roomLight.position.set(0, 4.9, 1.4);
+g.add(roomLight)
+// searchlight on the back corner of the deck, sweeping slowly towards the Causeway (back of the camp)
+g.add(box(0.1, 0.3, 0.1, P.woodDark, 0.8, 4.5, -1.15)); // its little post
+const lampHead = new THREE.Group();
+lampHead.position.set(0.8, 4.75, -1.15);
+g.add(lampHead);
+lampHead.add(box(0.3, 0.26, 0.36, lambert('#2a2f36'), 0, 0, 0));
+const lens = box(0.24, 0.2, 0.04, lanternMat, 0, 0, -0.19);
+lampHead.add(lens);
+const beamMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  blending: THREE.AdditiveBlending,
+  fog: false,
+  uniforms: { opacity: { value: 0 }, tint: { value: new THREE.Color('#fff0c0') } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+   // bright at the lamp, fading out along the beam
+   fragmentShader: `uniform float opacity; uniform vec3 tint; varying vec2 vUv;
+void main() {
+ gl_FragColor = vec4(tint, opacity * pow(vUv.y, 1.6));
+ #include <colorspace_fragment>
+}`,
+});
+const BEAM = 22;
+const beamGeo = new THREE.ConeGeometry(3.2, BEAM, 20, 1, true);
+beamGeo.translate(0, -BEAM / 2, 0); // tip at the lamp
+beamGeo.rotateX(Math.PI / 2 - 0.12); // point backwards (-z) and a little down
+const beam = new THREE.Mesh(beamGeo, beamMat);
+beam.visible = false;
+beam.castShadow = false;
+beam.raycast = () => {}; // never block clicks on the stations
+lampHead.add(beam);
+
+let night = 0;
+
   return {
     group: g,
     setOpen: (p) => {
       doorHinge.rotation.y = -1.8 * p;
       bino.position.z = 0.5 + p * 0.7;
     },
-    tick: (t) => (flag.rotation.y = Math.sin(t * 3) * 0.25),
+    night: (n) => {
+      night = n;
+      glowMat.emissiveIntensity = n * 1.3;
+      lens.material.emissiveIntensity = 0.2 + n * 1.6;
+      roomLight.intensity = n * 3.2;
+      beamMat.uniforms.opacity.value = n * 0.22;
+      beam.visible = n > 0.02;
+    },
+    tick: (t) => {
+      flag.rotation.y = Math.sin(t * 3) * 0.25;
+      lampHead.rotation.y = Math.sin(t * 0.35) * 0.75;
+      lantern.rotation.z = Math.sin(t * 1.8) * 0.12;
+      if (night > 0.02) roomLight.intensity = night * (3 + Math.sin(t * 9) * 0.15 + Math.sin(t * 5.3) * 0.1 )
+    },
   };
 }
 
@@ -740,6 +805,9 @@ export function buildCamp(scene) {
     const [[cx, , cz], [tx, , tz]] = st.cam;
     for (let k = 0; k <= 4; k++) clearZones.push({ x: cx + ((tx - cx) * k) / 4, z: cz + ((tz - cz) * k) / 4, r: 3.2 });
   }
+
+  const planted = []
+
   const keepClear = (x, z) => (Math.abs(x) < 2.2 && z > 4) || clearZones.some((c) => Math.hypot(c.x - x, c.z - z) < c.r);
   for (let i = 0; i < 46; i++) {
     const a = r() * Math.PI * 2;
@@ -749,11 +817,18 @@ export function buildCamp(scene) {
     if (keepClear(x, z)) continue;
     if (z > 10 && Math.abs(x) < 7) continue; // keep the front open for the camera
     const scale = 0.9 + r() * 0.8;
-    const tree = r() > 0.4 ? pineTree(scale, r) : roundTree(scale, r);
+    const pine = r() > 0.4 ? pineTree(scale, r) : roundTree(scale, r);
+    const tree = pine ? pineTree(scale, r) : roundTree(scale, r);
     tree.position.set(x, 0, z);
     root.add(tree);
     colliders.push({ x, z, r: 0.8 * scale });
+    planted.push({ x, z, scale, pine});
   }
+
+  const fairyLights = buildFairyLights(planted, rng(77));
+  root.add(fairyLights.group);
+  tickers.push(fairyLights.tick);
+  nightHooks.push(fairyLights.night)
 
   // flowers
   const flowerGeo = new THREE.IcosahedronGeometry(0.12, 0);
