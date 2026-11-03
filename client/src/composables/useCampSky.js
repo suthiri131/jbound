@@ -19,8 +19,11 @@ const readMode = () => {
  * plus the visitor's day/night override (remembered in localStorage).
  * `?weather=rain` (or clear/partly/cloudy/haze/storm) previews another sky.
  */
+
+export const skyMode = ref(readMode());
+
 export function useCampSky({ weather = true } = {}) {
-  const mode = ref(readMode());
+  const mode = skyMode;
   const forced = new URLSearchParams(location.search).get('weather');
   const condition = ref(CONDITION_LABEL[forced] ? forced : 'clear');
   const forecast = ref('');

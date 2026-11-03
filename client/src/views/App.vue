@@ -5,6 +5,7 @@ import AppNav from "@/components/common/AppNav.vue";
 import SatchelDrawer from "@/components/common/SatchelDrawer.vue";
 import { hasSupabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { useCampMusic } from '@/composables/useCampMusic'
 import NotificationsPanel from "../components/common/NotificationsPanel.vue";
 
 const route = useRoute();
@@ -23,6 +24,7 @@ const showChrome = computed(
 );
 const fullBleed = computed(() => Boolean(route.meta.fullBleed));
 const peekNav = computed(() => Boolean(route.meta.peekNav));
+useCampMusic();
 </script>
 
 <template>
