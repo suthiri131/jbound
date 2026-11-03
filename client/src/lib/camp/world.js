@@ -4,6 +4,7 @@
  * scene calls: setEnvironment(env) when the sky changes and tick(t, dt) every frame.
  */
 import * as THREE from 'three';
+import { buildCauseway } from './causeway';
 
 // ---------- helpers ----------
 
@@ -702,6 +703,11 @@ export function buildCamp(scene) {
     windmills.push(w.hub);
   }
 
+  const causeway = buildCauseway()
+  root.add(causeway.group)
+  tickers.push(causeway.tick)
+  nightHooks.push(causeway.night)
+
   // stations
   const stations = STATIONS.map((def) => {
     const built = BUILDERS[def.id]();
@@ -845,5 +851,5 @@ export function buildCamp(scene) {
     scene.remove(root);
   }
 
-  return { root, stations, colliders, setEnvironment, tick, dispose, ground: island };
+  return { root, stations, colliders, setEnvironment, setTraffic: causeway.setTraffic, tick, dispose, ground: island };
 }
