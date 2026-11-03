@@ -48,11 +48,11 @@ async function submit() {
       <div class="name-row">
         <label class="field">
           First name
-          <input v-model="form.firstName" class="input" type="text" autocomplete="given-name" required maxlength="30" placeholder="e.g. Benjamin" />
+          <input v-model="form.firstName" class="input" type="text" autocomplete="given-name" required maxlength="30" placeholder="e.g. Albert" />
         </label>
         <label class="field">
           Last name
-          <input v-model="form.lastName" class="input" type="text" autocomplete="family-name" required maxlength="30" placeholder="e.g. Netanyahu" />
+          <input v-model="form.lastName" class="input" type="text" autocomplete="family-name" required maxlength="30" placeholder="e.g. Stein" />
         </label>
       </div>
       <label class="field">
