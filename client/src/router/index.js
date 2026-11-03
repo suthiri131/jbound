@@ -7,7 +7,7 @@ const routes = [
     path: "/",
     name: "home",
     component: () => import("@/views/BasecampView.vue"),
-    meta: { title: "Home", fullBleed: true }, // the 3D camp fills the window: no footer, no page scroll
+    meta: { title: "Home", fullBleed: true , peekNav: true}, // the 3D camp fills the window: no footer, no page scroll
   },
 
   {
