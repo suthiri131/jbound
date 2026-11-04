@@ -1,4 +1,6 @@
 <script setup>
+import LedgerSelect from "@/components/common/LedgerSelect.vue";
+import BackLabel from "@/components/common/BackLabel.vue";
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage as getErrorMessage } from '@/lib/api';
@@ -182,6 +184,13 @@ const people = computed(() => members.value.map((member) => {
 }));
 // ---------- the crew in front of the stall ----------
 const { sky } = useCampSky();
+// Continue the backdrop's lowest grass colour through the scrollable page.
+const groundColor = computed(() => {
+  const [brightness, saturation] = sky.value.landFilter.match(/[\d.]+/g).map(Number);
+  const grass = [110, 163, 78]; // #6ea34e, the foreground in SkyBackdrop
+  const grey = grass[0] * 0.213 + grass[1] * 0.715 + grass[2] * 0.072;
+  return `rgb(${grass.map(channel => Math.round((grey + (channel - grey) * saturation) * brightness)).join(' ')})`;
+});
 const crewLooks = ref({});
 onMounted(async () => {
   try {
@@ -244,9 +253,9 @@ onMounted(loadConversionRate);
 </script>
 
 <template>
-  <main class="ledger-camp">
+  <main class="ledger-camp" :style="{ backgroundColor: groundColor }">
     <SkyBackdrop />
-    <RouterLink to="/" class="camp-back back">← Back</RouterLink>
+    <RouterLink to="/" class="camp-back back" aria-label="Back to Basecamp"><BackLabel /></RouterLink>
 
     <section class="stall-scene" aria-label="The market stall: who has paid what">
       <div class="stall-wrap">
@@ -263,12 +272,9 @@ onMounted(loadConversionRate);
     <div class="receipt-wrap">
       <article class="receipt" aria-labelledby="receipt-title">
         <header class="r-head">
-          <label class="sr-only" for="trip-picker">Trip</label>
-          <select id="trip-picker" v-model="tripId" class="trip-select" @change="chooseTrip">
-            <option value="" disabled>Select a trip</option>
-            <option v-for="trip in trips" :key="trip.id" :value="trip.id">{{ trip.name }}</option>
-          </select>
-          <h1 id="receipt-title" class="r-title">{{ selectedTrip?.name || 'The Ledger' }}</h1>
+          <LedgerSelect id="trip-picker" v-model="tripId" label="Trip" placeholder="Select a trip"
+            :options="trips.map(trip => ({ value: trip.id, label: trip.name }))" @change="chooseTrip" />
+          <h1 id="receipt-title" class="r-title" :title="selectedTrip?.name">{{ selectedTrip?.name || 'The Ledger' }}</h1>
           <p class="r-meta">
             <span v-if="receiptDate">{{ receiptDate }} · </span>{{ members.length }} crew<span v-if="conversionRate"> · S$1 = RM{{ conversionRate.toFixed(2) }}</span>
           </p>
@@ -360,13 +366,13 @@ onMounted(loadConversionRate);
                 <input id="expense-amount" v-model.number="form.amount" class="input" type="number" min="0.01" step="0.01" placeholder="0.00" required />
               </label>
               <label class="field" for="expense-currency">Currency
-                <select id="expense-currency" v-model="form.currency" class="select"><option value="SGD">S$ SGD</option><option value="MYR">RM MYR</option></select>
+                <LedgerSelect id="expense-currency" v-model="form.currency" label="Currency"
+                  :options="[{ value: 'SGD', label: 'S$ SGD' }, { value: 'MYR', label: 'RM MYR' }]" />
               </label>
             </div>
             <label class="field" for="expense-payer">Paid by
-              <select id="expense-payer" v-model="form.paidBy" class="select">
-                <option v-for="member in members" :key="member.id" :value="member.id">{{ member.id === auth.user?.id ? `${member.name} (you)` : member.name }}</option>
-              </select>
+              <LedgerSelect id="expense-payer" v-model="form.paidBy" label="Paid by"
+                :options="members.map(member => ({ value: member.id, label: member.id === auth.user?.id ? `${member.name} (you)` : member.name }))" />
             </label>
             <fieldset class="split">
               <legend>Split among <button class="link" type="button" @click="toggleCustom">{{ customSplit ? 'Split equally' : 'Custom amounts' }}</button></legend>
@@ -405,7 +411,7 @@ onMounted(loadConversionRate);
 .ledger-camp {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(370px, 450px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 450px);
   font-family: var(--font-round);
   color: #1f2a24;
   overflow: hidden !important; /* the receipt scrolls on its own, the scene stays put */
@@ -458,7 +464,10 @@ onMounted(loadConversionRate);
   text-align: center;
 }
 .say b {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-weight: 700;
 }
 .up .say {
@@ -470,10 +479,14 @@ onMounted(loadConversionRate);
 .receipt-wrap {
   position: relative;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 22px 30px 48px 8px;
 }
 .receipt {
+  min-width: 0;
+  overflow-wrap: anywhere;
   position: relative;
   padding: 22px 22px 34px;
   background: #fffdf7;
@@ -512,17 +525,14 @@ onMounted(loadConversionRate);
   justify-items: center;
   gap: 4px;
 }
-.trip-select {
-  font: inherit;
-  font-family: var(--font-round);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border: 1.5px solid #1f2a24;
-  border-radius: 999px;
-  background: #fffdf7;
-}
 .r-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   margin: 4px 0 0;
   font-family: var(--font-story);
   font-weight: 800;
@@ -573,7 +583,7 @@ onMounted(loadConversionRate);
 }
 .items li {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   grid-template-rows: auto auto;
   gap: 0 10px;
 }
@@ -590,7 +600,7 @@ onMounted(loadConversionRate);
 }
 .amt {
   font-weight: 700;
-  white-space: nowrap;
+  text-align: right;
 }
 .edit {
   grid-column: 2;
@@ -648,7 +658,7 @@ onMounted(loadConversionRate);
 }
 .owes li {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   align-items: center;
   gap: 2px 10px;
   padding: 10px 12px;
@@ -742,7 +752,7 @@ label.tick {
 }
 .two {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .split {
@@ -822,9 +832,74 @@ label.tick {
 }
 
 
-@media (max-width: 900px) {
+/* Let content shrink inside the receipt instead of widening the page. */
+.r-head > *,
+.items li > div,
+.tiles li,
+.tick,
+.tick > span,
+.field,
+.split,
+.split-row > span {
+  min-width: 0;
+}
+.total,
+.history p {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.total strong,
+.history p > span {
+  margin-left: auto;
+  text-align: right;
+}
+.add-form .input,
+.add-form .select {
+  min-width: 0;
+  max-width: 100%;
+}
+.split legend {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.split-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 110px);
+}
+.split-row > input[type='checkbox'] {
+  margin: 0;
+}
+.custom {
+  width: 100%;
+}
+.convert {
+  flex-wrap: wrap;
+}
+.convert label {
+  min-width: 0;
+}
+.convert output {
+  min-width: 0;
+}
+.crew-line li {
+  min-width: 0;
+  flex: 1 1 0;
+}
+.say {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.crew-line :deep(.avatar-flat) {
+  max-width: 100%;
+  height: auto !important;
+  max-height: 138px;
+}
+
+
+@media (max-width: 991.98px) {
   .ledger-camp {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
     align-content: start;
     overflow-y: auto !important;
   }
@@ -832,14 +907,80 @@ label.tick {
     padding: 66px 12px 16px;
   }
   .stall-wrap {
-    width: min(100%, 560px);
+    width: min(100%, 440px);
   }
   .receipt-wrap {
+    width: 100%;
+    max-width: 640px;
+    justify-self: center;
     overflow: visible;
-    padding: 0 14px 44px;
+    padding: 12px 20px 44px;
   }
   .receipt {
     rotate: 0deg;
+  }
+}
+@media (max-width: 575.98px) {
+  .back {
+    top: 14px;
+    left: 14px;
+  }
+  .stall-scene {
+    padding: 68px 12px 8px;
+  }
+  .receipt-wrap {
+    padding: 12px 12px 36px;
+  }
+  .receipt {
+    padding: 20px 16px 28px;
+  }
+  .r-title {
+    font-size: 28px;
+  }
+  .say {
+    padding: 3px 4px;
+    font-size: 10px;
+  }
+  .items li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+  .items li > div {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .amt {
+    text-align: left;
+  }
+  .edit {
+    grid-row: auto;
+  }
+  .owes li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .owes li > strong {
+    padding-left: 32px;
+  }
+  .two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .split-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .custom {
+    grid-column: 2;
+  }
+  .convert output {
+    flex-basis: 100%;
+  }
+  .add-form .row > .btn {
+    flex: 1 1 auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .receipt {
+    animation: none;
   }
 }
 </style>

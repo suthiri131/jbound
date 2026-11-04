@@ -1,4 +1,5 @@
 <script setup>
+import BackLabel from "@/components/common/BackLabel.vue";
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { api, API_URL, errorMessage } from '@/lib/api';
 import { timeAgo } from '@/utils/format';
@@ -115,7 +116,7 @@ function handleCameraKeydown(event) {
         :holiday="q.holiday"
         :condition="isNow ? condition : 'clear'"
       />
-      <RouterLink to="/" class="camp-back back">← Back</RouterLink>
+      <RouterLink to="/" class="camp-back back" aria-label="Back to Basecamp"><BackLabel /></RouterLink>
 
       <div class="dials" role="group" aria-label="What to look at">
         <div class="seg" role="group" aria-label="Checkpoint">

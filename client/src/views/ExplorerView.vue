@@ -1,4 +1,5 @@
 <script setup>
+import BackLabel from "@/components/common/BackLabel.vue";
 
 import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -175,6 +176,31 @@ onMounted(async () => {
 
 // ---------- a place page or its tales, taking over the board ----------
 const onPlacePage = computed(() => Boolean(route.meta.onBoard));
+
+// Detail pages share the outer Back control; keep board filters when returning.
+function previousBoardPage() {
+  const previous = router.options.history.state?.back;
+  if (typeof previous !== 'string') return null;
+  const fromExplorer = /^\/explorer(?:[/?]|$)/.test(previous);
+  const fromTales = route.name !== 'place' && /^\/tales(?:[/?]|$)/.test(previous);
+  return fromExplorer || fromTales ? previous : null;
+}
+const backDestination = computed(() => {
+  // History state changes alongside the route, so recompute on every navigation.
+  void route.fullPath;
+  return onPlacePage.value ? previousBoardPage() || '/explorer' : '/';
+});
+const backLabel = computed(() => {
+  if (!onPlacePage.value) return 'Back to Basecamp';
+  if (backDestination.value.startsWith('/tales')) return 'Back to Tales';
+  if (backDestination.value.startsWith('/explorer/place/')) return 'Back to the place';
+  return 'Back to the notice board';
+});
+function goBack() {
+  if (onPlacePage.value && previousBoardPage()) router.back();
+  else router.push(backDestination.value);
+}
+
 const placePage = ref(null);
 watch(
   () => route.path,
@@ -367,7 +393,7 @@ function pinFromBackpack(item) {
 <template>
   <main class="notice-page">
     <SkyBackdrop />
-    <RouterLink to="/" class="camp-back back">← Back</RouterLink>
+    <button type="button" class="camp-back back" :aria-label="backLabel" @click="goBack"><BackLabel /></button>
 
     <div class="board-wrap">
       <header class="roof">

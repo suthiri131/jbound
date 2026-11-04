@@ -1,6 +1,6 @@
 <script setup>
     import { ref, reactive, computed, watch, nextTick } from 'vue';
-    import { useRoute, useRouter } from 'vue-router';
+    import { useRoute } from 'vue-router';
     import { api, assetUrl, errorMessage } from '@/lib/api';
     import { useAuthStore } from '@/stores/auth';
     import { VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
@@ -8,7 +8,6 @@
 import { askConfirm, showAlert } from '@/lib/dialog';
 
     const route = useRoute();
-    const router = useRouter();
 
     const placeTalesLink = (post) => ({
         path: post.place
@@ -16,17 +15,6 @@ import { askConfirm, showAlert } from '@/lib/dialog';
             : `/explorer/tales/custom/${encodeURIComponent(post.custom_place_name)}`,
         query: route.query,
     });
-
-    // Tales and the Explorer both open this page on the notice board; Back returns to whichever it was.
-    const cameFrom = window.history.state?.back;
-    const backLabel = !cameFrom || /^\/explorer(\?|$)/.test(cameFrom) ? '← Back to the notice board'
-        : cameFrom.startsWith('/tales') ? '← Back to Tales'
-        : cameFrom.startsWith('/explorer/place') ? '← Back to the place'
-        : '← Back';
-    function goBack() {
-        if (cameFrom) router.back();
-        else router.push('/explorer'); // opened from a shared link
-    }
 
     const auth = useAuthStore();
     const openComments = reactive({});
@@ -259,7 +247,6 @@ import { askConfirm, showAlert } from '@/lib/dialog';
 
 <template>
   <div>
-    <button type="button" class="btn btn-sm btn-ghost" @click="goBack">{{ backLabel }}</button>
 
     <section class="place-header">
 
