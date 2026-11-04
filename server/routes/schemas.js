@@ -80,7 +80,6 @@ export const updateMeBody = z
   })
   .refine((b) => Object.keys(b).length > 0, 'Nothing to update');
 
-// ---------- places ----------
 export const placesQuery = z.object({
   vibes: csvVibes,
   hiddenGem: boolQuery,
@@ -90,6 +89,7 @@ export const placesQuery = z.object({
   q: z.string().trim().max(60).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
+
 export const googleSearchQuery = z.object({
   q: z.string().trim().max(80).optional(),
   vibe: vibe.optional(),

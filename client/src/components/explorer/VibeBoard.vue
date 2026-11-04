@@ -43,9 +43,6 @@ const TILTS = [-3, 2, -1.5, 3, -2.5, 1.5, -1];
       <h2 class="display display-lg">
         What's the vibe today, {{ name || "explorer" }}?
       </h2>
-      <p class="hand">
-        Tap the flyers you're feeling. Pick as many as you like.
-      </p>
     </header>
 
     <ul class="flyers" role="group" aria-label="Vibes">

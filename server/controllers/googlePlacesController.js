@@ -71,7 +71,6 @@ export async function googleSearch(req, res) {
       postCount: byGoogleId[p.googlePlaceId]?.posts?.[0]?.count ?? 0,
       distanceKm: Math.round(distanceFromCheckpointKm(p, checkpoint) * 10) / 10,
       isHiddenGem: p.ratingCount < HIDDEN_GEM_MAX_REVIEWS,
-      communityQuote: null,
     }))
     // (removed the old vibe-type filter: places are already tagged with the vibe they were found under)
     .filter((p) => maxDistanceKm == null || p.distanceKm <= maxDistanceKm)
