@@ -139,6 +139,14 @@ export const commentBody = z.object({ text: z.string().trim().min(1).max(1000) }
 
 // ---------- trips ----------
 const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Use a hex colour like #2E5A3C');
+// how a trip looks on the Planner: one of five bags, with up to four badges pinned on
+export const BAG_KINDS = ['rucksack', 'daypack', 'messenger', 'tote', 'satchel'];
+export const BAG_BADGES = ['mushroom', 'mountain', 'compass', 'star', 'leaf', 'heart', 'sun', 'durian'];
+const bagBadges = z
+  .array(z.enum(BAG_BADGES))
+  .max(4, 'A bag holds up to 4 badges')
+  .refine((list) => new Set(list).size === list.length, 'Each badge can only go on once');
+
 export const createTripBody = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -153,6 +161,8 @@ export const updateTripBody = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   mission: z.string().trim().max(160).nullable().optional(),
   coverColor: hexColor.optional(),
+  bagKind: z.enum(BAG_KINDS).nullable().optional(),
+  bagBadges: bagBadges.nullable().optional(),
   startDate: isoDate.nullable().optional(),
   endDate: isoDate.nullable().optional(),
 });

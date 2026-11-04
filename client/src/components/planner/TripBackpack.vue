@@ -2,10 +2,16 @@
 import { computed, useId } from "vue";
 import { PHASE_STAMP } from "@/utils/constants";
 import { dateRange } from "@/utils/format";
+import { bagBadgesFor, bagColour, bagKindFor } from '@/utils/bags';
+import BagBadge from './BagBadge.vue';
 
 const props = defineProps({
   trip: { type: Object, default: null },
   isNew: { type: Boolean, default: false },
+  kind: { type: String, default: null },
+  coverColor: { type: String, default: null },
+  badges: { type: Array, default: null },
+  bare: { type: Boolean, default: false },
 });
 
 const uid = useId();
@@ -15,39 +21,17 @@ const handFilter = computed(() =>
 );
 const softFilter = `url(#${ids.soft})`;
 
-const KINDS = ["rucksack", "daypack", "messenger", "tote", "satchel"];
-const seed = computed(() => {
-  const id = String(props.trip?.id ?? "");
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++)
-    h = Math.imul(h ^ id.charCodeAt(i), 16777619);
-  h ^= h >>> 15;
-  return Math.imul(h, 2246822519) >>> 0;
-});
-const variant = computed(() =>
-  props.isNew ? "tote" : KINDS[seed.value % KINDS.length],
-);
-
-// the trip's cover colour, softened into the watercolour palette (unknown colours are just lightened)
-const SOFT = {
-  "#2e5a3c": "#7d9a52", // green  -> moss
-  "#b4471f": "#c9673e", // red    -> rust orange
-  "#1f4e5a": "#8f9fcb", // teal   -> periwinkle
-  "#8a5a2b": "#a4643a", // brown  -> saddle leather
-  "#5a3e6b": "#a184b4", // purple -> lilac
-};
-const colour = computed(() => {
-  const c = String(props.trip?.cover_color || "#2e5a3c").toLowerCase();
-  return SOFT[c] || `color-mix(in srgb, ${c} 72%, #f3e3bd)`;
-});
+const variant = computed(() => (props.isNew ? 'tote' : props.kind || bagKindFor(props.trip)));
+const colour = computed(() => bagColour(props.coverColor || props.trip?.cover_color));
 
 // where the name label and the status tag sit on each bag, in px of the 260 x 300 drawing
+// where the name label, the status tag and the (up to 4) badges sit on each bag, in px of the 260 x 300 drawing
 const SPOT = {
-  rucksack: { label: [114, 224, 98, 32], tag: [21, 111] },
-  daypack: { label: [114, 100, 88, 32], tag: [177, 21] },
-  messenger: { label: [92, 140, 100, 32], tag: [13, 210] },
-  tote: { label: [84, 176, 100, 36], tag: [21, 75] },
-  satchel: { label: [84, 140, 98, 34], tag: [10, 93] },
+  rucksack: { label: [114, 224, 98, 32], tag: [21, 111], pins: [[100, 100], [210, 100], [155, 90], [72, 238]] },
+  daypack: { label: [114, 100, 88, 32], tag: [177, 21], pins: [[196, 226], [134, 180], [198, 178], [134, 230]] },
+  messenger: { label: [92, 140, 100, 32], tag: [13, 210], pins: [[78, 132], [214, 134], [112, 118], [214, 176]] },
+  tote: { label: [84, 176, 100, 36], tag: [21, 75], pins: [[88, 152], [182, 150], [134, 146], [188, 240]] },
+  satchel: { label: [84, 140, 98, 34], tag: [10, 93], pins: [[132, 122], [64, 166], [202, 166], [132, 234]] },
 };
 const labelBox = computed(() => {
   const [x, y, w, h] = SPOT[variant.value].label;
@@ -61,6 +45,12 @@ const labelBox = computed(() => {
 const tagBox = computed(() => {
   const [x, y] = SPOT[variant.value].tag;
   return { left: `${(x / 260) * 100}%`, top: `${(y / 300) * 100}%` };
+});
+const pinned = computed(() => {
+  if (props.isNew) return [];
+  const list = props.badges || bagBadgesFor(props.trip, variant.value);
+  const spots = SPOT[variant.value].pins;
+  return list.slice(0, spots.length).map((kind, i) => ({ kind, x: spots[i][0], y: spots[i][1], turn: [-12, 9, -5, 14][i] }));
 });
 
 const stamp = computed(
@@ -76,11 +66,7 @@ const progress = computed(() => {
 </script>
 
 <template>
-  <div
-    class="pack"
-    :class="[`is-${variant}`, { new: isNew }]"
-    :style="{ '--bag': colour }"
-  >
+  <div class="pack" :class="[`is-${variant}`, { new: isNew, bare }]" :style="{ '--bag': colour }">
     <div class="bag">
       <svg viewBox="0 0 260 300" aria-hidden="true">
         <defs>
@@ -417,11 +403,6 @@ const progress = computed(() => {
             />
             <path class="stitch dk" d="M118 104 H198 V128 H118 Z" />
             <!-- compression straps + buckles -->
-            <path
-              class="s"
-              d="M56 126 L120 122 L120 134 L56 138 Z"
-              style="fill: #6f6a8f"
-            />
             <rect
               class="s"
               x="90"
@@ -548,33 +529,6 @@ const progress = computed(() => {
               rx="4"
             />
             <circle class="s f-metal" cx="147" cy="212" r="5" />
-            <!-- pins -->
-            <circle class="s" cx="82" cy="134" r="17" style="fill: #c89a6a" />
-            <path
-              class="s"
-              d="M70 136 C70 124 94 124 94 136 Z"
-              style="fill: #c84a3a"
-            />
-            <path class="s f-cream" d="M78 136 L86 136 L86 146 L78 146 Z" />
-            <circle cx="77" cy="130" r="1.8" fill="#fff" />
-            <circle cx="86" cy="129" r="1.6" fill="#fff" />
-            <circle class="s" cx="108" cy="120" r="8" style="fill: #c89a6a" />
-            <path
-              class="thin"
-              d="M104 123 L108 115 L112 123 Z"
-              style="fill: #5d7a8c"
-            />
-            <circle class="s" cx="214" cy="140" r="15" style="fill: #e7c48a" />
-            <path
-              class="s"
-              d="M203 147 L211 133 L216 141 L219 137 L226 147 Z"
-              style="fill: #7d9a52"
-            />
-            <path
-              class="s"
-              d="M208 168 l5 11 12 1 -9 8 3 12 -11 -6 -11 6 3 -12 -9 -8 12 -1Z"
-              style="fill: #a7744a; opacity: 0.95"
-            />
             <rect
               class="s label"
               x="92"
@@ -791,13 +745,17 @@ const progress = computed(() => {
           </g>
           <path class="string tie" d="M56 132 C46 120 34 112 22 108" />
         </g>
+        <!-- badges pinned on the bag -->
+        <g v-for="(p, i) in pinned" :key="`${p.kind}-${i}`" :transform="`translate(${p.x} ${p.y}) rotate(${p.turn})`">
+        <BagBadge :kind="p.kind" />
+        </g>
       </svg>
 
       <span v-if="isNew" class="label-text new-text" :style="labelBox">
         <span class="plus" aria-hidden="true">+</span>
         Pack a new trip
       </span>
-      <template v-else>
+      <template v-else-if="!bare">
         <span class="label-text" :style="labelBox" :title="trip.name"
           ><span class="clamp">{{ trip.name }}</span></span
         >
@@ -808,7 +766,8 @@ const progress = computed(() => {
       </template>
     </div>
 
-    <template v-if="!isNew">
+    <template v-if="bare" />
+    <template v-else-if="!isNew">
       <span class="dates">{{ dateRange(trip.start_date, trip.end_date) }}</span>
       <span class="caption hand">{{ progress }}</span>
     </template>
@@ -1041,6 +1000,9 @@ const progress = computed(() => {
 .new .thin,
 .new .tie {
   display: none;
+}
+.bare .tie {
+  display: none
 }
 .new-text {
   flex-direction: column;
