@@ -10,6 +10,8 @@ import ScrapbookPage from '@/components/archives/ScrapbookPage.vue';
 import { buildScrapbookPages } from '@/utils/scrapbookLayout';
 import { useOneCupboard } from '@/composables/useOneCupboard';
 import { askConfirm, showAlert } from '@/lib/dialog';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
+
 
 // phases in which the server still accepts memory uploads
 const UPLOAD_PHASES = ['on_the_road', 'memory_box'];
@@ -302,8 +304,8 @@ async function swapOutReviewed() {
       @open="openDrawer"
       @pick="reviewDrawer"
     >
-      <p v-if="!loading && !loadError && !attic.drawers.length && !pendingTrip" class="hand empty">
-        Nothing in here yet. Finished trips move into a drawer a week after they end.
+      <WanderingEyes v-if="loading && !attic.drawers.length" center text="Climbing up to the attic…" />
+      <p v-if="!loading && !loadError && !attic.drawers.length && !pendingTrip" class="hand empty">Nothing in here yet. Finished trips move into a drawer a week after they end.
       </p>
     </AtticScene>
 

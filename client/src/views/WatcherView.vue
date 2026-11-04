@@ -5,6 +5,7 @@ import { api, API_URL, errorMessage } from '@/lib/api';
 import { timeAgo } from '@/utils/format';
 import { useCampSky } from '@/composables/useCampSky';
 import CrossingScene from '@/components/watcher/CrossingScene.vue';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -34,9 +35,11 @@ const score = computed(() => est.value?.selected?.score ?? 0);
 const isNow = computed(() => q.day === now.day && q.hour === now.hour);
 const { condition } = useCampSky();
 
+const estLoading = ref(false);
+const camLoading = ref(false);
 async function loadEstimate() {
   estError.value = '';
-  console.log('[Watcher] loading congestion', { ...q });
+  estLoading.value = true;  console.log('[Watcher] loading congestion', { ...q });
   try {
     const { data } = await api.get(`/checkpoints/${q.checkpoint}/congestion`, {
       params: { direction: q.direction, day: q.day, hour: q.hour, holiday: q.holiday || undefined },
@@ -48,10 +51,10 @@ async function loadEstimate() {
     estError.value = errorMessage(err);
   }
 }
-
 async function loadCameras() {
   console.log('[Watcher] loading cameras', { checkpoint: q.checkpoint });
-  try {
+  camLoading.value = true;
+  try {    
     const { data } = await api.get(`/checkpoints/${q.checkpoint}/cameras`);
     cams.value = data;
     camError.value = '';
@@ -62,9 +65,10 @@ async function loadCameras() {
     camError.value = err?.response?.status === 503
       ? 'Live cameras need an LTA DataMall key on the server (LTA_ACCOUNT_KEY). The estimate above still works.'
       : errorMessage(err, 'Cameras unavailable right now');
+  } finally {
+    camLoading.value = false;
   }
 }
-
 watch(q, loadEstimate, { deep: true, immediate: true });
 watch(() => q.checkpoint, loadCameras);
 onMounted(() => {
@@ -180,6 +184,7 @@ function handleCameraKeydown(event) {
         <input v-model.number="q.hour" class="slider" type="range" min="0" max="23" step="1" aria-label="Hour of day" data-cy="hour-slider" />
         <div class="axis"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
 
+        <WanderingEyes v-if="estLoading && !est" center text="Reading the queue…" />
         <p v-if="est?.bestHours?.length" class="best">
           <strong>Quieter times:</strong>
           <button v-for="h in est.bestHours" :key="h" type="button" class="mini" @click="q.hour = h">{{ hourLabel(h) }}</button>
@@ -194,6 +199,7 @@ function handleCameraKeydown(event) {
           <span v-if="cams" class="cam-meta">Updated {{ timeAgo(cams.fetchedAt) }} · {{ cams.source }}</span>
         </div>
         <p v-if="camError" class="cam-note" role="status">{{ camError }}</p>
+        <WanderingEyes v-if="camLoading && !cams" center text="Tuning in the cameras…" />
         <div class="cam-strip">
           <figure v-for="c in cams?.cameras || []" :key="c.cameraId" class="cam">
             <button type="button" class="cam-open" :aria-label="`Enlarge camera: ${c.label}`" @click="openCameraViewer(c)">

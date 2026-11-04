@@ -10,6 +10,7 @@ import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
 import FiresideCircle from '@/components/tales/FiresideCircle.vue';
 import { useCampSky } from '@/composables/useCampSky';
 import { askConfirm, showAlert } from '@/lib/dialog';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 
 const route = useRoute();
@@ -470,7 +471,7 @@ function handlePhotoKeydown(event) {
       </ul>
 
       <p v-if="!feed.loading && !feed.items.length" class="empty">No postcards yet. Be the first by the fire.</p>
-      <p v-if="feed.loading" class="empty" role="status">Checking the mailbox…</p>
+      <WanderingEyes v-if="feed.loading" center text="Checking the mailbox…" />
       <button v-if="feed.nextCursor" type="button" class="send older" :disabled="feed.loading" @click="load(true)">Older postcards</button>
       </div>
     </section>

@@ -13,6 +13,8 @@ import ToastMessage from "@/components/common/ToastMessage.vue";
 import SkyBackdrop from "@/components/scene/SkyBackdrop.vue";
 import FilterMenu from "@/components/explorer/FilterMenu.vue";
 import VibeBoard from "@/components/explorer/VibeBoard.vue";
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
+
 
 const route = useRoute();
 const router = useRouter();
@@ -467,7 +469,7 @@ function pinFromBackpack(item) {
 
               <div class="feed-body">
                 <div class="results">
-                  <p v-if="loading && !board.length" class="deck-empty" role="status">Pinning up fresh flyers…</p>
+                  <WanderingEyes v-if="loading && !board.length" center text="Pinning up fresh flyers…" />               
                   <p v-else-if="error" class="deck-empty error-text" role="alert">{{ error }}</p>
                   <p v-else-if="!board.length" class="deck-empty">
                     {{ places.length ? 'That’s every flyer on the board. Try another vibe.' : 'No flyers for that. Try another vibe or search.' }}

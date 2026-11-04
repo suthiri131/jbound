@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue';
 import { api, errorMessage } from '@/lib/api';
 import { timeAgo } from '@/utils/format';
 import { useNotificationsStore } from '@/stores/notifications';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 const emit = defineEmits(['close']);
 const notifications = useNotificationsStore();
@@ -96,8 +97,7 @@ onMounted(() => {
     </div>
 
     <p v-if="loadError" class="error-text card-flat card-pad" role="alert">{{ loadError }}</p>
-    <p v-if="loading" class="hand muted">Loading…</p>
-
+    <WanderingEyes v-if="loading" center text="Checking for news…" />
     <section v-if="invites.length" class="group">
       <h2 class="group-label">Invites</h2>
       <ul class="feed">
