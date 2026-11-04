@@ -1,4 +1,5 @@
 <script setup>
+import BackLabel from "@/components/common/BackLabel.vue";
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTripsStore } from '@/stores/trips';
@@ -56,8 +57,7 @@ watch(() => route.query.join, async (code) => {
     <SatchelBar :search="search" :phase="phase" :start-open="Boolean(route.query.new)">
       <template #lead>
         <RouterLink to="/" class="camp-back back-camp" aria-label="Back to Basecamp" title="Back to Basecamp">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
-          <span aria-hidden="true">Back</span>
+          <BackLabel />
         </RouterLink>
       </template>
       <template #search>
@@ -121,7 +121,6 @@ watch(() => route.query.join, async (code) => {
   box-sizing: border-box;
   padding: 0 14px;
   gap: 6px;
-  font-size: 20px;
 }
 
 /* search: magnifier inside the bar on the left */

@@ -2,7 +2,6 @@
 import { ref, computed, watch, onBeforeUnmount } from "vue";
 import { useRoute } from "vue-router";
 import AppNav from "@/components/common/AppNav.vue";
-import SatchelDrawer from "@/components/common/SatchelDrawer.vue";
 import { hasSupabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { useCampMusic } from '@/composables/useCampMusic'
@@ -12,13 +11,6 @@ import { dismissDialogs } from "@/lib/dialog";
 
 const route = useRoute();
 const auth = useAuthStore();
-const satchelOpen = ref(false);
-watch(
-  () => auth.user?.id,
-  () => {
-    satchelOpen.value = false;
-  },
-);
 const notifOpen = ref(false);
 // The sign-in / sign-up pages have their own header, so the app nav + footer are hidden there.
 const showChrome = computed(
@@ -76,7 +68,6 @@ function onPointerOut(e) {
     <footer v-if="showChrome && !fullBleed" class="footer hand">
       JBound · Singapore ⇄ Johor Bahru
     </footer>
-    <SatchelDrawer v-if="satchelOpen" @close="satchelOpen = false" />
     <NotificationsPanel v-if="notifOpen" @close="notifOpen = false" />
     <AppDialog />
   </div>

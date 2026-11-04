@@ -111,6 +111,21 @@ button {
   font-family: var(--font-round);
   font-weight: 700;
   text-decoration: none;
+  cursor: pointer;
+}
+.camp-back,
+.btn.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-round);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.camp-back > svg,
+.page-back > svg {
+  flex: none;
 }
 .camp-back:hover {
   color: #1f2a24;
