@@ -119,7 +119,6 @@ function created(trip) {
         {{ total }} {{ search.trim() || phase ? 'matching ' : '' }}trip{{ total === 1 ? '' : 's' }}
       </span>
       <div v-if="!loading && !loadError && total > 0" class="edit-row">
-        <span v-if="editingBags" class="edit-hint hand" role="status">Pick a bag to restyle</span>
         <button type="button" class="edit-bags" :aria-pressed="editingBags" data-cy="edit-bags" @click="toggleEditing">
           <svg v-if="!editingBags" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16Z" /><path d="m13.5 6.5 4 4" /></svg>
           {{ editingBags ? 'Done' : 'Edit bags' }}
