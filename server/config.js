@@ -33,6 +33,8 @@ export const config = {
   },
 
   frankfurterBaseUrl: process.env.FRANKFURTER_BASE_URL || 'https://api.frankfurter.dev',
+  // Vercel sends this as `Authorization: Bearer $CRON_SECRET` on scheduled cron requests — set it in Vercel's env vars.
+  cronSecret: process.env.CRON_SECRET || '',
   ors: {
     apiKey: process.env.ORS_API_KEY || '',
     baseUrl: process.env.ORS_BASE_URL || 'https://api.heigit.org/openrouteservice',
