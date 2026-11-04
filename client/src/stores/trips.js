@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 
 /** The satchel: every trip the user is on that hasn't been archived yet. */
 export const useTripsStore = defineStore('trips', {
-  state: () => ({ trips: [], loaded: false, loading: false, sessionVersion: 0 }),
+  state: () => ({ trips: [], loaded: false, loading: false, sessionVersion: 0, invitesAccepted: 0 }),
   getters: {
     onTheRoad: (s) => s.trips.find((t) => t.phase === 'on_the_road') || null,
     memoryBoxTrips: (s) => s.trips.filter((t) => t.phase === 'memory_box'),
@@ -40,6 +40,13 @@ export const useTripsStore = defineStore('trips', {
       } finally {
         if (version === this.sessionVersion) this.loading = false;
       }
+    },
+    /** Accept or decline an invite. An accepted trip only now appears in the user's lists, so refresh them. */
+    async respondToInvite(tripId, action) {
+      await api.post(`/trips/${tripId}/invites/${action}`);
+      if (action !== 'accept') return;
+      this.invitesAccepted++; // the Planner keeps its own page of trips
+      await this.fetch(true).catch(() => {}); // the answer is saved; the lists catch up on the next load
     },
     async create(payload) {
       const version = this.sessionVersion;

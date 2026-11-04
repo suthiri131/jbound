@@ -34,6 +34,7 @@ async function listTripPage(req, res) {
     let q = supabase.from('trips')
       .select(`${TRIP_FIELDS}, membership:trip_members!inner(user_id, role), members:trip_members(count), items:itinerary_items(done)`, { count: 'exact', head })
       .eq('membership.user_id', req.user.id)
+      .eq('membership.status', 'accepted')
       .is('archived_at', null);
     // Match the computed phase before counting and limiting rows.
     if (phase === 'planning') q = q.or(`start_date.is.null,start_date.gt.${today}`);
@@ -73,7 +74,8 @@ export async function listMyTrips(req, res) {
     await supabase
       .from('trip_members')
       .select(`role, trip:trips(${TRIP_FIELDS}, members:trip_members(count), items:itinerary_items(done))`)
-      .eq('user_id', req.user.id),
+      .eq('user_id', req.user.id)
+      .eq('status', 'accepted'),
   );
   const today = sgToday();
   const trips = await Promise.all(
@@ -214,13 +216,17 @@ export async function joinByCode(req, res) {
   );
   const { data: existing } = await supabase
     .from('trip_members')
-    .select('role')
+    .select('role, status')
     .eq('trip_id', trip.id)
     .eq('user_id', req.user.id)
     .maybeSingle();
 
-  let alreadyMember = Boolean(existing);
-  if (!existing) {
+  let alreadyMember = Boolean(existing) && existing.status !== 'pending';
+  if (existing?.status === 'pending') {
+    // Invited, then used the code anyway: that's as good as accepting.
+    check(await supabase.from('trip_members').update({ status: 'accepted' }).eq('trip_id', trip.id).eq('user_id', req.user.id));
+    await postSystemMessage(trip.id, `${await displayName(req.user.id)} joined the crew`);
+  } else if (!existing) {
     try {
       await addMember(trip.id, req.user.id);
       await postSystemMessage(trip.id, `${await displayName(req.user.id)} joined the crew`);

@@ -4,9 +4,11 @@ import { api, errorMessage } from '@/lib/api';
 import { timeAgo } from '@/utils/format';
 import { useNotificationsStore } from '@/stores/notifications';
 import WanderingEyes from '@/components/common/WanderingEyes.vue';
+import { useTripsStore } from '@/stores/trips';
 
 const emit = defineEmits(['close']);
 const notifications = useNotificationsStore();
+const tripsStore = useTripsStore();
 const loading = ref(false);
 const loadError = ref('');
 const items = ref([]);
@@ -76,7 +78,7 @@ async function loadInvites() {
 }
 
 async function respond(tripId, action) {
-  await api.post(`/trips/${tripId}/invites/${action}`);
+  await tripsStore.respondToInvite(tripId, action);
   invites.value = invites.value.filter((t) => t.id !== tripId);
   notifications.inviteCount = invites.value.length;
 }
@@ -101,9 +103,9 @@ onMounted(() => {
     <section v-if="invites.length" class="group">
       <h2 class="group-label">Invites</h2>
       <ul class="feed">
-        <li v-for="t in invites" :key="t.id" class="row-item" style="flex-direction: row; justify-content: space-between; align-items: center;">
+        <li v-for="t in invites" :key="t.id" class="row-item">
           <span>You've been invited to <strong>{{ t.name }}</strong></span>
-          <span class="row" style="gap: 8px">
+          <span class="invite-actions">
             <button type="button" class="btn btn-sm" @click="respond(t.id, 'accept')">Accept</button>
             <button type="button" class="btn btn-sm btn-ghost" @click="respond(t.id, 'decline')">Decline</button>
           </span>
@@ -143,5 +145,6 @@ onMounted(() => {
 .text { font-size: 15px; }
 .meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-mute); }
 .trip-name { font-weight: 700; }
+.invite-actions { display: flex; gap: 8px; margin-top: 6px; }
 .empty { margin-top: 20px; }
 </style>

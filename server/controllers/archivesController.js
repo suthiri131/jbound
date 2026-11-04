@@ -17,7 +17,8 @@ async function atticEntries(userId) {
     await supabase
       .from('trip_members')
       .select(`attic_slot, attic_cleared_at, trip:trips(${TRIP_FIELDS})`)
-      .eq('user_id', userId),
+      .eq('user_id', userId)
+      .eq('status', 'accepted'),
   );
   const today = sgToday();
   const entries = await Promise.all(
