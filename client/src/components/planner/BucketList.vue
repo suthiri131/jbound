@@ -20,7 +20,7 @@ const props = defineProps({
   legs: { type: Object, default: () => ({}) }, // itemId → 'tight' | 'overloaded'
   activeStopId: { type: [String, Number], default: null },
 });
-const emit = defineEmits(['changed', 'error', 'edit', 'delete', 'select-stop']);
+const emit = defineEmits(['changed', 'ticked', 'error', 'edit', 'delete', 'select-stop']);
 
 function clearStopSelection(event) {
   if (!event.currentTarget.contains(event.relatedTarget)) emit('select-stop', null);
@@ -85,8 +85,19 @@ async function run(fn) {
 }
 
 const patch = (item, body) => run(() => api.patch(`/trips/${props.trip.id}/itinerary/${item.id}`, body));
-const toggle = (item) => patch(item, { done: !item.done });
-const setTime = (item, value) => patch(item, { time: value || null });
+// Ticking is instant: flip it here, save in the background, undo if the save fails.
+// A tick doesn't change the route, so the map and timings are left alone.
+async function toggle(item) {
+  const done = !item.done;
+  item.done = done;
+  emit('ticked', item.id);
+  try {
+    await api.patch(`/trips/${props.trip.id}/itinerary/${item.id}`, { done });
+  } catch (err) {
+    item.done = !done;
+    emit('error', errorMessage(err, 'Could not tick that off'));
+  }
+}const setTime = (item, value) => patch(item, { time: value || null });
 const remove = async (item) => {
   const yes = await askConfirm({ title: `Remove ${item.title}?`, confirmLabel: 'Remove stop', danger: true });
   if (yes) run(() => api.delete(`/trips/${props.trip.id}/itinerary/${item.id}`));

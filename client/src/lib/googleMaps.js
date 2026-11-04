@@ -17,9 +17,8 @@ let loader;
 export async function loadGoogleMaps() {
   if (!hasGoogleMaps) throw new Error('VITE_GOOGLE_MAPS_API_KEY is not set');
   // 'alpha' is a superset of 'weekly' — needed so the same loader can also serve 'maps3d' below.
-  loader ||= new Loader({ apiKey, version: 'alpha', region: 'SG', language: 'en' });
-  // SymbolPath lives in 'core', not 'maps'
-  const [{ Map, Polyline, InfoWindow }, { AdvancedMarkerElement }, { LatLngBounds, SymbolPath }] = await Promise.all([
+  // 'weekly' (the stable channel) includes 'maps3d' since Oct 2025; 'alpha' shows Google's dev-only banner.
+  loader ||= new Loader({ apiKey, version: 'weekly', region: 'SG', language: 'en' });  const [{ Map, Polyline, InfoWindow }, { AdvancedMarkerElement }, { LatLngBounds, SymbolPath }] = await Promise.all([
     loader.importLibrary('maps'),
     loader.importLibrary('marker'),
     loader.importLibrary('core'),
