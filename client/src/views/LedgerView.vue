@@ -246,7 +246,7 @@ onMounted(loadConversionRate);
 <template>
   <main class="ledger-camp">
     <SkyBackdrop />
-    <RouterLink to="/" class="camp-back back">← Walk back to camp</RouterLink>
+    <RouterLink to="/" class="camp-back back">← Back</RouterLink>
 
     <section class="stall-scene" aria-label="The market stall: who has paid what">
       <div class="stall-wrap">

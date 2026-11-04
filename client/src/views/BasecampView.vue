@@ -57,6 +57,24 @@ const { mode, condition, forecast, forced, isNight, modeLabel, cycleMode, condit
 
 // background music: day and night playlists, swapped when the sky changes
 const music = useCampMusic();
+// place labels: hidden until you walk up to a place, unless you switch them all on (remembered)
+const LABELS_KEY = "jbound:camp-labels";
+const readLabels = () => {
+  try {
+    return localStorage.getItem(LABELS_KEY) === "all";
+  } catch {
+    return false;
+  }
+};
+const showLabels = ref(readLabels());
+function toggleLabels() {
+  showLabels.value = !showLabels.value;
+  try {
+    localStorage.setItem(LABELS_KEY, showLabels.value ? "all" : "near");
+  } catch {
+    /* private mode: just not remembered */
+  }
+}
 
 // ---------- you + your crew ----------
 const me = computed(() =>
@@ -140,6 +158,7 @@ onMounted(() => {
       :condition="condition"
       :return-from="returnFrom"
       :traffic="traffic"
+      :show-labels="showLabels"
       :locked="locked"
       :view-shift="viewShift"
       @locked="onLocked"
@@ -151,6 +170,22 @@ onMounted(() => {
         <span v-if="forecast || forced" class="chip-weather" :title="forecast">
           Woodlands · {{ conditionLabel }}
         </span>
+        <button
+          type="button"
+          class="round"
+          :aria-pressed="showLabels"
+          :aria-label="showLabels ? 'Hide place labels' : 'Show all place labels'"
+          :title="showLabels ? 'Labels: all shown' : 'Labels: only when you walk up'"
+          @click="toggleLabels"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
+            <template v-if="showLabels">
+              <path d="M7 9h10M7 12h6" />
+            </template>
+            <path v-else d="M3 3l18 18" />
+          </svg>
+        </button>
 
         <button
           type="button"

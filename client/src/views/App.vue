@@ -110,8 +110,11 @@ useCampMusic();
     transform: none;
     transition-delay: 0s;
   }
-}
-@media (prefers-reduced-motion: reduce) {
+  /* the dropped-down nav covers the top of the page, so keep the camp's top-right buttons below it */
+  .app:has(.nav-shell.peek) :deep(.hud.top-right) {
+    top: 86px;
+  }
+}@media (prefers-reduced-motion: reduce) {
   .nav-shell.peek {
     transition: none;
   }

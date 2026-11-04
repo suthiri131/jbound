@@ -22,6 +22,7 @@ const props = defineProps({
   mode: { type: String, default: 'auto' }, // 'auto' | 'day' | 'night'
   condition: { type: String, default: 'clear' },
   returnFrom: { type: String, default: null },
+  showLabels: { type: Boolean, default: false},
   traffic: { type: Object, default: () => ({}) },
   locked: { type: Array, default: () => [] },
   viewShift : { type: Object, default: () => ({ x: 0, y: 0}) },
@@ -718,7 +719,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   >
     <div ref="canvasWrap" class="canvas" :style="{ cursor: hovered ? 'pointer' : 'default' }" @pointerdown="onPointerDown" @pointerup="onPointerUp" @pointercancel="onPointerCancel" />
 
-    <div class="overlays" :class="{ ready }">
+    <div class="overlays" :class="{ ready, 'labels-hidden' : !showLabels }">
         <button
           v-for="s in stationList"
           :key="s.id"
@@ -818,7 +819,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background 0.15s, opacity 0.2s;
   font: inherit;
 }
 .bubble::after {
@@ -853,8 +854,46 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   outline: 3px solid #fffdf7;
   outline-offset: 2px;
 }
+/* labels hidden (the default): a place's label only pops up when you walk up to it, hover it or tab to it.
+   The hidden ones still let taps through to the building and are still read out by screen readers. */
+.labels-hidden .bubble:not(.hot):not(:focus-visible) {
+  opacity: 0;
+  pointer-events: none;
+}
+.labels-hidden .bubble.hot {
+  animation: label-pop 0.22s ease-out;
+}
+@keyframes label-pop {
+  from { opacity: 0; margin-top: -4px; }
+  to { opacity: 1; margin-top: -12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .labels-hidden .bubble.hot { animation: none; }
+}
+
+/* night: warm paper lanterns instead of bright white cards */
+.is-night .bubble {
+  border-color: #3a2618;
+  background: #f3e2bd;
+  color: #3a2618;
+  box-shadow: 0 0 0 4px rgba(255, 190, 90, 0.18), 0 0 18px rgba(255, 180, 80, 0.55);
+}
+.is-night .bubble::after {
+  border-color: #3a2618;
+}
+.is-night .bubble span {
+  color: #5a3a22;
+  opacity: 1;
+}
+.is-night .bubble.hot,
+.is-night .bubble:hover,
+.is-night .bubble:focus-visible {
+  /* the one you're next to burns a little brighter */
+  background: #f5bf4f;
+  box-shadow: 0 0 0 5px rgba(255, 190, 90, 0.3), 0 0 26px rgba(255, 180, 80, 0.8);
+}
 @media (max-width: 640px) {
-  /* phones: names only, or the bubbles pile on top of each other */
+  /* phones: smaller labels, names only */
   .bubble {
     padding: 4px 10px 5px;
     border-width: 2px;
@@ -866,7 +905,6 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
     display: none;
   }
 }
-
 .tag {
   position: absolute;
   left: 0;

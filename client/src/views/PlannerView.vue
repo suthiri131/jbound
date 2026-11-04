@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTripsStore } from '@/stores/trips';
 import { errorMessage } from '@/lib/api';
+import { useCampSky } from '@/composables/useCampSky';
 import SatchelBar from '@/components/planner/SatchelBar.vue';
 
 const route = useRoute();
 const router = useRouter();
 const trips = useTripsStore();
+const { isNight } = useCampSky({ weather: false });
 const loadError = ref('');
 const joining = ref(false);
 const phases = ['planning', 'on_the_road', 'memory_box'];
@@ -46,7 +48,7 @@ watch(() => route.query.join, async (code) => {
 </script>
 
 <template>
-  <main class="trips-page">
+  <main class="trips-page" :class="{ night: isNight }">
     <div v-if="loadError" class="card-flat card-pad" role="alert">
       <p class="error-text">{{ loadError }}</p>
     </div>
@@ -55,7 +57,7 @@ watch(() => route.query.join, async (code) => {
       <template #lead>
         <RouterLink to="/" class="camp-back back-camp" aria-label="Back to Basecamp" title="Back to Basecamp">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
-          <span aria-hidden="true">⛺</span>
+          <span aria-hidden="true">Back</span>
         </RouterLink>
       </template>
       <template #search>
@@ -89,10 +91,27 @@ watch(() => route.query.join, async (code) => {
   gap: 16px;
   padding: 18px clamp(14px, 3vw, 44px) 30px;
   font-family: var(--font-round);
+  /* by day a light oak table, by night (see .night below) the dark wood */
+  background: repeating-linear-gradient(90deg, #f3e3bd 0 150px, #e3cc9a 150px 152px, #efdcb0 152px 300px, #e3cc9a 300px 302px);
+  box-shadow: inset 0 0 80px rgba(120, 80, 30, 0.16);}
+.trips-page > :deep(.satchel) { flex: 1; }
+/* night: the dark wood, and the writing on the table turns light so it still reads */
+.trips-page.night {
   background: repeating-linear-gradient(90deg, #7a4d2c 0 150px, #6c4326 150px 153px, #744829 153px 300px, #6c4326 300px 303px);
   box-shadow: inset 0 0 90px rgba(40, 20, 5, 0.55);
 }
-.trips-page > :deep(.satchel) { flex: 1; }
+.trips-page.night :deep(.dates),
+.trips-page.night :deep(.edit-hint) { color: #ecd9b0; }
+.trips-page.night :deep(.caption) { color: #fbf1dc; }
+.trips-page.night :deep(.new-text) { color: #f1dfb6; }
+.trips-page.night :deep(.new .s),
+.trips-page.night :deep(.new .ink),
+.trips-page.night :deep(.new .strap-ink) { stroke: #e3c99a; }
+.trips-page.night :deep(.ground) { fill: rgba(20, 8, 0, 0.35); }
+.trips-page.night :deep(.new .f-bag),
+.trips-page.night :deep(.new .f-side),
+.trips-page.night :deep(.new .f-deep),
+.trips-page.night :deep(.new .label) { fill: rgba(255, 240, 210, 0.08); }
 .trips-page :deep(.trip-pagination) { padding: 6px 12px; border-radius: 10px; background: #f1dfb6; }
 
 /* back to camp: arrow + tent */

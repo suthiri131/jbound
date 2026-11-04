@@ -316,7 +316,7 @@ function handlePhotoKeydown(event) {
 <template>
   <main class="tales-page">
     <SkyBackdrop :path="false" />
-    <RouterLink to="/" class="camp-back home" aria-label="Back to Basecamp">← <span class="home-label">Basecamp</span></RouterLink>
+    <RouterLink to="/" class="camp-back home" aria-label="Back to Basecamp">← <span class="home-label">Back</span></RouterLink>
 
     <section class="bubble" aria-label="Postcards from JB">
       <header class="toolbar">
