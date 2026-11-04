@@ -31,20 +31,68 @@ const DEFAULT_FILTERS = {
   hiddenGem: false,
 };
 
+// ---------- remembered board ----------
+// Leaving the Explorer and coming back (nav bar, Basecamp, another page) lands on the same feed
+// with the same vibes and filters. Kept in sessionStorage: it lasts until this browser tab closes.
+const SAVED_KEY = "jbound:explorer";
+
+function readSaved() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SAVED_KEY) || "null");
+    if (!saved || typeof saved !== "object") return null;
+    const f = saved.filters || {};
+    return {
+      vibes: Array.isArray(saved.vibes) ? saved.vibes.filter((v) => VIBE_IDS.includes(v)) : [],
+      q: typeof saved.q === "string" ? saved.q : "",
+      filters: {
+        checkpoint: ["woodlands", "tuas"].includes(f.checkpoint) ? f.checkpoint : DEFAULT_FILTERS.checkpoint,
+        maxDistanceKm: Number.isFinite(f.maxDistanceKm) ? f.maxDistanceKm : DEFAULT_FILTERS.maxDistanceKm,
+        maxPrice: [1, 2, 3, 4].includes(f.maxPrice) ? f.maxPrice : DEFAULT_FILTERS.maxPrice,
+        hiddenGem: f.hiddenGem === true,
+      },
+    };
+  } catch {
+    return null; // private mode or unreadable data: start fresh
+  }
+}
+
+function saveBoard() {
+  try {
+    sessionStorage.setItem(
+      SAVED_KEY,
+      JSON.stringify({ vibes: vibes.value, q: q.value.trim(), filters: filters.value }),
+    );
+  } catch {
+    /* storage blocked: the board just won't be remembered */
+  }
+}
+
 // ---------- state ----------
 const vibesFromUrl = () =>
   String(route.query.vibes || "")
     .split(",")
     .filter((v) => VIBE_IDS.includes(v));
 
-/** 'board' = asking for your vibe, 'feed' = the places pinned up. Coming Back from a place page lands on the feed. */
-const stage = ref(
-  route.query.vibes !== undefined || route.query.q ? "feed" : "board",
-);
+// The URL wins (Back from a place page, a shared link). Otherwise fall back to what was saved last time.
+const fromUrl = route.query.vibes !== undefined || Boolean(route.query.q);
+const saved = readSaved();
+const restored = !fromUrl && saved !== null;
+
+/** 'board' = asking for your vibe, 'feed' = the places pinned up. */
+const stage = ref(fromUrl || restored ? "feed" : "board");
 const boardVisits = ref(0);
-const vibes = ref(vibesFromUrl());
-const q = ref(String(route.query.q || ""));
-const filters = ref({ ...DEFAULT_FILTERS });
+const vibes = ref(fromUrl ? vibesFromUrl() : saved?.vibes ?? []);
+const q = ref(fromUrl ? String(route.query.q || "") : saved?.q ?? "");
+const filters = ref(saved ? { ...saved.filters } : { ...DEFAULT_FILTERS });
+
+// save whenever the feed changes, so the next visit picks up from here
+watch(
+  [vibes, q, filters, stage],
+  () => {
+    if (stage.value === "feed") saveBoard();
+  },
+  { deep: true },
+);
 
 const places = ref([]);
 const loading = ref(false);
@@ -179,6 +227,8 @@ async function openPinFromUrl() {
 watch(() => route.query.pin, openPinFromUrl);
 
 onMounted(async () => {
+  // put the remembered vibes back in the URL, so Back from a place page keeps them too
+  if (restored) syncUrl();
   if (stage.value === "feed") search();
   await trips.fetch().catch(() => {});
   openPinFromUrl();
