@@ -7,6 +7,12 @@ import CrossingScene from '@/components/watcher/CrossingScene.vue';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+const dayDropdownOpen = ref(false);
+function selectDay(index) {
+  q.day = index;
+  dayDropdownOpen.value = false;
+}
+
 const sgNow = () => {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', weekday: 'long', hour: '2-digit', hour12: false }).formatToParts(new Date());
   return { day: DAYS.indexOf(parts.find((p) => p.type === 'weekday').value), hour: Number(parts.find((p) => p.type === 'hour').value) % 24 };
@@ -120,12 +126,17 @@ function handleCameraKeydown(event) {
           <button type="button" :aria-pressed="q.direction === 'to_jb'" @click="q.direction = 'to_jb'">SG → JB</button>
           <button type="button" :aria-pressed="q.direction === 'to_sg'" @click="q.direction = 'to_sg'">JB → SG</button>
         </div>
-        <label class="pick">
-          <span class="sr-only">Day</span>
-          <select v-model.number="q.day">
-            <option v-for="(d, i) in DAYS" :key="d" :value="i">{{ d }}</option>
-          </select>
-        </label>
+        <div class="day-dropdown">
+          <button type="button" class="day-trigger" :aria-expanded="dayDropdownOpen" aria-label="Select day" @click="dayDropdownOpen = !dayDropdownOpen">
+            <span>{{ DAYS[q.day] }}</span>
+            <span class="dropdown-arrow" aria-hidden="true"></span>
+          </button>
+          <ul v-if="dayDropdownOpen" class="day-list" role="listbox">
+            <li v-for="(d, i) in DAYS" :key="d">
+              <button type="button" :class="{ selected: q.day === i }" @click="selectDay(i)">{{ d }}</button>
+            </li>
+          </ul>
+        </div>
         <label class="pick check">
           <input v-model="q.holiday" type="checkbox" /> Holiday
         </label>
@@ -286,11 +297,6 @@ function handleCameraKeydown(event) {
   box-shadow: 0 3px 0 rgba(0, 0, 0, 0.22);
   font-size: 14px;
   font-weight: 600;
-}
-.pick select {
-  border: 0;
-  background: none;
-  font: inherit;
 }
 .check input {
   width: 18px;
@@ -607,5 +613,111 @@ figcaption {
   .verdict strong {
     font-size: 30px;
   }
+}
+
+/* ---------- Day dropdown ---------- */
+.dials {
+  z-index: 10;
+}
+.day-dropdown {
+  position: relative;
+  flex: none;
+  min-width: max-content;
+}
+.day-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 43px;
+  width: 100%;
+  padding: 0 14px;
+  border: 2.5px solid #1f2a24;
+  border-radius: 12px;
+  background: #fffdf7;
+  color: #1f2a24;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.22);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dropdown-arrow {
+  display: block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-right: 2.5px solid #1f2a24;
+  border-bottom: 2.5px solid #1f2a24;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  margin-right: 5px;
+  margin-top: -5px;
+}
+.day-trigger[aria-expanded='true'] .dropdown-arrow {
+  transform: rotate(225deg);
+  margin-top: 5px;
+}
+.day-list {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: max-content;
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
+  background: #fffdf7;
+  border: 2px solid #1f2a24;
+  border-radius: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #a6a69b transparent;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+}
+.day-list li {
+  margin: 0;
+  padding: 0;
+}
+.day-list button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2a24;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.day-list button:hover,
+.day-list button:focus-visible,
+.day-list button.selected {
+  background: #f6e2b3;
+}
+.day-list button.selected {
+  font-weight: 700;
+}
+.day-list::-webkit-scrollbar {
+  width: 7px;
+}
+.day-list::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+.day-list::-webkit-scrollbar-thumb {
+  background: #a6a69b;
+  border-radius: 10px;
+}
+.day-list::-webkit-scrollbar-button {
+  display: none;
 }
 </style>
