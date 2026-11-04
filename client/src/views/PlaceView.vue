@@ -75,12 +75,6 @@ const directionsUrl = computed(() => {
   return `https://www.google.com/maps/dir/?${params}`;
 });
 
-function goBack() {
-  // came from the board → keep its filters; opened from a shared link or another page → go to the board
-  if (window.history.state?.back?.startsWith("/explorer")) router.back();
-  else router.push("/explorer");
-}
-
 async function share() {
   const url = window.location.href;
   try {
@@ -156,10 +150,6 @@ onBeforeUnmount(removeMarker);
 
 <template>
   <div class="place-page">
-    <button type="button" class="btn btn-sm btn-ghost back" @click="goBack">
-      ← Back to the notice board
-    </button>
-
     <!-- loading skeleton -->
     <div
       v-if="loading"
@@ -463,9 +453,6 @@ onBeforeUnmount(removeMarker);
 </template>
 
 <style scoped>
-.back {
-  margin-bottom: 16px;
-}
 
 /* photos */
 .gallery {

@@ -1,4 +1,5 @@
 <script setup>
+import BackLabel from "@/components/common/BackLabel.vue";
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage } from '@/lib/api';
@@ -232,7 +233,7 @@ async function swapOutReviewed() {
 <template>
   <main class="attic-page">
     <h1 class="sr-only">Archives</h1>
-    <RouterLink v-if="!tripId" to="/" class="camp-back out">← Back</RouterLink>
+    <RouterLink v-if="!tripId" to="/" class="camp-back out" aria-label="Back to Basecamp"><BackLabel /></RouterLink>
 
     <div
       v-if="tripId"

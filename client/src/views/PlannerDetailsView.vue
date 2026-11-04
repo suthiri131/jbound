@@ -1,4 +1,5 @@
 <script setup>
+import BackLabel from "@/components/common/BackLabel.vue";
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage } from "@/lib/api";
@@ -219,7 +220,7 @@ const canMemories = computed(() =>
 
 <template>
   <main class="planner" :class="{ night: isNight }"> 
-    <RouterLink to="/planner" class="camp-back back">← All expeditions</RouterLink>
+    <RouterLink to="/planner" class="camp-back back" aria-label="Back to Planner"><BackLabel /></RouterLink>
     <p v-if="loading" class="muted" role="status">Opening your trip…</p>
     <div v-else-if="loadError" class="card-flat card-pad" role="alert">
       <h1 class="display display-sm">This trip is unavailable</h1>
