@@ -13,6 +13,7 @@ describe('application navigation after planner rename', () => {
       '/planner/example-trip?search=Kyoto&phase=planning',
       '/archives/example-trip', '/explorer?pinTo=example-trip',
       '/tales/place/example-place', '/tales/custom/Kyoto',
+      '/explorer/place/example-place', '/explorer/tales/place/example-place', '/explorer/tales/custom/Kyoto',
     ]);
     for (const source of Object.values(sources)) {
       for (const match of source.matchAll(/(?:to|path|linkTo)\s*[:=]\s*["'](\/[^"']*)["']/g)) {

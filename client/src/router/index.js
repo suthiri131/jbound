@@ -41,16 +41,14 @@ const routes = [
     meta: { title: "Watcher", fullBleed: true },
   },
 
-  // Place Tales (from Version 1)
+  // A place's tales live on the notice board, whichever page you came from. These keep old links working.
   {
     path: "/tales/place/:placeId",
-    name: "place-tales",
-    component: PlaceTalesView,
+    redirect: (to) => ({ name: "explorer-place-tales", params: to.params }),
   },
   {
     path: "/tales/custom/:name",
-    name: "custom-place-tales",
-    component: PlaceTalesView,
+    redirect: (to) => ({ name: "explorer-custom-tales", params: to.params }),
   },
   
   {
@@ -76,12 +74,27 @@ const routes = [
     name: "explorer",
     component: () => import("@/views/ExplorerView.vue"),
     meta: { title: "Explorer", fullBleed: true },
-  },
-  {
-    path: "/explorer/place/:googlePlaceId",
-    name: "place",
-    component: () => import("@/views/PlaceView.vue"),
-    meta: { title: "Place" },
+    // these take over the notice board; the Explorer stays mounted underneath, so its results and filters survive
+    children: [
+      {
+        path: "place/:googlePlaceId",
+        name: "place",
+        component: () => import("@/views/PlaceView.vue"),
+        meta: { title: "Place", onBoard: true },
+      },
+      {
+        path: "tales/place/:placeId",
+        name: "explorer-place-tales",
+        component: PlaceTalesView,
+        meta: { title: "Tales", onBoard: true },
+      },
+      {
+        path: "tales/custom/:name",
+        name: "explorer-custom-tales",
+        component: PlaceTalesView,
+        meta: { title: "Tales", onBoard: true },
+      },
+    ],
   },
   {
     path: "/archives/:tripId?",

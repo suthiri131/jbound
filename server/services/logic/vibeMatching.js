@@ -1,17 +1,3 @@
-/**
- * ============================================================
- * VIBE MATCHING  (core business logic — see README AI disclosure)
- * TODO(team): AI-generated reference draft. Rewrite in your own words before submission;
- *             the unit tests in server/tests/ tell you if the rewrite still behaves.
- * ============================================================
- * Filters and ranks places for the Vibe Explorer.
- *
- * Normal mode:      60% vibe match + 40% community popularity (post count)
- * Hidden-gem mode:  only gems; 60% vibe match + 30% gem bonus + 10% "less popular"
- *
- * A place is a "hidden gem" if it was submitted by the community OR has
- * few community posts — i.e. it is not on every generic top-10 list.
- */
 import { distanceFromCheckpointKm } from './geo.js';
 
 export const VIBES = ['eating', 'activities', 'culture', 'adventure', 'cozy', 'peaceful', 'chaotic'];

@@ -1,18 +1,3 @@
-/**
- * ============================================================
- * TRIP PHASE + 7-DAY MEMORY WINDOW  (core business logic — see README AI disclosure)
- * ============================================================
- *   planning      today is before start_date (or no dates yet)
- *   on_the_road   start_date ≤ today ≤ end_date
- *   memory_box    the 7 days after end_date: crew uploads photos
- *   archived      archived_at is set, or the 7 days are over
- *                 (the server sets archived_at lazily the next time
- *                 anyone loads their trips — no cron job needed)
- *
- * All dates are 'YYYY-MM-DD' strings in Singapore time.
- * TODO(team): rewrite in your own words + adjust MEMORY_WINDOW_DAYS if needed.
- */
-
 export const MEMORY_WINDOW_DAYS = 7;
 
 /** Today's date in Singapore as YYYY-MM-DD (independent of the server's timezone). */

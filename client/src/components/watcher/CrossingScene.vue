@@ -77,9 +77,9 @@ const PIERS = [12, 28, 44, 60, 76, 92];
       </svg>
     </div>
 
-    <!-- a checkpoint at each end: the left one is always Singapore -->
-    <div class="post sg" :style="{ filter: sky.landFilter }"><span>SINGAPORE</span><i /></div>
-    <div class="post jb" :style="{ filter: sky.landFilter }"><span>JOHOR BAHRU</span><i /></div>
+    <!-- a sign at each end: the left one is always Singapore -->
+    <div class="post sg"><span>SINGAPORE</span></div>
+    <div class="post jb"><span>JOHOR BAHRU</span></div>
 
     <svg v-if="holiday" class="bunting" viewBox="0 0 1000 60" preserveAspectRatio="none">
       <path d="M0 6Q250 56 500 18T1000 6" fill="none" stroke="#fffdf7" stroke-width="2" />
@@ -204,13 +204,10 @@ const PIERS = [12, 28, 44, 60, 76, 92];
   }
 }
 
-/* ---------- checkpoints ---------- */
+/* ---------- signs ---------- */
 .post {
   position: absolute;
   bottom: calc(42% + 4px);
-  display: grid;
-  justify-items: center;
-  gap: 4px;
   z-index: 2;
 }
 .post.sg {
@@ -229,15 +226,6 @@ const PIERS = [12, 28, 44, 60, 76, 92];
   font-weight: 700;
   font-size: clamp(10px, 1.1cqw, 13px);
   letter-spacing: 0.08em;
-}
-.post i {
-  width: 110px;
-  height: 56px;
-  background: linear-gradient(#d4c2a0 24%, #a8e0ea 24% 60%, #d4c2a0 60%);
-  border: 2px solid #1f2a24;
-}
-.tuas .post i {
-  background: linear-gradient(#c6d0d4 24%, #a8e0ea 24% 60%, #c6d0d4 60%);
 }
 .bunting {
   position: absolute;

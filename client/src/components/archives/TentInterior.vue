@@ -3,7 +3,24 @@
 import { useCampSky } from '@/composables/useCampSky';
 
 const { sky } = useCampSky({ weather: false });
-const BULBS = [[150, 150], [240, 112], [330, 74], [420, 42], [580, 42], [670, 74], [760, 112], [850, 150]];
+
+// One rope, wall to ridge to wall. Flags and bulbs are worked out from it, so they always hang on the line.
+const WALL = [0, 218];
+const SAG = [240, 124];
+const RIDGE = [500, 14];
+const ROPE = `M${WALL} Q${SAG} ${RIDGE} Q${1000 - SAG[0]} ${SAG[1]} ${1000 - WALL[0]} ${WALL[1]}`;
+const along = (t) => [0, 1].map((i) => (1 - t) ** 2 * WALL[i] + 2 * t * (1 - t) * SAG[i] + t ** 2 * RIDGE[i]);
+const mirror = ([x, y]) => [1000 - x, y];
+
+// a triangle whose top edge lies on the rope and whose tip hangs straight down
+const flag = (t, place) => {
+  const [a, b] = [place(along(t)), place(along(t + 0.052))];
+  return `M${a} L${b} L${(a[0] + b[0]) / 2} ${(a[1] + b[1]) / 2 + 34}Z`;
+};
+const FLAG_SPOTS = [0.03, 0.1, 0.17, 0.24, 0.31];
+const BULB_SPOTS = [0.44, 0.6, 0.76, 0.92];
+// numbered left to right along the whole rope, so odd and even take turns
+const BULBS = [...BULB_SPOTS.map((t) => along(t)), ...[...BULB_SPOTS].reverse().map((t) => mirror(along(t)))];
 const SEAMS = ['M500 0 300 700', 'M500 0 700 700', 'M500 0 90 700', 'M500 0 910 700'];
 const FLAGS = ['#e2573c', '#f2b134', '#3f8f86', '#fffdf7', '#2f7fbf'];
 </script>
@@ -36,16 +53,18 @@ const FLAGS = ['#e2573c', '#f2b134', '#3f8f86', '#fffdf7', '#2f7fbf'];
         <path d="M500 26 590 96H410Z" fill="none" stroke="#7d5e36" stroke-width="7" stroke-linejoin="round" />
       </g>
 
-      <!-- string lights along the slopes -->
-      <path d="M100 176Q240 130 420 42Q500 10 580 42Q760 130 900 176" fill="none" stroke="#5d4326" stroke-width="2.5" />
+      <!-- the rope, its bunting and its lights -->
+      <path :d="ROPE" fill="none" stroke="#5d4326" stroke-width="2.5" />
+      <path v-for="(t, i) in FLAG_SPOTS" :key="`l${i}`" :d="flag(t, (p) => p)" :fill="FLAGS[(i + 1) % 5]" />
+      <path v-for="(t, i) in FLAG_SPOTS" :key="`r${i}`" :d="flag(t, mirror)" :fill="FLAGS[(i + 3) % 5]" />
       <g v-for="([x, y], i) in BULBS" :key="i">
-        <circle :cx="x" :cy="y + 11" r="19" fill="#ffe7a8" opacity=".35" />
-        <circle :cx="x" :cy="y + 11" r="7" fill="#fff0bd" stroke="#5d4326" stroke-width="1.6" />
+        <path :d="`M${x} ${y}v6`" stroke="#5d4326" stroke-width="2.5" />
+        <circle :cx="x" :cy="y + 13" r="7" fill="#a98f5c" stroke="#5d4326" stroke-width="1.6" />
+        <g class="lit" :class="i % 2 ? 'even' : 'odd'">
+          <circle :cx="x" :cy="y + 13" r="19" fill="#ffe7a8" opacity=".4" />
+          <circle :cx="x" :cy="y + 13" r="7" fill="#fff0bd" stroke="#5d4326" stroke-width="1.6" />
+        </g>
       </g>
-
-      <!-- bunting in the corners -->
-      <path v-for="i in 5" :key="`l${i}`" :d="`M${(i - 1) * 42 + 8} ${232 - (i - 1) * 25}l30 -18l-4 30Z`" :fill="FLAGS[i % 5]" />
-      <path v-for="i in 5" :key="`r${i}`" :d="`M${992 - (i - 1) * 42} ${232 - (i - 1) * 25}l-30 -18l4 30Z`" :fill="FLAGS[(i + 2) % 5]" />
     </svg>
 
     <span class="pole" />
@@ -118,6 +137,21 @@ svg {
   font-size: clamp(13px, 1.5vw, 19px);
   white-space: nowrap;
 }
+/* bulbs 1, 3, 5... for one second, then 2, 4, 6... for one second, and repeat */
+.lit {
+  animation: blink 2s steps(1) infinite;
+}
+.lit.even {
+  animation-delay: -1s;
+}
+@keyframes blink {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
 @keyframes glow {
   50% {
     box-shadow: 0 0 34px 22px rgba(255, 224, 150, 0.42);
@@ -130,8 +164,11 @@ svg {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lantern {
+  .lantern,
+  .lit,
+  .lit.even {
     animation: none;
+    opacity: 1; /* no flashing: all lights stay on */
   }
 }
 </style>

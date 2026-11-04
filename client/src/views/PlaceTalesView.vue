@@ -1,12 +1,32 @@
 <script setup>
     import { ref, reactive, computed, watch, nextTick } from 'vue';
-    import { useRoute } from 'vue-router';
+    import { useRoute, useRouter } from 'vue-router';
     import { api, assetUrl, errorMessage } from '@/lib/api';
     import { useAuthStore } from '@/stores/auth';
     import { VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
     import { timeAgo, initials } from '@/utils/format';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
     const route = useRoute();
+    const router = useRouter();
+
+    const placeTalesLink = (post) => ({
+        path: post.place
+            ? `/explorer/tales/place/${post.place.id}`
+            : `/explorer/tales/custom/${encodeURIComponent(post.custom_place_name)}`,
+        query: route.query,
+    });
+
+    // Tales and the Explorer both open this page on the notice board; Back returns to whichever it was.
+    const cameFrom = window.history.state?.back;
+    const backLabel = !cameFrom || /^\/explorer(\?|$)/.test(cameFrom) ? '← Back to the notice board'
+        : cameFrom.startsWith('/tales') ? '← Back to Tales'
+        : cameFrom.startsWith('/explorer/place') ? '← Back to the place'
+        : '← Back';
+    function goBack() {
+        if (cameFrom) router.back();
+        else router.push('/explorer'); // opened from a shared link
+    }
 
     const auth = useAuthStore();
     const openComments = reactive({});
@@ -85,6 +105,7 @@
     }
 
     async function loadPlaceTales() {
+        if (!route.params.placeId && route.params.name === undefined) return; // on the way to another page
         loading.value = true;
         error.value = '';
         place.value = null;
@@ -160,11 +181,29 @@
             }
 
             const { data } = await api.get(`/posts/${p.id}/comments`);
-            openComments[p.id] = data;
+            openComments[p.id] = { items: data.items ?? [], nextCursor: data.nextCursor ?? null, loading: false };
         } catch (err) {
-            alert(errorMessage(err));
+            showAlert(errorMessage(err));
         }
         }
+
+    async function loadMoreComments(p) {
+        const state = openComments[p.id];
+        if (!state?.nextCursor || state.loading) return;
+
+        state.loading = true;
+        try {
+            const { data } = await api.get(`/posts/${p.id}/comments`, {
+                params: { before: state.nextCursor }
+            });
+            state.items.push(...data.items);
+            state.nextCursor = data.nextCursor;
+        } catch (err) {
+            showAlert(errorMessage(err));
+        } finally {
+            state.loading = false;
+        }
+    }
 
     async function comment(p) {
         const text = (commentDraft[p.id] || '').trim();
@@ -172,16 +211,28 @@
 
         try {
             const { data } = await api.post(`/posts/${p.id}/comments`, { text });
-            (openComments[p.id] ||= []).push(data);
+            openComments[p.id].items.unshift(data); // newest first, like the rest of the list
             p.commentCount++;
             commentDraft[p.id] = '';
         } catch (err) {
-            alert(errorMessage(err));
+            showAlert(errorMessage(err));
         }
         }
 
+    async function removeComment(p, c) {
+        if (!(await askConfirm({ title: 'Delete this comment?', confirmLabel: 'Delete comment', danger: true }))) return;
+
+        try {
+            await api.delete(`/posts/${p.id}/comments/${c.id}`);
+            openComments[p.id].items = openComments[p.id].items.filter(x => x.id !== c.id);
+            p.commentCount = Math.max(0, p.commentCount - 1);
+        } catch (err) {
+            showAlert(errorMessage(err));
+        }
+    }
+
     async function removePost(p) {
-        if (!window.confirm('Delete this tale?')) return;
+        if (!(await askConfirm({ title: 'Delete this tale?', confirmLabel: 'Delete tale', danger: true }))) return;
 
         try {
             await api.delete(`/posts/${p.id}`);
@@ -189,7 +240,7 @@
             // prevents carousel from pulling the image that was deleted
             currentPlacePhoto.value = 0;
         } catch (err) {
-            alert(errorMessage(err));
+            showAlert(errorMessage(err));
         }
         }
 
@@ -207,8 +258,8 @@
 </script>
 
 <template>
-  <main class="container page">
-    <RouterLink to="/tales">← Back to Tales</RouterLink>
+  <div>
+    <button type="button" class="btn btn-sm btn-ghost" @click="goBack">{{ backLabel }}</button>
 
     <section class="place-header">
 
@@ -285,14 +336,14 @@
                 at
                 <RouterLink
                     v-if="post.place"
-                    :to="`/tales/place/${post.place.id}`"
+                    :to="placeTalesLink(post)"
                 >
                     {{ post.place.name }}
                 </RouterLink>
 
                 <RouterLink
                     v-else
-                    :to="`/tales/custom/${encodeURIComponent(post.custom_place_name)}`"
+                    :to="placeTalesLink(post)"
                 >
                     {{ post.custom_place_name }}
                 </RouterLink>
@@ -358,19 +409,41 @@
         </footer>
 
         <div v-if="openComments[post.id]" class="comments">
-            <p v-for="c in openComments[post.id]" :key="c.id">
-            <strong>{{ c.author?.name }}</strong> {{ c.text }}
+            <p v-if="!openComments[post.id].items.length" class="muted">No comments yet.</p>
+            <p v-for="c in openComments[post.id].items" :key="c.id" class="comment-row">
+            <span><strong>{{ c.author?.name }}</strong> {{ c.text }}</span>
+            <button
+                v-if="c.author?.id === auth.user?.id"
+                type="button"
+                class="btn btn-sm btn-ghost"
+                @click="removeComment(post, c)"
+            >
+                Delete
+            </button>
             </p>
 
-            <form class="row" style="gap: 8px; flex-wrap: nowrap" @submit.prevent="comment(post)">
+            <button
+                v-if="openComments[post.id].nextCursor"
+                type="button"
+                class="btn btn-sm btn-ghost older"
+                :disabled="openComments[post.id].loading"
+                @click="loadMoreComments(post)"
+            >
+                {{ openComments[post.id].loading ? 'Loading…' : 'Older comments' }}
+            </button>
+
+            <form v-if="auth.isLoggedIn" class="row" style="gap: 8px; flex-wrap: nowrap" @submit.prevent="comment(post)">
             <input
                 v-model="commentDraft[post.id]"
                 class="input"
                 maxlength="1000"
                 placeholder="Add a comment…"
+                :aria-label="`Comment on ${post.author?.name}'s tale`"
             />
             <button type="submit" class="btn btn-sm btn-dark">Post</button>
             </form>
+            <!-- the Explorer is open to guests, but commenting needs an account -->
+            <RouterLink v-else :to="{ path: '/sign-in', query: { next: route.fullPath } }">Sign in to comment</RouterLink>
         </div>
 
         </article>
@@ -425,7 +498,7 @@
       </div>
     </div>
 
-  </main>
+  </div>
 </template>
 
 <style scoped>
@@ -438,6 +511,9 @@
 .liked { background: var(--clay); }
 .comments { margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); font-size: 14px; }
 .comments p { margin: 0 0 8px; }
+.comment-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; overflow-wrap: anywhere; }
+.comment-row .btn { flex: none; }
+.older { margin-bottom: 8px; }
 
 .photo-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; padding: 55px 50px; }
 .photo-enlarged { max-width: 100%; max-height: 85vh; object-fit: contain; border-radius: 8px; }

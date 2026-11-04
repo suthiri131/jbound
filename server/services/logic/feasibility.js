@@ -1,22 +1,3 @@
-/**
- * ============================================================
- * FEASIBILITY CHECK — Well planned / Rushed / Overloaded
- * (core business logic — see README AI disclosure)
- * ============================================================
- * 
- * 
- * this information is stale and I will change accordingly 
- * For each pair of consecutive stops on a day:
- *   need  = time spent at the previous stop + travel time to the next
- *   slack = (next.time − prev.time) − need
- *     slack ≥ 15 min        → fine
- *     −15 < slack < 15      → tight        (Rushed)
- *     slack ≤ −15 or gap ≤ 0 → overloaded  (Overloaded)
- * A day is also Rushed if it runs > 11 h, Overloaded if > 13 h or > 6 stops.
- * Border crossings planned at an hour the Watcher heuristic marks "High" → Rushed.
- * The trip's verdict is its worst day.
- * with your own observations — this is what graders will ask about.
- */
 import { scoreFor, levelFor } from './congestionHeuristic.js';
 
 export const DWELL_BY_VIBE = { eating: 60, culture: 45, activities: 90, adventure: 60 };

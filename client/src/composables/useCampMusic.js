@@ -5,7 +5,7 @@ import { skyMode } from './useCampSky';
 // Your tracks, in client/public/audio/. Played in order, looped, one list by day and one by night.
 const PLAYLISTS = {
   day: ['/audio/day/day-1.mp3', '/audio/day/day-2.mp3', '/audio/day/day-3.mp3'],
-  night: ['/audio/night/night-1.mp3', '/audio/night/night-2.mp3'],
+  night: ['/audio/night/night-1.mp3', '/audio/night/night-2.mp3', '/audio/night/night-3.mp3'],
 };
 const VOLUME = 0.35;
 const KEY = 'jbound:camp-music';

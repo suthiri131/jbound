@@ -1,7 +1,9 @@
 <script setup>
 /**
- * The 3D basecamp. You walk your character around (WASD / arrows / tap the ground) and step up to a station
- * to go in: the camera swoops to it, its door opens, and `enter` fires so the page can change route.
+ * The 3D basecamp. You walk your character around and step up to a station to go in: the camera swoops to it,
+ * its door opens, and `enter` fires so the page can change route.
+ * Desktop: WASD / arrows / click the ground, with the whole camp in view.
+ * Phones and touch screens: an on-screen joystick, with the camera following close behind you.
  *
  * Props:
  *  - returnFrom: start zoomed in on this station and pull back (you just walked out of it)
@@ -35,6 +37,11 @@ const hovered = ref(null);
 const entering = ref(null); // station being entered
 const wipe = ref(props.returnFrom ? 'out' : null); // 'in' = iris closing as you step through, 'out' = opening as you walk back out
 const ready = ref(false);
+const COMPACT_QUERY = '(max-width: 700px), (pointer: coarse)';
+const compactMedia = typeof window !== 'undefined' ? window.matchMedia?.(COMPACT_QUERY) : null;
+const compact = ref(Boolean(compactMedia?.matches)); // joystick + follow camera instead of tap-to-walk + overview
+const onCompactChange = (e) => (compact.value = e.matches);
+const knob = ref(null);
 const people = shallowRef([]); // name tags: [{ id, name, live }]
 
 const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -44,6 +51,7 @@ const clock = new THREE.Clock();
 const player = { avatar: null, pos: new THREE.Vector3(0, 0, 8.5), ry: Math.PI, target: null, speed: 0, waveT: -1 };
 const mates = new Map(); // id -> { avatar, pos, ry, target, wait, live, lookKey, waveT }
 const keys = new Set();
+const joy = { pointerId: null, x: 0, z: 0 }; // x / z are -1..1; length = how hard you are pushing
 const cam = {
   pos: new THREE.Vector3(),
   target: new THREE.Vector3(),
@@ -57,6 +65,9 @@ let arrivalResolve = null;
 
 const OVERVIEW_POS = new THREE.Vector3(0, 13, 27);
 const OVERVIEW_TARGET = new THREE.Vector3(0, 2.4, -2);
+
+const FOLLOW_OFFSET = new THREE.Vector3(0, 15, 20); // camera, relative to you: far enough to see the tall stations' bubbles
+const FOLLOW_LOOK = new THREE.Vector3(0, 3, -2); // what it looks at, relative to you
 
 // Narrow screens (phones held upright) don't zoom out to fit the whole camp any more. Like Pocket Camp, the
 // camera stays close, looks down a little more, follows you around, and you can drag to look around.
@@ -96,7 +107,21 @@ function framing() {
   };
 }
 
+/** Where the camera wants to be when nothing special is happening. */
 function overview(out = { pos: new THREE.Vector3(), target: new THREE.Vector3() }) {
+  if (compact.value) {
+    // close behind you. A drag looks around, as far as the edge of the camp; walking brings the view back
+    pan.x = THREE.MathUtils.clamp(pan.x, Math.min(0, -CAMP_HALF_W - player.pos.x), Math.max(0, CAMP_HALF_W - player.pos.x));
+    const lookZ = player.pos.z + FOLLOW_LOOK.z;
+    pan.y = THREE.MathUtils.clamp(pan.y, Math.min(0, CAMP_Z[0] - lookZ), Math.max(0, CAMP_Z[1] - lookZ));
+    out.target.copy(player.pos).add(FOLLOW_LOOK);
+    out.pos.copy(player.pos).add(FOLLOW_OFFSET);
+    out.target.x += pan.x;
+    out.pos.x += pan.x;
+    out.target.z += pan.y;
+    out.pos.z += pan.y;
+    return out;
+  }
   const f = framing();
   // follow you: barely on a wide screen (just enough to feel alive), properly on a phone
   const followX = THREE.MathUtils.lerp(0.18, 1, f.tall);
@@ -260,7 +285,7 @@ function onKeyDown(e) {
     keys.add(k);
     player.target = null;
     e.preventDefault();
-  } else if ((k === 'e' || k === ' ') && nearby.value && document.activeElement?.tagName !== 'BUTTON') {
+  } else if ((k === 'e' || (k === ' ' && document.activeElement?.tagName !== 'BUTTON')) && nearby.value) { // Space also presses a focused button
     e.preventDefault();
     enter(nearby.value);
   } else if (k === 'q') {
@@ -272,6 +297,44 @@ function onKeyUp(e) {
 }
 function onBlur() {
   keys.clear();
+  releaseJoystick();
+}
+
+// the joystick: how far the knob is from the centre, as a fraction of how far it can travel
+const JOY_TRAVEL = 44; // px
+const JOY_DEADZONE = 0.14;
+
+function moveJoystick(e) {
+  const box = e.currentTarget.getBoundingClientRect();
+  let dx = (e.clientX - (box.left + box.width / 2)) / JOY_TRAVEL;
+  let dz = (e.clientY - (box.top + box.height / 2)) / JOY_TRAVEL;
+  const push = Math.hypot(dx, dz);
+  if (push > 1) {
+    dx /= push;
+    dz /= push;
+  }
+  if (knob.value) knob.value.style.transform = `translate(${dx * JOY_TRAVEL}px, ${dz * JOY_TRAVEL}px)`;
+  joy.x = push < JOY_DEADZONE ? 0 : dx;
+  joy.z = push < JOY_DEADZONE ? 0 : dz;
+}
+function onJoystickDown(e) {
+  if (entering.value || joy.pointerId !== null) return;
+  joy.pointerId = e.pointerId;
+  e.currentTarget.setPointerCapture?.(e.pointerId);
+  player.target = null;
+  moveJoystick(e);
+}
+function onJoystickMove(e) {
+  if (e.pointerId === joy.pointerId) moveJoystick(e);
+}
+function onJoystickUp(e) {
+  if (e.pointerId === joy.pointerId) releaseJoystick();
+}
+function releaseJoystick() {
+  joy.pointerId = null;
+  joy.x = 0;
+  joy.z = 0;
+  if (knob.value) knob.value.style.transform = '';
 }
 
 const raycaster = new THREE.Raycaster();
@@ -323,7 +386,8 @@ function onPointerUp(e) {
   drag = null;
   if (wasDrag || entering.value) return;
   const { stationId, ray } = pick(e);
-  if (stationId) return enter(stationId)
+  if (stationId) return enter(stationId);
+  if (compact.value) return; // the joystick does the walking here
   const hit = ray.intersectPlane(groundPlane, new THREE.Vector3());
   if (hit) {
     collide(hit);
@@ -342,6 +406,7 @@ async function enter(stationId) {
   }
   entering.value = stationId;
   keys.clear();
+  releaseJoystick();
 
   // walk to the doorstep first (skip the stroll if motion is reduced)
   if (reduceMotion) {
@@ -404,12 +469,13 @@ function frame() {
   // --- you ---
   let moving = false;
   if (player.avatar) {
-    let ix = 0;
-    let iz = 0;
+    let ix = joy.x;
+    let iz = joy.z;
     for (const k of keys) {
       ix += MOVE_KEYS[k][0];
       iz += MOVE_KEYS[k][1];
     }
+    const pace = Math.min(1, Math.hypot(ix, iz)); // keys are always full speed; the joystick is as hard as you push
     if (ix || iz) {
       // camera-relative: "up" walks away from the camera
       camera.getWorldDirection(fwd);
@@ -417,7 +483,7 @@ function frame() {
       fwd.normalize();
       right.crossVectors(fwd, camera.up).normalize();
       const dir = new THREE.Vector3().addScaledVector(right, ix).addScaledVector(fwd, -iz).normalize();
-      player.pos.addScaledVector(dir, 5.5 * dt);
+      player.pos.addScaledVector(dir, 5.5 * pace * dt);
       player.ry = turn(player.ry, Math.atan2(dir.x, dir.z), dt);
       moving = true;
     } else if (player.target) {
@@ -430,8 +496,8 @@ function frame() {
       }
     }
     if (moving) collide(player.pos);
-    if (moving && !drag) pan.multiplyScalar(1 - Math.min(1, dt * 2.5))
-    player.speed += ((moving ? 1 : 0) - player.speed) * Math.min(1, dt * 10);
+    if (moving && !drag) pan.multiplyScalar(1 - Math.min(1, dt * 2.5));
+    player.speed += ((moving ? (ix || iz ? pace : 1) : 0) - player.speed) * Math.min(1, dt * 10);
     placeAvatar(player.avatar, player.pos, player.ry);
     player.avatar.animate(dt, player.speed);
     if (player.waveT >= 0) {
@@ -508,7 +574,7 @@ function frame() {
     }
   } else if (!entering.value) {
     const o = overview();
-    const k = Math.min(1, dt * 3);
+    const k = Math.min(1, dt * (compact.value ? 6 : 3)); // the follow camera keeps up with you
     cam.pos.lerp(o.pos, k);
     cam.target.lerp(o.target, k);
   }
@@ -600,6 +666,7 @@ onMounted(() => {
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
+  compactMedia?.addEventListener?.('change', onCompactChange);
   frame();
   ready.value = true;
 });
@@ -611,6 +678,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown);
   window.removeEventListener('keyup', onKeyUp);
   window.removeEventListener('blur', onBlur);
+  compactMedia?.removeEventListener?.('change', onCompactChange);
   player.avatar?.dispose();
   mates.forEach((m) => m.avatar.dispose());
   camp?.dispose();
@@ -643,7 +711,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   <div
     ref="host"
     class="camp"
-    :class="{ 'is-entering': entering }"
+    :class="{ 'is-entering': entering, compact }"
     tabindex="-1"
     @pointermove="onPointerMove"
     @pointerleave="hovered = null"
@@ -671,11 +739,26 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
       </span>
     </div>
 
-    <button v-if="nearby && !entering" class="prompt" aria-live="polite">
-      <kbd>E</kbd> Enter {{ nearbyName(nearby) }}
-    </button>
+    <div aria-live="polite">
+      <button v-if="nearby && !entering" type="button" class="prompt" @click="enter(nearby)">
+        <kbd v-if="!compact">E</kbd> Enter {{ nearbyName(nearby) }}
+      </button>
+    </div>
 
     <div class="hud-slot"><slot /></div>
+
+    <!-- stations stay reachable without it: every bubble is a button -->
+    <div
+      v-if="compact"
+      class="joystick"
+      aria-hidden="true"
+      @pointerdown.prevent="onJoystickDown"
+      @pointermove="onJoystickMove"
+      @pointerup="onJoystickUp"
+      @pointercancel="onJoystickUp"
+    >
+      <i ref="knob" class="knob" />
+    </div>
     <div v-if="wipe" class="wipe" :class="wipe" aria-hidden="true" @animationend="wipe === 'out' && (wipe = null)" />
   </div>
 </template>
@@ -771,16 +854,10 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   outline-offset: 2px;
 }
 @media (max-width: 640px) {
-  /* phones: the labels cover too much of the camp, so they fade out. The one you're standing next to
-     (or tabbed to) still shows, so the "Enter …" pill makes sense. Tapping the buildings still works. */
+  /* phones: names only, or the bubbles pile on top of each other */
   .bubble {
     padding: 4px 10px 5px;
     border-width: 2px;
-    transition: opacity 0.2s;
-  }
-  .bubble:not(.hot):not(:focus-visible) {
-    opacity: 0;
-    pointer-events: none;
   }
   .bubble strong {
     font-size: 14px;
@@ -832,20 +909,55 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   border-radius: 999px;
   background: #fffdf7;
   color: #1f2a24;
-  font-weight: 700;
-  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
-  animation: pop 0.2s ease-out;
-}
-button.prompt {
   font: inherit;
   font-weight: 700;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
   cursor: pointer;
-  min-height: 44px;
+  animation: pop 0.2s ease-out;
 }
-@media (pointer: coarse) {
-  .prompt kbd {
-    display: none; /* no keyboard on a phone: the whole pill is the button */
-  }
+/* the bottom-left corner belongs to the joystick */
+.compact .prompt {
+  left: auto;
+  right: 18px;
+  bottom: 56px;
+  translate: none;
+  min-height: 48px;
+  padding: 10px 18px;
+  z-index: 3;
+}
+.joystick {
+  position: absolute;
+  z-index: 3;
+  left: 22px;
+  bottom: 26px;
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+.knob {
+  width: 56px;
+  height: 56px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.is-entering .joystick {
+  opacity: 0;
+  pointer-events: none;
+}
+button.prompt {
+  min-height: 44px;
 }
 kbd {
   display: inline-grid;

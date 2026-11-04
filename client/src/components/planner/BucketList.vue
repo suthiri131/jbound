@@ -8,6 +8,7 @@ import { PHASE_STAMP } from '@/utils/constants';
 import AddStopForm from './AddStopForm.vue';
 import TripActions from './TripActions.vue';
 import EditStopModal from './EditStopModal.vue';
+import { askConfirm } from '@/lib/dialog';
 
 const editTarget = ref(null);
 function onStopSaved() {
@@ -86,8 +87,9 @@ async function run(fn) {
 const patch = (item, body) => run(() => api.patch(`/trips/${props.trip.id}/itinerary/${item.id}`, body));
 const toggle = (item) => patch(item, { done: !item.done });
 const setTime = (item, value) => patch(item, { time: value || null });
-const remove = (item) => {
-  if (window.confirm(`Remove ${item.title}?`)) run(() => api.delete(`/trips/${props.trip.id}/itinerary/${item.id}`));
+const remove = async (item) => {
+  const yes = await askConfirm({ title: `Remove ${item.title}?`, confirmLabel: 'Remove stop', danger: true });
+  if (yes) run(() => api.delete(`/trips/${props.trip.id}/itinerary/${item.id}`));
 };
 
 function saveOrder() {

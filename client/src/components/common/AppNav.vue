@@ -108,6 +108,10 @@ async function logout() {
           @click="navOpen = false"
           >{{ l.label }}</RouterLink
         >
+        <!-- no room for the music button in the bar on phones -->
+        <button type="button" class="link mobile-music" :aria-pressed="musicOn" @click="toggleMusic">
+          Music: {{ musicOn ? "on" : "off" }}
+        </button>
         <div v-if="!auth.isLoggedIn && auth.ready" class="mobile-auth">
           <RouterLink class="btn btn-ghost" :to="{ name: 'sign-in', query: { next: route.fullPath } }">Sign in</RouterLink>
           <RouterLink class="btn btn-primary" :to="{ name: 'sign-up', query: { next: route.fullPath } }">Sign up</RouterLink>
@@ -329,6 +333,9 @@ async function logout() {
 }
  
 .burger,
+.mobile-music {
+  display: none;
+}
 .mobile-auth {
   display: none;
 }
@@ -370,6 +377,19 @@ async function logout() {
     text-underline-offset: 5px;
   }
  
+  .mobile-music {
+    display: block;
+    width: 100%;
+    border-width: 0 0 1.5px;
+    background: none;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .actions .sound {
+    display: none;
+  }
+
   .mobile-auth {
     display: flex;
     gap: 10px;
