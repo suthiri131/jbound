@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 import { errorMessage } from '@/lib/api';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import AvatarEditor from '@/components/profile/AvatarEditor.vue';
+import CharacterEditor from '@/components/profile/CharacterEditor.vue';
 import NameForm from '@/components/profile/NameForm.vue';
 import EmailForm from '@/components/profile/EmailForm.vue';
 import PasswordForm from '@/components/profile/PasswordForm.vue';
@@ -57,6 +58,7 @@ async function confirmDelete(password) {
     </header>
 
     <AvatarEditor />
+    <CharacterEditor />
 
     <section class="card-flat card-pad block" aria-labelledby="details-title">
       <h2 id="details-title" class="display display-sm">Your details</h2>

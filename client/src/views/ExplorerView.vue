@@ -1,6 +1,6 @@
 <script setup>
 
-import { ref, reactive, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, assetUrl } from "@/lib/api";
 import { useTripsStore } from "@/stores/trips";
@@ -9,9 +9,9 @@ import { VIBES, VIBE_LABEL, VIBE_TINT } from "@/utils/constants";
 import { dayLabel } from "@/utils/format";
 import VibeIcon from "@/components/common/VibeIcon.vue";
 import ToastMessage from "@/components/common/ToastMessage.vue";
-import Pagination from "@/components/common/Pagination.vue";
-import VibeBoard from "@/components/explorer/VibeBoard.vue";
+import SkyBackdrop from "@/components/scene/SkyBackdrop.vue";
 import FilterMenu from "@/components/explorer/FilterMenu.vue";
+import VibeBoard from "@/components/explorer/VibeBoard.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -19,7 +19,6 @@ const trips = useTripsStore();
 const auth = useAuthStore();
 
 const VIBE_IDS = VIBES.map((v) => v.id);
-const PAGE_SIZE = 12;
 const DEFAULT_FILTERS = {
   checkpoint: "woodlands",
   maxDistanceKm: 40,
@@ -33,11 +32,11 @@ const vibesFromUrl = () =>
     .split(",")
     .filter((v) => VIBE_IDS.includes(v));
 
-/** 'board' = vibe board intro, 'feed' = results */
+/** 'board' = asking for your vibe, 'feed' = the places pinned up. Coming Back from a place page lands on the feed. */
 const stage = ref(
   route.query.vibes !== undefined || route.query.q ? "feed" : "board",
 );
-const boardVisits = ref(0); // the doors only play on the first visit
+const boardVisits = ref(0);
 const vibes = ref(vibesFromUrl());
 const q = ref(String(route.query.q || ""));
 const filters = ref({ ...DEFAULT_FILTERS });
@@ -45,16 +44,9 @@ const filters = ref({ ...DEFAULT_FILTERS });
 const places = ref([]);
 const loading = ref(false);
 const error = ref("");
-const page = ref(1);
-const poofIn = ref(false); // feed cards "poof up" right after the board
+const dealing = ref(false); // places get pinned up one by one right after the vibe screen
 const toast = ref({ message: "", linkTo: "", linkLabel: "" });
 
-const totalPages = computed(() =>
-  Math.max(1, Math.ceil(places.value.length / PAGE_SIZE)),
-);
-const pagePlaces = computed(() =>
-  places.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE),
-);
 const vibeSummary = computed(() =>
   vibes.value.map((v) => VIBE_LABEL[v]).join(", "),
 );
@@ -79,7 +71,7 @@ async function search() {
     });
     if (id !== requestId) return; // a newer search already started
     places.value = data;
-    page.value = 1;
+    skipped.value = [];
   } catch (err) {
     if (id === requestId) error.value = errorMessage(err);
   } finally {
@@ -117,13 +109,11 @@ watch(
 );
 // the search box's own ✕ (or deleting the text) empties it → go back to the vibe results
 function onSearchInput() {
-  if (!q.value.trim() && route.query.q && stage.value === "feed")
-    submitSearch();
+  if (!q.value.trim() && route.query.q) submitSearch();
 }
 
 function submitSearch() {
   clearTimeout(debounce);
-  if (stage.value === "board") stage.value = "feed";
   syncUrl();
   search();
 }
@@ -132,52 +122,71 @@ function clearSearch() {
   submitSearch();
 }
 
-// ---------- vibe board ----------
-function onExplore(picked) {
-  skipWatch = true;
-  vibes.value = picked;
-  q.value = "";
-  stage.value = "feed";
-  poofIn.value = true;
-  setTimeout(() => (poofIn.value = false), 1200);
-  syncUrl();
-  search();
-}
-function changeVibe() {
-  boardVisits.value++;
-  stage.value = "board";
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
 function toggleVibe(id) {
   if (q.value) q.value = ""; // picking a category leaves the typed search
   const i = vibes.value.indexOf(id);
   i === -1 ? vibes.value.push(id) : vibes.value.splice(i, 1);
 }
 
-function goToPage(n) {
-  page.value = n;
-  window.scrollTo({ top: 0, behavior: "smooth" });
+// ---------- vibe screen <-> feed ----------
+function onExplore(picked) {
+  clearTimeout(debounce);
+  skipWatch = true;
+  vibes.value = picked;
+  q.value = "";
+  stage.value = "feed";
+  dealing.value = true;
+  syncUrl();
+  search().finally(() => setTimeout(() => (dealing.value = false), 1600));
 }
+function changeVibe() {
+  clearTimeout(debounce);
+  boardVisits.value++;
+  stage.value = "board";
+}
+
+// "+ Pin to trip" on a place page asks for the pin dialog with ?pin=<googlePlaceId>
+async function openPinFromUrl() {
+  const pinId = route.query.pin;
+  if (!pinId) return;
+  try {
+    await trips.fetch().catch(() => {});
+    const { data } = await api.get(
+      `/places/google/details/${encodeURIComponent(pinId)}`,
+    );
+    openPin({
+      id: data.id,
+      googlePlaceId: data.googlePlaceId,
+      name: data.name,
+    });
+  } catch (err) {
+    toast.value = { message: errorMessage(err) };
+  }
+  const { pin: _used, ...rest } = route.query; // so the same place can be pinned again
+  router.replace({ query: rest });
+}
+watch(() => route.query.pin, openPinFromUrl);
 
 onMounted(async () => {
   if (stage.value === "feed") search();
   await trips.fetch().catch(() => {});
-  // "+ Pin to trip" on a place page sends people here with ?pin=<googlePlaceId>
-  if (route.query.pin) {
-    try {
-      const { data } = await api.get(
-        `/places/google/details/${encodeURIComponent(route.query.pin)}`,
-      );
-      openPin({
-        id: data.id,
-        googlePlaceId: data.googlePlaceId,
-        name: data.name,
-      });
-    } catch (err) {
-      toast.value = { message: errorMessage(err) };
-    }
-  }
+  openPinFromUrl();
 });
+
+// ---------- a place page or its tales, taking over the board ----------
+const onPlacePage = computed(() => Boolean(route.meta.onBoard));
+const placePage = ref(null);
+watch(
+  () => route.path,
+  async () => {
+    if (!onPlacePage.value) return;
+    await nextTick();
+    placePage.value?.focus({ preventScroll: true }); // keyboard and screen reader users start on the new content
+  },
+  { immediate: true }, // arriving straight from Tales
+);
+/** Keeps ?vibes and ?q in the URL, so the way back lands on the same board. */
+const keepQuery = (path) => ({ path, query: route.query });
 
 /** Place page link. Google results have googlePlaceId; our own rows keep it in google_place_id. */
 const placeLink = (p) => {
@@ -250,370 +259,727 @@ async function pin() {
 }
 
 const price = (n) => (n ? "$".repeat(n) : "");
+
+// ---------- the flyers + backpack ----------
+// Swipe a flyer right (or ♥) to drop a place in your Backpack to plan with later; left (or ✕) to take it off the board.
+const BACKPACK_KEY = "jbound:backpack";
+const readBackpack = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BACKPACK_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+};
+const backpack = ref(readBackpack());
+watch(backpack, (list) => {
+  try {
+    localStorage.setItem(BACKPACK_KEY, JSON.stringify(list));
+  } catch {
+    /* private mode: backpack lasts for this visit only */
+  }
+}, { deep: true });
+
+const keyOf = (p) => p.googlePlaceId || p.google_place_id || p.id;
+const inBackpack = (p) => backpack.value.some((b) => b.key === keyOf(p));
+const skipped = ref([]); // keys taken off the board; a new search pins them back up
+const board = computed(() =>
+  places.value.filter((p) => !inBackpack(p) && !skipped.value.includes(keyOf(p))),
+);
+const lastAction = ref(null); // { kind: 'keep' | 'skip', place } for undo
+
+function keep(place) {
+  backpack.value.unshift({ key: keyOf(place), id: place.id || null, googlePlaceId: place.googlePlaceId || place.google_place_id || null, name: place.name, photo: place.photos?.[0] || null, vibes: place.vibes || [] });
+  lastAction.value = { kind: "keep", place };
+}
+function skip(place) {
+  skipped.value.push(keyOf(place));
+  lastAction.value = { kind: "skip", place };
+}
+function undo() {
+  const last = lastAction.value;
+  if (!last) return;
+  if (last.kind === "keep") backpack.value = backpack.value.filter((b) => b.key !== keyOf(last.place));
+  else skipped.value = skipped.value.filter((k) => k !== keyOf(last.place));
+  lastAction.value = null;
+}
+function dropFromBackpack(item) {
+  backpack.value = backpack.value.filter((b) => b.key !== item.key);
+}
+
+// drag a flyer to swipe it
+const drag = ref({ key: null, startX: 0, dx: 0 });
+const leaving = ref(null); // { key, dir: 'left' | 'right' } while a card flies off
+function onDown(e, p) {
+  if (leaving.value || e.target.closest("a, button")) return; // its links and buttons still just click
+  drag.value = { key: keyOf(p), startX: e.clientX, dx: 0 };
+  e.currentTarget.setPointerCapture?.(e.pointerId);
+}
+function onMove(e) {
+  if (drag.value.key) drag.value.dx = e.clientX - drag.value.startX;
+}
+function onUp(p) {
+  if (drag.value.key !== keyOf(p)) return;
+  const { dx } = drag.value;
+  drag.value = { key: null, startX: 0, dx: 0 };
+  if (dx > 110) fling("right", p);
+  else if (dx < -110) fling("left", p);
+}
+function fling(dir, p) {
+  if (leaving.value) return;
+  leaving.value = { key: keyOf(p), dir };
+  setTimeout(() => {
+    dir === "right" ? keep(p) : skip(p);
+    leaving.value = null;
+  }, 260);
+}
+function onCardKey(e, p) {
+  if (e.target !== e.currentTarget) return; // focus is on one of the card's buttons
+  if (e.key === "ArrowRight") fling("right", p);
+  else if (e.key === "ArrowLeft") fling("left", p);
+  else return;
+  e.preventDefault();
+}
+function cardStyle(p, i) {
+  const base = { "--i": Math.min(i, 11), "--tilt": `${TILTS[i % TILTS.length]}deg` };
+  const key = keyOf(p);
+  if (leaving.value?.key === key) {
+    const right = leaving.value.dir === "right";
+    return { ...base, transform: `translateX(${right ? 140 : -140}%) rotate(${right ? 24 : -24}deg)`, opacity: 0, transition: "transform .26s ease-in, opacity .26s", zIndex: 3 };
+  }
+  if (drag.value.key === key) return { ...base, transform: `translateX(${drag.value.dx}px) rotate(${drag.value.dx / 18}deg)`, transition: "none", zIndex: 3 };
+  return base;
+}
+const hint = (p) => {
+  if (drag.value.key !== keyOf(p)) return "";
+  return drag.value.dx > 50 ? "keep" : drag.value.dx < -50 ? "skip" : "";
+};
+// a slightly different tilt per card so the board looks hand-pinned
+const TILTS = [-1.2, 0.8, -0.6, 1.1, -0.9, 0.6];
+const TACKS = ["red", "yellow-pin", "green"];
+
+/** Open the pin-to-trip dialog for a backpack item. */
+function pinFromBackpack(item) {
+  openPin({ id: item.id, googlePlaceId: item.googlePlaceId, name: item.name });
+}
 </script>
 
 <template>
-  <main class="container page">
-    <!-- top bar: page stamp on the left, search + filters on the right -->
-    <div class="topbar">
-      <span class="tag-stamp">Explorer</span>
-      <div class="tools">
-        <form class="search" role="search" @submit.prevent="submitSearch">
-          <svg
-            class="search-ico"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            aria-hidden="true"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-4-4" />
-          </svg>
-          <input
-            v-model="q"
-            class="input search-input"
-            type="search"
-            placeholder="Search bak kut teh, murals, durian…"
-            aria-label="Search places in JB"
-            data-cy="explorer-search"
-            @input="onSearchInput"
-          />
-        </form>
-        <FilterMenu v-model="filters" :defaults="DEFAULT_FILTERS" />
+  <main class="notice-page">
+    <SkyBackdrop />
+    <RouterLink to="/" class="camp-back back">← Basecamp</RouterLink>
+
+    <div class="board-wrap">
+      <header class="roof">
+        <h1 class="roof-title">Notice Board</h1>
+      </header>
+
+      <div class="frame">
+        <div class="cork">
+          <div v-if="onPlacePage" :key="route.path" ref="placePage" class="cork-scroll" tabindex="-1">
+            <article class="sheet">
+              <i class="pin red" aria-hidden="true" />
+              <RouterView />
+            </article>
+          </div>
+
+          <!-- hidden rather than removed, so coming back keeps the results and your place in them -->
+          <div v-show="!onPlacePage" :key="stage" class="cork-scroll">
+            <!-- 1. what's the vibe? -->
+            <VibeBoard
+              v-if="stage === 'board'"
+              :key="boardVisits"
+              :name="auth.firstName"
+              :initial="vibes"
+              @explore="onExplore"
+            />
+
+            <!-- 2. every place, pinned up -->
+            <div v-else class="feed" :class="{ dealing }">
+              <section class="note white head" style="--tilt: -0.3deg" aria-label="Search and filter">
+                <i class="pin red" aria-hidden="true" />
+                <div class="head-top">
+                  <div class="head-text">
+                    <h2 class="head-title">JBound's recommendations for you</h2>
+                    <p v-if="q.trim()" class="head-sub">
+                      Results for “{{ q.trim() }}”
+                      <button type="button" class="link" @click="clearSearch">✕ Clear search</button>
+                    </p>
+                    <p v-else class="head-sub">{{ vibes.length ? `Because you're feeling ${vibeSummary}.` : 'A bit of everything around JB.' }}</p>
+                  </div>
+                  <div class="tools">
+                    <form class="search" role="search" @submit.prevent="submitSearch">
+                      <input v-model="q" type="search" placeholder="Search bak kut teh, murals, durian…" aria-label="Search places in JB" data-cy="explorer-search" @input="onSearchInput" />
+                    </form>
+                    <FilterMenu v-model="filters" :defaults="DEFAULT_FILTERS" class="filters" />
+                  </div>
+                </div>
+
+                <div class="cats" role="group" aria-label="Filter by vibe">
+                  <button
+                    v-for="v in VIBES"
+                    :key="v.id"
+                    type="button"
+                    class="vibe"
+                    :aria-pressed="!q.trim() && vibes.includes(v.id)"
+                    :data-cy="`vibe-${v.id}`"
+                    @click="toggleVibe(v.id)"
+                  >
+                    <VibeIcon :vibe="v.id" :size="15" /> {{ v.label }}
+                  </button>
+                  <button type="button" class="vibe change" data-cy="change-vibe" @click="changeVibe">↺ Change my vibe</button>
+                </div>
+
+                <p class="status" aria-live="polite">
+                  <strong class="found">{{ loading ? 'Scouting…' : `${board.length} place${board.length === 1 ? '' : 's'} on the board` }}</strong>
+                  <span>Swipe a flyer ← to pass, → to pack it</span>
+                  <button v-if="lastAction" type="button" class="link" @click="undo">Undo</button>
+                  <!-- Google requires attribution when showing Places data outside a Google map. -->
+                  <span v-if="places.length" class="attribution">Places data © Google</span>
+                </p>
+              </section>
+
+              <div class="feed-body">
+                <div class="results">
+                  <p v-if="loading && !board.length" class="deck-empty" role="status">Pinning up fresh flyers…</p>
+                  <p v-else-if="error" class="deck-empty error-text" role="alert">{{ error }}</p>
+                  <p v-else-if="!board.length" class="deck-empty">
+                    {{ places.length ? 'That’s every flyer on the board. Try another vibe.' : 'No flyers for that. Try another vibe or search.' }}
+                  </p>
+
+                  <ul v-else class="grid">
+                    <li
+                      v-for="(p, i) in board"
+                      :key="keyOf(p)"
+                      class="flyer"
+                      :class="hint(p)"
+                      :style="cardStyle(p, i)"
+                      tabindex="0"
+                      :aria-label="`${p.name} flyer. Left arrow passes, right arrow packs it.`"
+                      data-cy="place-card"
+                      @pointerdown="onDown($event, p)"
+                      @pointermove="onMove"
+                      @pointerup="onUp(p)"
+                      @pointercancel="onUp(p)"
+                      @keydown="onCardKey($event, p)"
+                    >
+                      <i class="pin" :class="TACKS[i % TACKS.length]" aria-hidden="true" />
+                      <div class="f-quick">
+                        <button type="button" class="quick" title="Skip" :aria-label="`Skip ${p.name}`" @click="fling('left', p)">✕</button>
+                        <button type="button" class="quick pack" title="Pack it" :aria-label="`Put ${p.name} in your backpack`" @click="fling('right', p)">♥</button>
+                      </div>
+                      <img v-if="p.photos?.[0]" :src="assetUrl(p.photos[0])" :alt="p.name" class="f-photo" draggable="false" loading="lazy" />
+                      <div v-else class="f-photo f-blank" :style="{ background: VIBE_TINT[p.vibes?.[0]] || '#f6d58e' }">
+                        <VibeIcon :vibe="p.vibes?.[0] || 'eating'" :size="40" :stroke-width="1.6" />
+                      </div>
+                      <div class="f-body">
+                        <p class="f-pills">
+                          <span v-for="v in p.vibes || []" :key="v" class="pill" :style="{ background: VIBE_TINT[v] }">{{ VIBE_LABEL[v] }}</span>
+                          <span v-if="p.isHiddenGem" class="pill" style="background: var(--mustard)">✦ Hidden gem</span>
+                        </p>
+                        <h3 class="f-name">
+                          <RouterLink v-if="placeLink(p)" :to="keepQuery(placeLink(p))" class="place-link" data-cy="place-link">{{ p.name }}</RouterLink>
+                          <template v-else>{{ p.name }}</template>
+                        </h3>
+                        <p v-if="p.rating" class="f-meta">
+                          <strong>★ {{ p.rating }}</strong>
+                          <span class="dim"><template v-if="p.ratingCount ?? p.rating_count"> ({{ p.ratingCount ?? p.rating_count }} Google reviews)</template></span>
+                        </p>
+                        <p class="f-meta dim">
+                          <template v-if="p.distanceKm != null">{{ p.distanceKm.toFixed(1) }} km from {{ filters.checkpoint === 'tuas' ? 'Tuas' : 'Woodlands' }} · </template>
+                          <template v-if="p.price_level">{{ price(p.price_level) }} · </template>
+                          {{ p.postCount || 0 }} tale{{ p.postCount === 1 ? '' : 's' }}
+                        </p>
+                        <p v-if="p.description" class="f-desc">{{ p.description }}</p>
+                        <span class="spacer" />
+                        <div class="f-actions">
+                          <RouterLink v-if="placeLink(p)" :to="keepQuery(placeLink(p))" class="btn btn-sm btn-ghost">View place</RouterLink>
+                          <button type="button" class="btn btn-primary btn-sm" data-cy="pin" @click="openPin(p)">+ Pin to trip</button>
+                          <RouterLink v-if="p.id" :to="keepQuery(`/explorer/tales/place/${p.id}`)" class="btn btn-sm btn-ghost">Read tales</RouterLink>
+                        </div>
+                      </div>
+                      <span class="stamp keep-stamp" aria-hidden="true">PACK IT</span>
+                      <span class="stamp skip-stamp" aria-hidden="true">NAH</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <aside class="note kraft backpack" style="--tilt: 0.8deg" aria-labelledby="bp-title">
+                  <i class="pin green" aria-hidden="true" />
+                  <h2 id="bp-title" class="note-title">Backpack <small>{{ backpack.length }}</small></h2>
+                  <p v-if="!backpack.length" class="bp-empty">Places you pack land here, ready to pin to a trip.</p>
+                  <ul v-else class="bp-list">
+                    <li v-for="item in backpack" :key="item.key">
+                      <span class="bp-name">{{ item.name }}</span>
+                      <button type="button" class="mini" @click="pinFromBackpack(item)">Pin</button>
+                      <button type="button" class="mini ghost" :aria-label="`Take ${item.name} out of the backpack`" @click="dropFromBackpack(item)">✕</button>
+                    </li>
+                  </ul>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <i class="post left" aria-hidden="true" />
+      <i class="post right" aria-hidden="true" />
     </div>
 
-    <!-- 1. vibe board -->
-    <VibeBoard
-      v-if="stage === 'board'"
-      :key="boardVisits"
-      class="vibe-board"
-      :name="auth.firstName"
-      :initial="vibes"
-      :skip-doors="boardVisits > 0"
-      @explore="onExplore"
-    />
+    <ToastMessage v-bind="toast" @close="toast.message = ''" />
 
-    <!-- 2. feed -->
-    <template v-else>
-      <h1 class="display display-lg" style="margin-top: 22px">
-        JBound's recommendations for you
-      </h1>
-      <p v-if="q.trim()" class="muted sub">
-        Results for “{{ q.trim() }}”
-        <button type="button" class="btn btn-sm btn-ghost" @click="clearSearch">
-          ✕ Clear search
-        </button>
-      </p>
-      <p v-else class="muted sub">
-        {{
-          vibes.length
-            ? `Because you're feeling ${vibeSummary}.`
-            : "A bit of everything around JB."
-        }}
-      </p>
-
-      <!-- category filters, right under the heading -->
-      <div class="row cats" role="group" aria-label="Categories">
-        <button
-          v-for="v in VIBES"
-          :key="v.id"
-          type="button"
-          class="chip"
-          :aria-pressed="!q.trim() && vibes.includes(v.id)"
-          :data-cy="`vibe-${v.id}`"
-          @click="toggleVibe(v.id)"
-        >
-          <VibeIcon :vibe="v.id" :size="18" /> {{ v.label }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-ghost"
-          data-cy="change-vibe"
-          @click="changeVibe"
-        >
-          ↺ Change my vibe
-        </button>
-      </div>
-
-      <p class="hand muted count" aria-live="polite">
-        {{
-          loading
-            ? "Scouting…"
-            : `${places.length} place${places.length === 1 ? "" : "s"} found`
-        }}
-      </p>
-      <!-- Google requires attribution when showing Places data outside a Google map.
-           TODO(team): also show each photo's authorAttributions (see Places API photo policies). -->
-      <p v-if="places.length" class="attribution">Places data © Google</p>
-      <p v-if="error" class="error-text" role="alert">{{ error }}</p>
-
-      <ul class="grid" :class="{ 'poof-in': poofIn }">
-        <li
-          v-for="(p, i) in pagePlaces"
-          :key="p.id || p.googlePlaceId"
-          class="card place"
-          :style="{ '--i': i }"
-          data-cy="place-card"
-        >
-          <img
-            v-if="p.photos?.[0]"
-            :src="assetUrl(p.photos[0])"
-            :alt="p.name"
-            class="photo"
-            loading="lazy"
-          />
-          <div
-            v-else
-            class="placeholder-photo photo"
-            :style="{ background: VIBE_TINT[p.vibes[0]] }"
-          >
-            <VibeIcon :vibe="p.vibes[0]" :size="40" :stroke-width="1.6" />
-          </div>
-          <div class="body">
-            <div class="row" style="gap: 6px">
-              <span
-                v-for="v in p.vibes"
-                :key="v"
-                class="pill"
-                :style="{ background: VIBE_TINT[v] }"
-                >{{ VIBE_LABEL[v] }}</span
-              >
-              <span
-                v-if="p.isHiddenGem"
-                class="pill"
-                style="background: var(--mustard)"
-                >✦ Hidden gem</span
-              >
-            </div>
-            <h2 class="display display-sm" style="margin-top: 8px">
-              <RouterLink
-                v-if="placeLink(p)"
-                :to="placeLink(p)"
-                class="place-link"
-                data-cy="place-link"
-                >{{ p.name }}</RouterLink
-              >
-              <template v-else>{{ p.name }}</template>
-            </h2>
-            <p v-if="p.rating" class="meta">
-              <strong>★ {{ p.rating }}</strong>
-              <span class="muted"
-                >({{ p.ratingCount ?? p.rating_count }} Google reviews)</span
-              >
-            </p>
-            <p class="meta muted">
-              {{ p.distanceKm }} km from
-              {{ filters.checkpoint === "tuas" ? "Tuas" : "Woodlands"
-              }}<template v-if="p.price_level">
-                · {{ price(p.price_level) }}</template
-              >
-              · {{ p.postCount }} tale{{ p.postCount === 1 ? "" : "s" }}
-            </p>
-            <p v-if="p.description" class="desc">{{ p.description }}</p>
-            <div class="spacer" />
-            <div class="row" style="gap: 8px; margin-top: 12px">
-              <RouterLink
-                v-if="placeLink(p)"
-                :to="placeLink(p)"
-                class="btn btn-sm btn-ghost"
-                >View place</RouterLink
-              >
-              <button
-                type="button"
-                class="btn btn-primary btn-sm"
-                data-cy="pin"
-                @click="openPin(p)"
-              >
-                + Pin to trip
-              </button>
-              <RouterLink
-                v-if="p.id"
-                :to="`/tales/place/${p.id}`"
-                class="btn btn-sm btn-ghost"
-                >Read tales</RouterLink
-              >
-            </div>
-          </div>
-        </li>
-      </ul>
-
-      <p v-if="!loading && !error && !places.length" class="empty hand">
-        Nothing here. Try a wider distance in Filters, or another vibe.
-      </p>
-
-      <Pagination
-        class="pager"
-        :page="page"
-        :total-pages="totalPages"
-        :disabled="loading"
-        label="Explorer result pages"
-        @page-change="goToPage"
-      />
-    </template>
-
-    <!-- pin modal (unchanged) -->
+    <!-- pin to trip -->
     <template v-if="pinning">
       <div class="scrim" @click="pinning = null" />
-      <div
-        class="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pin-title"
-        @keydown.esc="pinning = null"
-      >
-        <h2 id="pin-title" class="display display-md">
-          Pin {{ pinning.name }}
-        </h2>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pin-title" @keydown.esc="pinning = null">
+        <h2 id="pin-title" class="display display-md">Pin {{ pinning.name }}</h2>
         <p v-if="!trips.plannable.length" class="lead">
           No trips to pin to yet.
           <RouterLink to="/planner?new=1">Create a new trip</RouterLink> first.
         </p>
-        <form
-          v-else
-          class="stack"
-          style="gap: 14px; margin-top: 16px"
-          @submit.prevent="pin"
-        >
-          <label class="field"
-            >Trip
+        <form v-else class="stack" style="gap: 14px; margin-top: 16px" @submit.prevent="pin">
+          <label class="field">Trip
             <select v-model="pinTrip" class="select" data-cy="pin-trip">
-              <option v-for="t in trips.plannable" :key="t.id" :value="t.id">
-                {{ t.name }}
-              </option>
+              <option v-for="t in trips.plannable" :key="t.id" :value="t.id">{{ t.name }}</option>
             </select>
           </label>
           <div class="row" style="gap: 12px">
-            <label class="field" style="flex: 1"
-              >Day
+            <label class="field" style="flex: 1">Day
               <select v-model="pinDay" class="select">
                 <option value="">Unscheduled</option>
-                <option v-for="d in pinDates" :key="d" :value="d">
-                  {{ dayLabel(pinTripObj?.start_date, d) }} · {{ d }}
-                </option>
+                <option v-for="d in pinDates" :key="d" :value="d">{{ dayLabel(pinTripObj?.start_date, d) }} · {{ d }}</option>
               </select>
             </label>
-            <label class="field" style="flex: 1"
-              >Time (optional)<input
-                v-model="pinTime"
-                type="time"
-                class="input"
-            /></label>
+            <label class="field" style="flex: 1">Time (optional)<input v-model="pinTime" type="time" class="input" /></label>
           </div>
           <div class="row" style="justify-content: flex-end">
-            <button type="button" class="btn btn-ghost" @click="pinning = null">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="btn btn-primary"
-              :disabled="pinBusy || !pinTrip"
-              data-cy="pin-confirm"
-            >
-              Pin it
-            </button>
+            <button type="button" class="btn btn-ghost" @click="pinning = null">Cancel</button>
+            <button type="submit" class="btn btn-primary" :disabled="pinBusy || !pinTrip" data-cy="pin-confirm">Pin it</button>
           </div>
         </form>
       </div>
     </template>
-
-    <ToastMessage v-bind="toast" @close="toast.message = ''" />
   </main>
 </template>
 
 <style scoped>
-/* top bar */
-.topbar {
+.notice-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 20px 34px; /* room for the posts below the board */
+  font-family: var(--font-round);
+  color: #1f2a24;
+  overflow: hidden !important; /* the sky stays put, everything scrolls on the cork */
+}
+.back {
+  position: absolute;
+  z-index: 6;
+  top: 16px;
+  left: 18px;
+}
+
+/* ---------- the board itself ---------- */
+.board-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: min(100%, 1400px);
+  display: flex;
+  flex-direction: column;
+}
+.roof {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  display: grid;
+  place-items: center;
+  height: 72px;
+  margin: 0 -2%;
+  background: linear-gradient(90deg, #bf6a48 50%, #9c4d31 50%);
+  clip-path: polygon(50% 0, 100% 86%, 100% 100%, 0 100%, 0 86%);
+  border-bottom: 10px solid #5c3520;
+}
+.roof-title {
+  margin: 12px 0 0;
+  color: #fff8ea;
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 28px;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+.frame {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 16px;
+  background: #8a5a34;
+  border-bottom: 12px solid #6f4426;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+}
+.cork {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  background: radial-gradient(rgba(100, 62, 28, 0.35) 1.2px, transparent 1.6px) 0 0 / 9px 9px, #c9975f;
+  box-shadow: inset 0 3px 10px rgba(60, 30, 10, 0.4);
+}
+.cork-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 22px 26px;
+}
+/* a slim thumb with no track or arrows, so nothing sits on the board's frame */
+.cork-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.cork-scroll::-webkit-scrollbar-button {
+  display: none;
+}
+.cork-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cork-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(60, 30, 10, 0.45);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .cork-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(60, 30, 10, 0.45) transparent;
+  }
+}
+/* a place page: one big sheet pinned over the whole board */
+.cork-scroll:focus {
+  outline: none;
+}
+.sheet {
+  position: relative;
+  flex: none;
+  min-width: 0;
+  padding: 24px clamp(14px, 3vw, 34px) 30px;
+  background: #fffdf7;
+  color: var(--ink);
+  font-family: var(--font-body);
+  box-shadow: 0 8px 18px rgba(50, 25, 5, 0.35);
+  animation: pin-up 0.25s ease-out;
+}
+@keyframes pin-up {
+  from {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+.post {
+  position: absolute;
+  z-index: 0;
+  top: 40px;
+  bottom: -26px;
+  width: 26px;
+  background: #5c3520;
+}
+.post.left {
+  left: 5%;
+}
+.post.right {
+  right: 5%;
+}
+
+/* ---------- notes ---------- */
+.note {
+  position: relative;
+  padding: 16px 16px 12px;
+  rotate: var(--tilt);
+  box-shadow: 0 6px 12px rgba(50, 25, 5, 0.3);
+}
+.white {
+  background: #fffdf7;
+}
+.kraft {
+  background: #f0d09d;
+}
+.pin {
+  position: absolute;
+  z-index: 2;
+  top: -7px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 50%;
+  box-shadow: 0 3px 4px rgba(0, 0, 0, 0.4), inset -2px -2px 0 rgba(0, 0, 0, 0.15);
+}
+.pin.red {
+  background: #e2573c;
+}
+.pin.yellow-pin {
+  background: #f2b134;
+}
+.pin.green {
+  background: #2e6b46;
+}
+.note-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.note-title small {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #1f2a24;
+  color: #fffdf7;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ---------- the header note: search, filters, vibes ---------- */
+.feed {
+  display: grid;
+  gap: 24px;
+}
+.head {
+  z-index: 4; /* the filter menu opens out over the flyers */
+  display: grid;
+  gap: 10px;
+}
+.head-top {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px 18px;
+}
+.head-text {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.head-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(21px, 2.1vw, 28px);
+  line-height: 1.1;
+}
+.head-sub {
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-soft);
 }
 .tools {
+  flex: 0 1 460px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex: 0 1 520px;
+  gap: 8px;
+  min-width: 0;
 }
 .search {
-  position: relative;
   flex: 1;
+  min-width: 0;
 }
-.search-ico {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--ink-mute);
-  pointer-events: none;
-}
-.search-input {
+.search input {
   width: 100%;
-  padding-left: 42px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 2px solid #1f2a24;
   border-radius: 999px;
+  background: #fffdf7;
+  font: inherit;
+  font-size: 14px;
 }
-
-.vibe-board {
-  margin-top: 22px;
-}
-
-/* feed */
-.sub {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 8px 0 0;
+.filters :deep(.filter-btn) {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+  box-shadow: none;
 }
 .cats {
-  margin-top: 18px;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.count {
-  margin: 20px 0 0;
+.vibe {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  background: #fffdf7;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vibe[aria-pressed='true'] {
+  background: #1f2a24;
+  color: #fffdf7;
+}
+.vibe.change {
+  border-style: dashed;
+  background: transparent;
+}
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.found {
+  font-family: var(--font-hand);
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2a24;
+}
+.attribution {
+  margin-left: auto;
+  color: var(--ink-mute);
+  font-size: 12px;
+}
+
+/* ---------- the flyers ---------- */
+.feed-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 224px;
+  align-items: start;
+  gap: 26px;
 }
 .grid {
   list-style: none;
-  margin: 18px 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 22px;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  gap: 28px 22px;
 }
-.place {
+.flyer {
+  position: relative;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-width: 0;
+  border: 2px solid #1f2a24;
+  border-radius: 6px;
+  background: #fffdf7;
+  box-shadow: 0 8px 14px rgba(50, 25, 5, 0.32);
+  rotate: var(--tilt);
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  transition: rotate 0.15s, box-shadow 0.15s;
 }
-.photo {
+.flyer:hover {
+  rotate: 0deg;
+  box-shadow: 0 12px 18px rgba(50, 25, 5, 0.38);
+}
+.flyer:active {
+  cursor: grabbing;
+}
+.flyer:focus-visible {
+  outline: 3px dashed #1f2a24;
+  outline-offset: 4px;
+}
+/* the places get pressed onto the cork, one after another */
+.dealing .flyer {
+  animation: pin-up 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) backwards;
+  animation-delay: calc(var(--i) * 70ms);
+}
+.dealing .head,
+.dealing .backpack {
+  animation: pin-up 0.4s cubic-bezier(0.3, 1.4, 0.5, 1) backwards;
+}
+@keyframes pin-up {
+  from {
+    opacity: 0;
+    translate: 0 -22px;
+    scale: 1.08;
+  }
+}
+.f-photo {
+  flex: none;
   width: 100%;
-  height: 170px;
+  height: 150px;
   object-fit: cover;
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 2px solid #1f2a24;
+  border-radius: 4px 4px 0 0;
+  pointer-events: none;
 }
-.body {
+.f-blank {
+  display: grid;
+  place-items: center;
+}
+.f-quick {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+}
+.quick {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 2px solid #1f2a24;
+  border-radius: 50%;
+  background: #fffdf7;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  color: #1f2a24;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.quick.pack {
+  background: #2e6b46;
+  color: #fffdf7;
+}
+.quick:active {
+  translate: 0 2px;
+  box-shadow: none;
+}
+.f-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 18px 18px;
+  padding: 12px 14px 14px;
+  font-family: var(--font-body);
 }
-.meta {
-  margin: 4px 0 0;
-  font-size: 13px;
+.f-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
 }
-.desc {
+.f-name {
   margin: 8px 0 0;
-  font-size: 14px;
-}
-.attribution {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--ink-mute);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 19px;
+  line-height: 1.12;
 }
 .place-link {
   color: inherit;
@@ -622,42 +988,186 @@ const price = (n) => (n ? "$".repeat(n) : "");
 .place-link:hover {
   text-decoration: underline;
 }
-.empty {
-  margin-top: 24px;
+.f-meta {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.dim {
+  color: var(--ink-soft);
+}
+.f-desc {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+.spacer {
+  flex: 1;
+}
+.f-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.f-actions .btn {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+.deck-empty {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+  margin: 0;
+  padding: 20px;
+  border: 3px dashed rgba(60, 30, 10, 0.5);
   text-align: center;
+  font-family: var(--font-hand);
+  font-size: 24px;
 }
-.pager {
-  margin-top: 28px;
+.stamp {
+  position: absolute;
+  z-index: 2;
+  top: 34px;
+  padding: 4px 10px;
+  border: 4px solid currentColor;
+  border-radius: 8px;
+  background: rgba(255, 253, 247, 0.85);
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 22px;
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+}
+.keep-stamp {
+  left: 16px;
+  color: #2e6b46;
+  rotate: -14deg;
+}
+.skip-stamp {
+  right: 16px;
+  color: #c2412d;
+  rotate: 14deg;
+}
+.flyer.keep .keep-stamp,
+.flyer.skip .skip-stamp {
+  opacity: 1;
 }
 
-/* cards "poof up" after Let's Explore */
-.poof-in .place {
-  animation: poof-up 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both;
-  animation-delay: calc(var(--i) * 45ms);
+/* ---------- backpack ---------- */
+.backpack {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  max-height: 340px;
 }
-@keyframes poof-up {
-  from {
-    opacity: 0;
-    transform: translateY(18px) scale(0.92);
+.bp-empty {
+  margin: 0;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  line-height: 1.1;
+}
+.bp-list {
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+.bp-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.bp-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+.mini {
+  flex: none;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  background: #f5bf4f;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mini.ghost {
+  padding: 0 7px;
+  background: transparent;
+}
+
+@media (max-width: 960px) {
+  .notice-page {
+    padding: 10px 10px 12px;
   }
-}
-
-@media (max-width: 640px) {
+  .back {
+    position: relative;
+    top: 0;
+    left: 0;
+    align-self: flex-start;
+    margin-bottom: 6px;
+  }
+  .roof {
+    margin: 0;
+  }
+  .frame {
+    padding: 10px;
+  }
+  .cork-scroll {
+    padding: 18px 12px 20px;
+  }
+  .post {
+    display: none;
+  }
+  /* the backpack moves above the flyers so it stays in reach */
+  .feed-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .backpack {
+    position: relative;
+    top: 0;
+    order: -1;
+    max-height: 200px;
+  }
   .tools {
-    flex-basis: 100%;
+    flex: 1 1 100%;
   }
-  /* one swipeable row of category chips */
+  .attribution {
+    margin-left: 0;
+  }
+}
+@media (max-width: 640px) {
+  /* one swipeable row of vibes, so the first flyer isn't pushed off the screen */
   .cats {
     flex-wrap: nowrap;
     overflow-x: auto;
-    padding-bottom: 6px;
+    scrollbar-width: none;
+    padding-bottom: 4px;
   }
   .cats > * {
     flex: none;
   }
+  .head-title {
+    font-size: 19px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .poof-in .place {
+  .dealing .flyer,
+  .dealing .head,
+  .dealing .backpack {
     animation: none;
   }
 }

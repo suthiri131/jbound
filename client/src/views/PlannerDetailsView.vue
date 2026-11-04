@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from "vue";
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage } from "@/lib/api";
 import { useTripsStore } from "@/stores/trips";
@@ -20,6 +20,23 @@ const trips = useTripsStore();
 
 const tripId = computed(() => route.params.tripId || null);
 const crewNotice = ref("");
+const chatOpen = ref(false);
+const chatLauncher = ref(null);
+const chatPanel = ref(null);
+async function toggleChat() {
+  chatOpen.value = !chatOpen.value;
+  await nextTick();
+  if (chatOpen.value) chatPanel.value?.querySelector('input')?.focus();
+  else chatLauncher.value?.focus();
+}
+watch(tripId, () => { chatOpen.value = false; });
+function dismissChatOutside(event) {
+  if (chatOpen.value && !chatPanel.value?.contains(event.target) && !chatLauncher.value?.contains(event.target)) {
+    chatOpen.value = false;
+  }
+}
+onMounted(() => document.addEventListener('pointerdown', dismissChatOutside));
+onBeforeUnmount(() => document.removeEventListener('pointerdown', dismissChatOutside));
 watch(tripId, () => { crewNotice.value = ""; });
 const trip = ref(null);
 const activeStopId = ref(null);
@@ -186,7 +203,7 @@ function startMemories() {
 async function onArchived() {
   await trips.fetch(true);
   notify(
-    `${trip.value.name} is now a drawer in the attic.`,
+    `${trip.value.name} is now a drawer in the archive tent.`,
     "/archives",
     "Open the Archives",
   );
@@ -199,7 +216,8 @@ const canMemories = computed(() =>
 </script>
 
 <template>
-  <main class="container page planner">
+  <main class="planner">
+    <RouterLink to="/planner" class="camp-back back">← All expeditions</RouterLink>
     <p v-if="loading" class="muted" role="status">Opening your trip…</p>
     <div v-else-if="loadError" class="card-flat card-pad" role="alert">
       <h1 class="display display-sm">This trip is unavailable</h1>
@@ -210,14 +228,48 @@ const canMemories = computed(() =>
     <template v-if="trip">
       <div v-if="trip.phase === 'archived'" class="card-flat card-pad archived">
         <strong>This trip is in the Archives.</strong>
-        <RouterLink to="/archives">Open its drawer in the attic →</RouterLink>
+        <RouterLink to="/archives">Open its drawer in the tent →</RouterLink>
       </div>
-      
       <p v-if="crewNotice" class="hand" role="status">{{ crewNotice }}</p>
 
       <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @joined="crewNotice = $event" />
 
       <div class="split">
+        <div class="map-column">
+          <div class="paper-map">
+            <i class="tape" aria-hidden="true" />
+            <MemoryBox
+              v-if="rightTab === 'memories' && canMemories"
+              :trip="trip"
+              @show-map="rightTab = 'map'"
+              @archived="onArchived"
+              @error="notify"
+            />
+            <RouteMap
+              v-else
+              :trip="trip"
+              :version="mapVersion"
+              :active-stop-id="activeStopId"
+              @select-stop="activeStopId = $event"
+            >
+              <template #actions>
+                <button
+                  v-if="canMemories"
+                  type="button"
+                  class="btn btn-teal btn-sm"
+                  @click="rightTab = 'memories'"
+                >
+                  {{
+                    trip.phase === "memory_box"
+                      ? "Back to memory box"
+                      : "Memory box"
+                  }}
+                </button>
+              </template>
+            </RouteMap>
+          </div>
+        </div>
+
         <BucketList
           :trip="trip"
           :legs="feas?.legs || {}"
@@ -229,38 +281,6 @@ const canMemories = computed(() =>
           @edit="editing = true"
           @delete="requestDelete"
         />
-
-        <div class="right">
-          <MemoryBox
-            v-if="rightTab === 'memories' && canMemories"
-            :trip="trip"
-            @show-map="rightTab = 'map'"
-            @archived="onArchived"
-            @error="notify"
-          />
-          <RouteMap
-            v-else
-            :trip="trip"
-            :version="mapVersion"
-            :active-stop-id="activeStopId"
-            @select-stop="activeStopId = $event"
-          >
-            <template #actions>
-              <button
-                v-if="canMemories"
-                type="button"
-                class="btn btn-teal btn-sm"
-                @click="rightTab = 'memories'"
-              >
-                {{
-                  trip.phase === "memory_box"
-                    ? "Back to memory box"
-                    : "Memory box"
-                }}
-              </button>
-            </template>
-          </RouteMap>
-        </div>
       </div>
     </template>
 
@@ -281,24 +301,41 @@ const canMemories = computed(() =>
     />
     <ToastMessage v-bind="toast" @close="toast.message = ''" />
 
-    <CampChat v-if="trip" :key="trip.id" :trip-id="trip.id" />
+    <aside v-if="trip" class="floating-chat" aria-label="Crew chat">
+      <div v-show="chatOpen" id="camp-chat-panel" ref="chatPanel" class="chat-panel" @keydown.esc.stop="toggleChat">
+        <button type="button" class="chat-close" aria-label="Close Camp chat" @click="toggleChat">×</button>
+        <CampChat :key="trip.id" :trip-id="trip.id" />
+      </div>
+      <button v-show="!chatOpen" ref="chatLauncher" type="button" class="btn btn-mustard chat-launcher" :aria-expanded="chatOpen" aria-label="Open Camp chat" title="Chat with your crew" aria-controls="camp-chat-panel" @click="toggleChat">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+
+            <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2 2-6a8.5 8.5 0 1 1 18-4.5Z" />
+            <path d="M7 10h8M7 14h5" />
+        </svg>
+      </button>
+    </aside>
+
   </main>
 </template>
 
 <style scoped>
+/* A wooden expedition table. The components keep their logic; this page dresses them as paper. */
 .planner {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-top: 22px;
+  gap: 16px;
+  padding: 18px clamp(14px, 2.4vw, 34px) 34px;
+  font-family: var(--font-round);
+  background: repeating-linear-gradient(90deg, #7a4d2c 0 150px, #6c4326 150px 153px, #744829 153px 300px, #6c4326 300px 303px);
+  box-shadow: inset 0 0 90px rgba(40, 20, 5, 0.55);
 }
-
-.empty {
-  text-align: center;
+.back {
+  flex: none;
 }
-.empty .lead {
-  margin-left: auto;
-  margin-right: auto;
+.planner > .muted,
+.planner > .hand {
+  color: #fbf1dc;
 }
 .archived {
   display: flex;
@@ -306,24 +343,174 @@ const canMemories = computed(() =>
   gap: 12px;
   background: var(--paper-deep);
 }
-/* Itinerary : map = 2 : 3, equal heights */
+
+/* the crew: a luggage label */
+.planner :deep(.crew) {
+  border: 0;
+  border-radius: 8px;
+  background: #f4e6c4;
+  box-shadow: 0 6px 12px rgba(40, 20, 5, 0.4);
+}
+.planner :deep(.crew h2),
+.planner :deep(.bucket h1),
+.planner :deep(.bucket h2),
+.planner :deep(.map-card h2) {
+  font-family: var(--font-story);
+  font-weight: 800;
+}
+
+.planner :deep(.bucket h1) { font-size: clamp(26px, 2.2vw, 34px); line-height: 1.2; }
+
+/* Map : day plan = 3 : 2 */
 .split {
   display: flex;
   flex-wrap: wrap;
-  align-items: stretch;
-  gap: 24px;
+  align-items: flex-start;
+  gap: 22px;
 }
-.left {
-  flex: 2 1 0;
-  min-width: min(360px, 100%);
-}
-.right {
+.map-column {
   flex: 3 1 0;
   min-width: min(440px, 100%);
   display: flex;
   flex-direction: column;
+  gap: 22px;
 }
-.right > * {
+.paper-map {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  background: #f1dfb6;
+  box-shadow: 0 10px 22px rgba(40, 20, 5, 0.45), inset 0 0 50px rgba(120, 85, 40, 0.28);
+  border-radius: 3px;
+}
+.paper-map > :not(.tape) {
   flex: 1;
+}
+.tape {
+  position: absolute;
+  z-index: 3;
+  top: -11px;
+  left: 50%;
+  width: 110px;
+  height: 26px;
+  margin-left: -55px;
+  rotate: -2deg;
+  background: rgba(224, 182, 96, 0.8);
+}
+.paper-map :deep(.map-card) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.paper-map :deep(.bar) {
+  padding: 4px 4px 12px;
+  background: transparent;
+  border-bottom: 0;
+}
+.paper-map :deep(.map-wrap) {
+  border: 2.5px solid #4a3a24;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.paper-map :deep(.legend) {
+  margin-top: 12px;
+  background: transparent;
+  border-top: 2px dashed #8a6a3a;
+}
+.paper-map :deep(.itinerary-stop.selected) {
+  background: rgba(255, 253, 247, 0.6);
+}
+.paper-map :deep(.leg-badge),
+.paper-map :deep(.timing-badge span) {
+  background: #fff8e6;
+}
+
+/* the day plan: a page torn from a lined notebook, taped down */
+.planner :deep(.bucket) {
+  flex: 2 1 0;
+  min-width: min(360px, 100%);
+  border: 0;
+  border-radius: 2px;
+  background: repeating-linear-gradient(#fffdf7 0 33px, #d5e4ee 33px 34.5px);
+  box-shadow: 0 10px 22px rgba(40, 20, 5, 0.45);
+}
+.planner :deep(.bucket::before) {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: -12px;
+  left: 44%;
+  width: 96px;
+  height: 26px;
+  rotate: 2deg;
+  background: rgba(224, 182, 96, 0.8);
+}
+.planner :deep(.bucket .progress) {
+  background: #fffaf0;
+  border-color: #c7ad78;
+}
+.planner :deep(.bucket .stop) {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+.planner :deep(.bucket .stop.selected) {
+  background: rgba(245, 191, 79, 0.28);
+  box-shadow: inset 4px 0 #c2412d;
+}
+.planner :deep(.bucket .stop-title) {
+  font-family: var(--font-hand);
+  font-size: 25px;
+  line-height: 1.05;
+}
+.planner :deep(.bucket .time) {
+  border-style: dashed;
+  background: #fffdf7;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+}
+.planner :deep(.bucket .tick) {
+  background: #fffdf7;
+}
+.planner :deep(.bucket .day-head) {
+  background: #fffdf7;
+}
+/* adding a stop: the kraft backpack pocket at the bottom of the page */
+.planner :deep(.bucket .scribble) {
+  background: #e7c48e;
+  border-color: #4a2c1a;
+  box-shadow: 0 5px 0 #4a2c1a;
+}
+.planner :deep(.bucket .location-field) {
+  background: #fff8e6;
+}
+
+/* Chat stays accessible independently of the route and itinerary length. */
+.floating-chat { position: fixed; right: 24px; bottom: 24px; z-index: 80; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; max-width: calc(100vw - 32px); }
+.chat-panel { position: relative; width: min(480px, calc(100vw - 32px)); }
+.chat-launcher { width: 64px; height: 64px; padding: 0; border-radius: 50%; }
+.chat-close { position: absolute; top: 10px; right: 12px; z-index: 1; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--paper); font-size: 26px; cursor: pointer; }
+.chat-panel :deep(.chat) { display: flex; flex-direction: column; max-height: min(560px, calc(100dvh - 120px)); }
+.chat-panel :deep(.head) { flex: none; padding-right: 48px; flex-wrap: wrap; }
+.chat-panel :deep(.hint) { flex-basis: 100%; margin-left: 0; }
+.chat-panel :deep(.log) { flex: 1; min-height: 100px; max-height: 340px; overflow-wrap: anywhere; }
+.chat-panel :deep(.compose) { flex: none; }
+@media (max-width: 600px) {
+  .floating-chat { right: 16px; bottom: 16px; }
+}
+/* camp chat: the leather notebook */
+.planner :deep(.chat) {
+  background: #3f2616;
+  border-color: #2a1810;
+  box-shadow: 0 8px 18px rgba(40, 20, 5, 0.45);
+}
+
+@media (max-width: 600px) {
+  .tape {
+    display: none;
+  }
 }
 </style>

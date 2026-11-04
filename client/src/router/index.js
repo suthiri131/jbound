@@ -7,7 +7,7 @@ const routes = [
     path: "/",
     name: "home",
     component: () => import("@/views/BasecampView.vue"),
-    meta: { title: "Home" },
+    meta: { title: "Home", fullBleed: true , peekNav: true}, // the 3D camp fills the window: no footer, no page scroll
   },
 
   {
@@ -31,63 +31,76 @@ const routes = [
     path: "/tales",
     name: "tales",
     component: () => import("@/views/TalesView.vue"),
-    meta: { requiresAuth: true, title: "Tales" },
+    meta: { requiresAuth: true, title: "Tales", fullBleed: true },
   },
 
   {
     path: "/watcher",
     name: "watcher",
     component: WatcherView,
-    meta: { title: "Watcher" },
+    meta: { title: "Watcher", fullBleed: true },
   },
 
-  // Place Tales (from Version 1)
+  // A place's tales live on the notice board, whichever page you came from. These keep old links working.
   {
     path: "/tales/place/:placeId",
-    name: "place-tales",
-    component: PlaceTalesView,
+    redirect: (to) => ({ name: "explorer-place-tales", params: to.params }),
   },
   {
     path: "/tales/custom/:name",
-    name: "custom-place-tales",
-    component: PlaceTalesView,
+    redirect: (to) => ({ name: "explorer-custom-tales", params: to.params }),
   },
   
   {
     path: "/planner",
     name: "planner",
     component: () => import("@/views/PlannerView.vue"),
-    meta: { requiresAuth: true, title: "Trips" },
+    meta: { requiresAuth: true, title: "Trips", fullBleed: true },
   },
   {
-    path: "/planner/:tripId",
+    path: "/planner/:tripId", 
     name: "trip-details",
     component: () => import("@/views/PlannerDetailsView.vue"),
-    meta: { requiresAuth: true, title: "Trip details" },
+    meta: { requiresAuth: true, title: "Trip details", fullBleed: true },
   },
   {
     path: "/ledger",
     name: "ledger",
     component: () => import("@/views/LedgerView.vue"),
-    meta: { requiresAuth: true, title: "Ledger" },
+    meta: { requiresAuth: true, title: "Ledger", fullBleed: true },
   },
   {
     path: "/explorer",
     name: "explorer",
     component: () => import("@/views/ExplorerView.vue"),
-    meta: { title: "Explorer" },
-  },
-  {
-    path: "/explorer/place/:googlePlaceId",
-    name: "place",
-    component: () => import("@/views/PlaceView.vue"),
-    meta: { title: "Place" },
+    meta: { title: "Explorer", fullBleed: true },
+    // these take over the notice board; the Explorer stays mounted underneath, so its results and filters survive
+    children: [
+      {
+        path: "place/:googlePlaceId",
+        name: "place",
+        component: () => import("@/views/PlaceView.vue"),
+        meta: { title: "Place", onBoard: true },
+      },
+      {
+        path: "tales/place/:placeId",
+        name: "explorer-place-tales",
+        component: PlaceTalesView,
+        meta: { title: "Tales", onBoard: true },
+      },
+      {
+        path: "tales/custom/:name",
+        name: "explorer-custom-tales",
+        component: PlaceTalesView,
+        meta: { title: "Tales", onBoard: true },
+      },
+    ],
   },
   {
     path: "/archives/:tripId?",
     name: "archives",
     component: () => import("@/views/ArchivesView.vue"),
-    meta: { requiresAuth: true, title: "Archives" },
+    meta: { requiresAuth: true, title: "Archives", fullBleed: true },
   },
   {
     path: "/notifications",

@@ -44,7 +44,7 @@ async function submit() {
   <form novalidate @submit.prevent="submit">
     <label class="field">
       Join a crew with an invite code
-      <span class="row" style="gap: 8px; flex-wrap: nowrap">
+      <span class="row join-controls">
         <input
           v-model="code"
           class="input"
@@ -57,7 +57,7 @@ async function submit() {
           :aria-describedby="error ? errId : undefined"
           data-cy="join-code"
         />
-        <button type="submit" class="btn btn-dark btn-sm" :disabled="busy || !code.trim()" data-cy="join-submit">
+        <button type="submit" class="btn btn-mustard btn-sm" :disabled="busy || !code.trim()" data-cy="join-submit">
           {{ busy ? 'Joining…' : 'Join' }}
         </button>
       </span>
@@ -65,3 +65,9 @@ async function submit() {
     <p v-if="error" :id="errId" class="error-text" role="alert" style="margin: 6px 0 0">{{ error }}</p>
   </form>
 </template>
+
+<style scoped>
+.join-controls { gap: 16px; flex-wrap: nowrap; }
+.join-controls .btn { box-shadow: var(--shadow-sm); }
+.join-controls .btn:disabled { opacity: 1; }
+</style>

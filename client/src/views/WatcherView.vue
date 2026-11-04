@@ -2,9 +2,16 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { api, API_URL, errorMessage } from '@/lib/api';
 import { timeAgo } from '@/utils/format';
+import { useCampSky } from '@/composables/useCampSky';
+import CrossingScene from '@/components/watcher/CrossingScene.vue';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const LEVEL_COLOR = { Low: 'var(--jungle)', Medium: 'var(--mustard)', High: 'var(--ember)' };
+
+const dayDropdownOpen = ref(false);
+function selectDay(index) {
+  q.day = index;
+  dayDropdownOpen.value = false;
+}
 
 const sgNow = () => {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Singapore', weekday: 'long', hour: '2-digit', hour12: false }).formatToParts(new Date());
@@ -24,8 +31,7 @@ const hourLabel = (h) => `${String(h).padStart(2, '0')}:00`;
 const level = computed(() => est.value?.selected?.level ?? 'Low');
 const score = computed(() => est.value?.selected?.score ?? 0);
 const isNow = computed(() => q.day === now.day && q.hour === now.hour);
-// Needle angle: score 0 → -90deg, 100 → +90deg
-const needle = computed(() => -90 + (score.value / 100) * 180);
+const { condition } = useCampSky();
 
 async function loadEstimate() {
   estError.value = '';
@@ -99,180 +105,619 @@ function handleCameraKeydown(event) {
 </script>
 
 <template>
-  <main class="container page">
-    <span class="tag-stamp" style="color: var(--teal)">Watcher</span>
-    <h1 class="display display-lg" style="margin-top: 16px">How bad is the jam?</h1>
-    <p class="lead">Typical queue patterns for each checkpoint, plus the live LTA cameras. Slide through the day to find a quieter time.</p>
+  <main class="watcher">
+    <section class="view" aria-label="Congestion estimate" data-cy="gauge">
+      <CrossingScene
+        :checkpoint="q.checkpoint"
+        :direction="q.direction"
+        :score="score"
+        :hour="q.hour"
+        :holiday="q.holiday"
+        :condition="isNow ? condition : 'clear'"
+      />
+      <RouterLink to="/" class="camp-back back">← Climb down</RouterLink>
 
-    <section class="controls row" aria-label="Checkpoint and direction">
-      <div class="segmented" role="group" aria-label="Checkpoint">
-        <button type="button" :aria-pressed="q.checkpoint === 'woodlands'" @click="q.checkpoint = 'woodlands'">Woodlands</button>
-        <button type="button" :aria-pressed="q.checkpoint === 'tuas'" @click="q.checkpoint = 'tuas'">Tuas</button>
+      <div class="dials" role="group" aria-label="What to look at">
+        <div class="seg" role="group" aria-label="Checkpoint">
+          <button type="button" :aria-pressed="q.checkpoint === 'woodlands'" @click="q.checkpoint = 'woodlands'">Woodlands</button>
+          <button type="button" :aria-pressed="q.checkpoint === 'tuas'" @click="q.checkpoint = 'tuas'">Tuas</button>
+        </div>
+        <div class="seg" role="group" aria-label="Direction">
+          <button type="button" :aria-pressed="q.direction === 'to_jb'" @click="q.direction = 'to_jb'">SG → JB</button>
+          <button type="button" :aria-pressed="q.direction === 'to_sg'" @click="q.direction = 'to_sg'">JB → SG</button>
+        </div>
+        <div class="day-dropdown">
+          <button type="button" class="day-trigger" :aria-expanded="dayDropdownOpen" aria-label="Select day" @click="dayDropdownOpen = !dayDropdownOpen">
+            <span>{{ DAYS[q.day] }}</span>
+            <span class="dropdown-arrow" aria-hidden="true"></span>
+          </button>
+          <ul v-if="dayDropdownOpen" class="day-list" role="listbox">
+            <li v-for="(d, i) in DAYS" :key="d">
+              <button type="button" :class="{ selected: q.day === i }" @click="selectDay(i)">{{ d }}</button>
+            </li>
+          </ul>
+        </div>
+        <label class="pick check">
+          <input v-model="q.holiday" type="checkbox" /> Holiday
+        </label>
       </div>
-      <div class="segmented" role="group" aria-label="Direction">
-        <button type="button" :aria-pressed="q.direction === 'to_jb'" @click="q.direction = 'to_jb'">SG → JB</button>
-        <button type="button" :aria-pressed="q.direction === 'to_sg'" @click="q.direction = 'to_sg'">JB → SG</button>
+
+      <div class="verdict" :class="`lvl-${level.toLowerCase()}`" role="status">
+        <span class="when">{{ isNow ? 'Right now' : `${DAYS[q.day]} ${hourLabel(q.hour)}` }} · {{ q.checkpoint === 'tuas' ? 'Tuas Second Link' : 'Woodlands Causeway' }}</span>
+        <strong>{{ level }}</strong>
+        <span class="score">score {{ score }} / 100</span>
       </div>
-      <label class="field" style="flex-direction: row; align-items: center; gap: 8px">Day
-        <select v-model.number="q.day" class="select" style="width: auto">
-          <option v-for="(d, i) in DAYS" :key="d" :value="i">{{ d }}</option>
-        </select>
-      </label>
-      <label class="row" style="gap: 8px; font-weight: 700; font-size: 14px">
-        <input v-model="q.holiday" type="checkbox" style="width: 20px; height: 20px" /> Public / school holiday
-      </label>
     </section>
 
-    <div class="split">
-      <section class="card card-pad gauge-card" aria-label="Congestion estimate" data-cy="gauge">
-        <p class="eyebrow">{{ isNow ? 'Right now' : `${DAYS[q.day]} ${hourLabel(q.hour)}` }} · {{ q.checkpoint === 'tuas' ? 'Tuas Second Link' : 'Woodlands Causeway' }}</p>
-        <svg viewBox="0 0 240 140" class="dial" role="img" :aria-label="`Estimated congestion ${level}, score ${score} of 100`">
-          <path d="M20 120a100 100 0 0 1 66-94" fill="none" stroke="#2E5A3C" stroke-width="22" />
-          <path d="M86 26a100 100 0 0 1 68 0" fill="none" stroke="#E0A43B" stroke-width="22" />
-          <path d="M154 26a100 100 0 0 1 66 94" fill="none" stroke="#B4471F" stroke-width="22" />
-          <g :style="{ transform: `rotate(${needle}deg)`, transformOrigin: '120px 120px', transition: 'transform .5s' }">
-            <path d="M120 120 116 116 120 36 124 116Z" fill="#2A2117" />
-          </g>
-          <circle cx="120" cy="120" r="10" fill="#2A2117" />
-        </svg>
-        <p class="display level" :style="{ color: LEVEL_COLOR[level] }">{{ level }}</p>
-        <p class="muted" style="margin: 0; text-align: center">score {{ score }} / 100</p>
+    <section class="rail" aria-label="Whole day">
+      <div class="timeline">
+        <div class="tl-head">
+          <h1 class="tl-title">How bad is the jam?</h1>
+          <span class="tl-time">{{ hourLabel(q.hour) }}</span>
+          <button v-if="!isNow" type="button" class="mini" @click="resetNow">Back to now</button>
+          <div class="legend">
+            <span><i class="low" /> Low</span>
+            <span><i class="medium" /> Medium</span>
+            <span><i class="high" /> High</span>
+          </div>
+        </div>
 
-        <label class="field" style="margin-top: 18px">Time of day · {{ hourLabel(q.hour) }}
-          <input v-model.number="q.hour" type="range" min="0" max="23" step="1" aria-label="Hour of day" data-cy="hour-slider" />
-        </label>
-        <button v-if="!isNow" type="button" class="btn btn-sm btn-ghost" style="margin-top: 8px" @click="resetNow">Back to now</button>
+        <div class="bars" role="list">
+          <button
+            v-for="h in est?.hourly || []"
+            :key="h.hour"
+            type="button"
+            role="listitem"
+            class="bar"
+            :class="[h.level.toLowerCase(), { sel: h.hour === q.hour }]"
+            :style="{ height: `${Math.max(6, h.score)}%` }"
+            :aria-label="`${hourLabel(h.hour)}: ${h.level}`"
+            :title="`${hourLabel(h.hour)} · ${h.level}`"
+            @click="q.hour = h.hour"
+          />
+        </div>
+        <input v-model.number="q.hour" class="slider" type="range" min="0" max="23" step="1" aria-label="Hour of day" data-cy="hour-slider" />
+        <div class="axis"><span>12am</span><span>6am</span><span>12pm</span><span>6pm</span><span>11pm</span></div>
 
         <p v-if="est?.bestHours?.length" class="best">
           <strong>Quieter times:</strong>
-          <button v-for="h in est.bestHours" :key="h" type="button" class="pill best-pill" @click="q.hour = h">{{ hourLabel(h) }}</button>
+          <button v-for="h in est.bestHours" :key="h" type="button" class="mini" @click="q.hour = h">{{ hourLabel(h) }}</button>
         </p>
         <p v-if="estError" class="error-text">{{ estError }}</p>
-        <p class="muted disclaimer">{{ est?.disclaimer }}</p>
-      </section>
-
-      <section class="card card-pad" aria-label="Whole day">
-        <h2 class="display display-sm">The whole day</h2>
-        <p class="muted" style="font-size: 13px; margin-top: 6px;">Estimated congestion throughout the day (0–100)</p>
-        <div class="graph-legend">
-            <span><i style="background: var(--jungle)"></i> Low</span>
-            <span><i style="background: var(--mustard)"></i> Medium</span>
-            <span><i style="background: var(--ember)"></i> High</span>
-        </div>
-
-        <div class="graph-container">
-            <span class="y-axis-label">Congestion score (0–100)</span>
-            <div class="bars" role="list">
-            <button
-                v-for="h in est?.hourly || []"
-                :key="h.hour"
-                type="button"
-                role="listitem"
-                class="bar"
-                :class="{ sel: h.hour === q.hour }"
-                :style="{ height: `${Math.max(6, h.score)}%`, background: LEVEL_COLOR[h.level] }"
-                :aria-label="`${hourLabel(h.hour)}: ${h.level}`"
-                :title="`${hourLabel(h.hour)} · ${h.level}`"
-                @click="q.hour = h.hour"
-            />
-            </div>
-        </div>
-        <div class="axis muted"><span>0000</span><span>0600</span><span>1200</span><span>1800</span><span>2300</span></div>
-      </section>
-    </div>
-
-    <section class="cams" aria-label="Live cameras">
-      <div class="row" style="justify-content: space-between; align-items: baseline">
-        <h2 class="display display-md">Live cameras</h2>
-        <span v-if="cams" class="muted" style="font-size: 13px">Updated {{ timeAgo(cams.fetchedAt) }} · {{ cams.source }} · refreshes every minute</span>
+        <p class="disclaimer">{{ est?.disclaimer }}</p>
       </div>
-      <p v-if="camError" class="card-flat card-pad" role="status" style="margin-top: 12px">{{ camError }}</p>
-      <p class="muted" style="font-size: 12px; margin-top: 8px;">🔍 Click on a camera image to enlarge it</p>
-      <div class="cam-grid">
-        <figure v-for="c in cams?.cameras || []" :key="c.cameraId" class="card cam">
-          <img :src="c.imageUrl" :alt="`Live traffic camera: ${c.label}`" loading="lazy" role="button" tabindex="0" @click="openCameraViewer(c)" @keydown.enter="openCameraViewer(c)" @keydown.space.prevent="openCameraViewer(c)"/>
-          <figcaption>
-            <strong>{{ c.label }}</strong>
-            <span class="pill" :style="{ background: LEVEL_COLOR[c.estimate.level], color: c.estimate.level === 'Medium' ? 'var(--ink)' : 'var(--card)' }">usually {{ c.estimate.level }} now</span>
-          </figcaption>
-        </figure>
+
+      <div class="cams" aria-label="Live cameras">
+        <div class="cam-head">
+          <h2 class="tl-title">Live cameras</h2>
+          <span v-if="cams" class="cam-meta">Updated {{ timeAgo(cams.fetchedAt) }} · {{ cams.source }}</span>
+        </div>
+        <p v-if="camError" class="cam-note" role="status">{{ camError }}</p>
+        <div class="cam-strip">
+          <figure v-for="c in cams?.cameras || []" :key="c.cameraId" class="cam">
+            <button type="button" class="cam-open" :aria-label="`Enlarge camera: ${c.label}`" @click="openCameraViewer(c)">
+              <img :src="c.imageUrl" :alt="`Live traffic camera: ${c.label}`" loading="lazy" />
+            </button>
+            <figcaption>
+              <strong>{{ c.label }}</strong>
+              <span class="usually" :class="c.estimate.level.toLowerCase()">usually {{ c.estimate.level }} now</span>
+            </figcaption>
+          </figure>
+        </div>
       </div>
-    
     </section>
 
     <!-- Fullscreen camera viewer -->
-        <div v-if="selectedCamera"
-            ref="cameraDialog"
-            class="camera-overlay"
-            role="dialog"
-            aria-modal="true"
-            :aria-label="`Camera viewer: ${selectedCamera.label}`"
-            tabindex="-1"
-            @click.self="closeCameraViewer"
-            @keydown="handleCameraKeydown"
-            >
-            <button
-                type="button"
-                class="camera-close"
-                aria-label="Close camera viewer"
-                @click="closeCameraViewer"
-            >
-                ✕
-            </button>
-
-            <div class="camera-viewer-content">
-                <h3>{{ selectedCamera.label }}</h3>
-
-                <img
-                :src="selectedCamera.imageUrl"
-                :alt="`Enlarged traffic camera: ${selectedCamera.label}`"
-                />
-
-                <p>Live LTA traffic camera · refreshes every minute</p>
-            </div>
-        </div>
-
+    <div
+      v-if="selectedCamera"
+      ref="cameraDialog"
+      class="camera-overlay"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="`Camera viewer: ${selectedCamera.label}`"
+      tabindex="-1"
+      @click.self="closeCameraViewer"
+      @keydown="handleCameraKeydown"
+    >
+      <button type="button" class="camera-close" aria-label="Close camera viewer" @click="closeCameraViewer">✕</button>
+      <div class="camera-viewer-content">
+        <h3>{{ selectedCamera.label }}</h3>
+        <img :src="selectedCamera.imageUrl" :alt="`Enlarged traffic camera: ${selectedCamera.label}`" />
+        <p>Live LTA traffic camera · refreshes every minute</p>
+      </div>
+    </div>
   </main>
 </template>
 
 <style scoped>
-.controls { margin-top: 24px; }
-.split { display: grid; grid-template-columns: minmax(280px, 1fr) 2fr; gap: 24px; margin-top: 24px; }
-.gauge-card { display: flex; flex-direction: column; }
-.dial { width: 100%; max-width: 320px; margin: 12px auto 0; display: block; }
-.level { margin: 4px 0 0; text-align: center; font-size: 40px; }
-input[type='range'] { accent-color: var(--teal); min-height: 44px; }
-.best { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 0; font-size: 14px; }
-.best-pill { min-height: 32px; background: var(--sage); cursor: pointer; }
-.disclaimer { margin: 14px 0 0; font-size: 12px; }
-.bars { display: flex; align-items: flex-end; gap: 4px; height: 240px; margin-top: 18px; padding-bottom: 4px; border-bottom: 2px solid var(--ink); }
-.bar { flex: 1; min-width: 0; border: 1.5px solid var(--ink); border-bottom: 0; border-radius: 4px 4px 0 0; cursor: pointer; padding: 0; opacity: .75; }
-.bar.sel { opacity: 1; outline: 3px solid var(--ink); outline-offset: 1px; }
-.axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px; margin-left: 28px; }
-.cams { margin-top: 40px; }
-.cam-grid { display: grid;grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 20px; margin-top: 16px;}
-.cam { margin: 0; overflow: hidden; }
+.watcher {
+  --low: #2e6b46;
+  --medium: #e0a43b;
+  --high: #c2412d;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-round);
+  color: #1f2a24;
+  background: #5c3520;
+}
 
-.cam img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; border-bottom: 2px solid var(--ink); background: var(--mist); }
+/* ---------- the view from the tower ---------- */
+.view {
+  position: relative;
+  flex: 1 0 auto;
+  min-height: max(340px, 48dvh);
+}
+.back {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  left: 16px;
+}
+.dials {
+  position: absolute;
+  z-index: 3;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: calc(100% - 190px);
+}
+.seg {
+  display: inline-flex;
+  border: 2.5px solid #1f2a24;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.22);
+}
+.seg button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  background: #fffdf7;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.seg button[aria-pressed='true'] {
+  background: #1f2a24;
+  color: #fffdf7;
+}
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 43px;
+  padding: 0 10px;
+  border: 2.5px solid #1f2a24;
+  border-radius: 12px;
+  background: #fffdf7;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.22);
+  font-size: 14px;
+  font-weight: 600;
+}
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: #1f2a24;
+}
+.verdict {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 72px;
+  translate: -50% 0;
+  display: grid;
+  justify-items: center;
+  padding: 10px 26px 12px;
+  border: 3px solid #1f2a24;
+  border-radius: 14px;
+  background: var(--tone);
+  color: var(--on);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.25);
+  text-align: center;
+  white-space: nowrap;
+  transition: background 0.3s;
+}
+.lvl-low {
+  --tone: var(--low);
+  --on: #fffdf7;
+}
+.lvl-medium {
+  --tone: var(--medium);
+  --on: #1f2a24;
+}
+.lvl-high {
+  --tone: var(--high);
+  --on: #fffdf7;
+}
+.when {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.verdict strong {
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 1.05;
+}
+.score {
+  font-size: 12.5px;
+}
 
-.cam figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; cursor: zoom-in; }
-@media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+/* ---------- the railing: timeline + cameras ---------- */
+.rail {
+  position: relative;
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px;
+  border-top: 10px solid #8a5a34;
+  background: repeating-linear-gradient(90deg, #6f4426 0 140px, #5c3520 140px 143px);
+}
+.timeline,
+.cams {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 2.5px solid #1f2a24;
+  border-radius: 14px;
+  background: #fffdf7;
+}
+.tl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.tl-title {
+  margin: 0;
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 21px;
+  line-height: 1.1;
+}
+.tl-time {
+  padding: 1px 10px;
+  border-radius: 8px;
+  background: #1f2a24;
+  color: #fffdf7;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.legend {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  font-size: 12.5px;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend i {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+}
+i.low,
+.bar.low {
+  background: var(--low);
+}
+i.medium,
+.bar.medium {
+  background: var(--medium);
+}
+i.high,
+.bar.high {
+  background: var(--high);
+}
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: clamp(90px, 16dvh, 170px);
+  margin-top: 12px;
+  border-bottom: 2.5px solid #1f2a24;
+}
+.bar {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.15s, height 0.3s;
+}
+.bar:hover {
+  opacity: 0.85;
+}
+.bar.sel {
+  opacity: 1;
+  outline: 2.5px solid #1f2a24;
+  outline-offset: 1px;
+}
+.slider {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  margin: 2px 0 0;
+  accent-color: #1f2a24;
+}
+.axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  opacity: 0.75;
+}
+.best {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  font-size: 13.5px;
+}
+.mini {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  background: #cfe6d3;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.disclaimer {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  opacity: 0.7;
+}
+.cam-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+}
+.cam-meta {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.cam-note {
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+.cam-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.cam {
+  margin: 0;
+}
+.cam-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 2.5px solid #1f2a24;
+  border-radius: 10px;
+  background: #cfe0d9;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+.cam-open img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  transition: scale 0.2s;
+}
+.cam-open:hover img {
+  scale: 1.04;
+}
+figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+  margin-top: 5px;
+  font-size: 13px;
+}
+.usually {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #fffdf7;
+}
+.usually.low {
+  background: var(--low);
+}
+.usually.medium {
+  background: var(--medium);
+  color: #1f2a24;
+}
+.usually.high {
+  background: var(--high);
+}
 
 /* Fullscreen camera viewer */
-.camera-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; padding: 60px 24px; }
-.camera-viewer-content { width: 100%; max-width: 1200px; text-align: center; color: white; }
-.camera-viewer-content h3 { margin-bottom: 16px; color: white; }
-.camera-viewer-content img { display: block; width: 100%; max-height: 75vh; object-fit: contain; margin: auto; }
-.camera-viewer-content p { margin-top: 12px; font-size: 13px; color: #ddd; }
-.camera-close { position: absolute; top: 18px; right: 22px; background: none; border: none; color: white; font-size: 30px; cursor: pointer; }
-@media (max-width: 600px) {.camera-overlay { padding: 60px 12px; } .camera-viewer-content img { max-height: 65vh; } }
+.camera-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+}
+.camera-viewer-content {
+  width: 100%;
+  max-width: 1200px;
+  text-align: center;
+  color: white;
+}
+.camera-viewer-content h3 {
+  margin: 0 0 16px;
+  color: white;
+}
+.camera-viewer-content img {
+  display: block;
+  width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+  margin: auto;
+}
+.camera-viewer-content p {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #ddd;
+}
+.camera-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 30px;
+  cursor: pointer;
+}
 
-.graph-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 13px; }
-.graph-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.graph-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
-.graph-container { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-.graph-container .bars { flex: 1; min-width: 0; margin-top: 0; }
-.y-axis-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 12px; color: var(--muted, #666); text-align: center; }
-.x-axis-label { text-align: center; margin-top: 8px; font-size: 12px; color: var(--muted, #666); }
+@media (max-width: 900px) {
+  .rail {
+    grid-template-columns: 1fr;
+  }
+  .view {
+    min-height: 480px;
+  }
+  .dials {
+    top: 66px;
+    left: 12px;
+    right: 12px;
+    max-width: none;
+    justify-content: flex-start;
+  }
+  .verdict {
+    top: 170px;
+  }
+  .verdict strong {
+    font-size: 30px;
+  }
+}
+
+/* ---------- Day dropdown ---------- */
+.dials {
+  z-index: 10;
+}
+.day-dropdown {
+  position: relative;
+  flex: none;
+  min-width: max-content;
+}
+.day-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 43px;
+  width: 100%;
+  padding: 0 14px;
+  border: 2.5px solid #1f2a24;
+  border-radius: 12px;
+  background: #fffdf7;
+  color: #1f2a24;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.22);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dropdown-arrow {
+  display: block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-right: 2.5px solid #1f2a24;
+  border-bottom: 2.5px solid #1f2a24;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  margin-right: 5px;
+  margin-top: -5px;
+}
+.day-trigger[aria-expanded='true'] .dropdown-arrow {
+  transform: rotate(225deg);
+  margin-top: 5px;
+}
+.day-list {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: max-content;
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
+  background: #fffdf7;
+  border: 2px solid #1f2a24;
+  border-radius: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #a6a69b transparent;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+}
+.day-list li {
+  margin: 0;
+  padding: 0;
+}
+.day-list button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2a24;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.day-list button:hover,
+.day-list button:focus-visible,
+.day-list button.selected {
+  background: #f6e2b3;
+}
+.day-list button.selected {
+  font-weight: 700;
+}
+.day-list::-webkit-scrollbar {
+  width: 7px;
+}
+.day-list::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+.day-list::-webkit-scrollbar-thumb {
+  background: #a6a69b;
+  border-radius: 10px;
+}
+.day-list::-webkit-scrollbar-button {
+  display: none;
+}
 </style>
-

@@ -47,6 +47,16 @@ export const updateProfileBody = z.object({
   firstName: z.string().trim().min(1, 'First name is required').max(30, 'First name is too long'),
   lastName: z.string().trim().min(1, 'Last name is required').max(30, 'Last name is too long'),
 });
+// The camp character's look. Colours are hex; styles must match the client's builder (client/src/lib/camp/avatar.js).
+const hex = z.string().regex(/^#[0-9a-f]{6}$/i, 'Use a #rrggbb colour');
+export const lookBody = z.object({
+  skin: hex,
+  hair: hex,
+  hairStyle: z.enum(['short', 'long', 'bun', 'buzz', 'curly']),
+  top: hex,
+  bottom: hex,
+  hat: z.enum(['none', 'cap', 'bucket', 'beanie']),
+});
 export const changeEmailBody = z.object({
   email: z.string({ required_error: 'Enter your new email' }).trim().toLowerCase().email('Enter a valid email address'),
   password: z.string({ required_error: 'Enter your password to confirm' }).min(1, 'Enter your password to confirm').max(200),

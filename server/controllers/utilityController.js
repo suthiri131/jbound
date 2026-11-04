@@ -4,6 +4,7 @@ import {
 } from "../services/currencyService.js";
 import { getDrivingRoute } from "../services/routingService.js";
 import { uploadImage } from "../services/storageService.js";
+import { getWeather } from "../services/weatherService.js";
 import { badRequest } from "../utils/httpError.js";
 
 /** GET /api/currency/rate?from=SGD&to=MYR&date=latest */
@@ -34,4 +35,9 @@ export async function upload(req, res) {
     userId: req.user.id,
   });
   res.status(201).json(result);
+}
+
+/** GET /api/weather -> { area, forecast, condition, updatedAt } (Woodlands, refreshed every 10 min) */
+export async function weather(_req, res) {
+  res.json(await getWeather());
 }

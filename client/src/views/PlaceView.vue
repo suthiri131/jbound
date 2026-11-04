@@ -76,8 +76,8 @@ const directionsUrl = computed(() => {
 });
 
 function goBack() {
-  // came from the Explorer → keep its filters; opened from a shared link → go to the Explorer
-  if (window.history.state?.back) router.back();
+  // came from the board → keep its filters; opened from a shared link or another page → go to the board
+  if (window.history.state?.back?.startsWith("/explorer")) router.back();
   else router.push("/explorer");
 }
 
@@ -96,11 +96,11 @@ async function share() {
   }
 }
 
-// TODO(team): reuse the pin modal from ExplorerView here.
 // Easiest: move it into components/explorer/PinModal.vue and use it in both pages.
 function pinToTrip() {
-  router.push({ path: "/explorer", query: { pin: place.value.googlePlaceId } });
+  router.replace({ query: { ...route.query, pin: place.value.googlePlaceId } }); // the Explorer around this page opens the dialog
 }
+const talesLink = computed(() => ({ path: `/explorer/tales/place/${place.value?.id}`, query: route.query }));
 
 // ---------- mini map ----------
 const mapEl = ref(null);
@@ -111,10 +111,22 @@ const mapError = ref(
 );
 let marker = null;
 
+// An error thrown while this page is being removed would stop Vue swapping it out, leaving it stuck on the board.
+function removeMarker() {
+  try {
+    if (marker) marker.map = null;
+  } catch {
+    /* the map is going away anyway */
+  }
+  marker = null;
+}
+
 async function drawMap() {
   if (!hasGoogleMaps || !mapEl.value || !place.value) return;
   try {
     const { Map, AdvancedMarkerElement } = await loadGoogleMaps();
+    if (!mapEl.value || !place.value) return; // left this page or tab while the map library loaded
+    removeMarker();
     const centre = { lat: place.value.lat, lng: place.value.lng };
     const map = new Map(mapEl.value, {
       center: centre,
@@ -139,15 +151,13 @@ watch([place, tab], async () => {
   await nextTick();
   drawMap();
 });
-onBeforeUnmount(() => {
-  if (marker) marker.map = null;
-});
+onBeforeUnmount(removeMarker);
 </script>
 
 <template>
-  <main class="container page place-page">
+  <div class="place-page">
     <button type="button" class="btn btn-sm btn-ghost back" @click="goBack">
-      ← Back to Explorer
+      ← Back to the notice board
     </button>
 
     <!-- loading skeleton -->
@@ -278,7 +288,7 @@ onBeforeUnmount(() => {
         </button>
         <RouterLink
           v-if="place.id"
-          :to="`/tales/place/${place.id}`"
+          :to="talesLink"
           class="btn btn-ghost"
         >
           Tales ({{ place.postCount }})
@@ -352,7 +362,6 @@ onBeforeUnmount(() => {
               >Open in Google Maps ↗</a
             >
           </li>
-          <!-- TODO(team): add border-crossing tip here, e.g. best time to cross from the Watcher. -->
         </ul>
 
         <div class="map-card card-flat">
@@ -420,12 +429,11 @@ onBeforeUnmount(() => {
         </p>
 
         <h2 class="display display-sm section-title">From the JBound crew</h2>
-        <!-- TODO(team): list Tales posts here (GET /api/places/:id gives the latest 20). -->
         <p class="muted">
           <template v-if="place.id">
             {{ place.postCount }} tale{{ place.postCount === 1 ? "" : "s" }} so
             far.
-            <RouterLink :to="`/tales/place/${place.id}`"
+            <RouterLink :to="talesLink"
               >Read them →</RouterLink
             >
           </template>
@@ -447,12 +455,11 @@ onBeforeUnmount(() => {
             t.replace(/_/g, " ")
           }}</span>
         </div>
-        <!-- TODO(team): accessibility, parking, halal, payment options… (each needs a new field in PROFILE_MASK). -->
       </section>
 
       <p class="attribution" style="margin-top: 28px">Places data © Google</p>
     </template>
-  </main>
+  </div>
 </template>
 
 <style scoped>

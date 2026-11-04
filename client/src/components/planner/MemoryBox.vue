@@ -5,6 +5,8 @@ import { api, errorMessage } from '@/lib/api';
 // import { useAuthStore } from '@/stores/auth';
 import { shortDate } from '@/utils/format';
 import { useTripRealtime } from '@/composables/useTripRealtime';
+import ArchiveTripModal from '@/components/planner/ArchiveTripModal.vue';
+import { askConfirm } from '@/lib/dialog';
 
 const props = defineProps({ trip: { type: Object, required: true } });
 const emit = defineEmits(['show-map', 'archived', 'error']);
@@ -75,7 +77,7 @@ async function update(m, body) {
 }
 
 async function remove(m) {
-  if (!window.confirm('Remove this photo from the memory box?')) return;
+  if (!(await askConfirm({ title: 'Remove this photo from the memory box?', confirmLabel: 'Remove photo', danger: true }))) return;
   try {
     await api.delete(`/trips/${props.trip.id}/memories/${m.id}`);
     load();
@@ -91,13 +93,26 @@ async function remove(m) {
 //   nudged.value = true;
 // }
 
+const confirmingArchive = ref(false);
+const archiving = ref(false);
+const archiveError = ref('');
+
+function askToArchive() {
+  archiveError.value = '';
+  confirmingArchive.value = true;
+}
+
 async function archiveNow() {
-  if (!window.confirm('Send this trip up to the Archives now? Nobody will be able to add more photos.')) return;
+  archiving.value = true;
+  archiveError.value = '';
   try {
     await api.post(`/trips/${props.trip.id}/archive`);
+    confirmingArchive.value = false;
     emit('archived');
   } catch (err) {
-    emit('error', errorMessage(err));
+    archiveError.value = errorMessage(err, 'Could not send this trip to the Archives. Please try again.');
+  } finally {
+    archiving.value = false;
   }
 }
 </script>
@@ -170,9 +185,17 @@ async function archiveNow() {
       <div class="spacer" />
       <div class="foot">
         <span class="hand" style="color: var(--jungle); font-size: 23px">{{ data.memories.length }} photo{{ data.memories.length === 1 ? '' : 's' }} packed</span>
-        <button v-if="data.window.phase === 'memory_box'" type="button" class="btn btn-ember" data-cy="archive-now" @click="archiveNow">Done · send it up to the attic</button>
+        <button v-if="data.window.phase === 'memory_box'" type="button" class="btn btn-ember" data-cy="archive-now" @click="askToArchive">Done · pack it into the tent</button>
       </div>
     </div>
+
+    <ArchiveTripModal
+      v-if="confirmingArchive"
+      :busy="archiving"
+      :error="archiveError"
+      @close="confirmingArchive = false"
+      @confirm="archiveNow"
+    />
   </section>
 </template>
 

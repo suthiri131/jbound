@@ -106,6 +106,12 @@ export const useAuthStore = defineStore('auth', {
       const { data } = await api.put('/auth/me/avatar', form);
       if (this.user?.id === userId) this.profile = { ...this.profile, avatar_url: data.avatar_url };
     },
+    /** Saves the camp character ({ skin, hair, hairStyle, top, bottom, hat }); see lib/camp/avatar.js. */
+    async setLook(look) {
+      const userId = this.user?.id;
+      const { data } = await api.put('/auth/me/look', look);
+      if (this.user?.id === userId) this.profile = { ...this.profile, look: data.look };
+    },
     async removeAvatar() {
       const userId = this.user?.id;
       const { data } = await api.delete('/auth/me/avatar');

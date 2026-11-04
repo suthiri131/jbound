@@ -1,22 +1,32 @@
 <script setup>
-import { ref, reactive, watch, onMounted, nextTick } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
 import { api, errorMessage, uploadImage } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { VIBES, VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
-import { timeAgo, initials } from '@/utils/format';
-import TalesStorybook from '@/components/tales/TalesStorybook.vue'
+import { timeAgo } from '@/utils/format';
+import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
+import FiresideCircle from '@/components/tales/FiresideCircle.vue';
+import { useCampSky } from '@/composables/useCampSky';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
-const auth = useAuthStore();
-const storybookRef = ref(null);
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 
 const feed = reactive({ items: [], nextCursor: null, loading: false, error: '' });
-const scope = ref('everyone');
-const vibe = ref('');
-const placeFilter = ref(route.query.placeId || '');
+
+// Coming back from a place's tales on the notice board picks up where you left off.
+const SPOT_KEY = 'jbound.talesSpot';
+const cameBack = router.options.history.state?.forward?.startsWith('/explorer/tales');
+const spot = cameBack ? JSON.parse(sessionStorage.getItem(SPOT_KEY) || 'null') : null;
+sessionStorage.removeItem(SPOT_KEY);
+const scrollerEl = ref(null);
+
+const scope = ref(spot?.scope ?? 'everyone');
+const vibe = ref(spot?.vibe ?? '');
+const placeFilter = ref(spot?.placeFilter ?? (route.query.placeId || ''));
 
 // composer
 const draft = reactive({ caption: '', vibe: '', place: null, images: [] });
@@ -25,12 +35,22 @@ const suggestions = ref([]);
 const uploading = ref(false);
 const posting = ref(false);
 const composeError = ref(''); 
+const openDropdown = ref('');
 
 // comments per post id
 const openComments = reactive({});
 const commentDraft = reactive({});
 
 const photoDialog = ref(null);
+
+function toggleDropdown(name) {
+  openDropdown.value = openDropdown.value === name ? '' : name;
+}
+function selectVibe(value, type) {
+  if (type === 'filter') vibe.value = value;
+  else draft.vibe = value;
+  openDropdown.value = '';
+}
 
 async function load(more = false) {
   feed.loading = true;
@@ -54,7 +74,24 @@ async function load(more = false) {
   }
 }
 watch([scope, vibe, placeFilter], () => load());
-onMounted(() => load());
+onMounted(async () => {
+  await load();
+  if (!spot) return;
+  while (feed.items.length < spot.count && feed.nextCursor && !feed.error) await load(true);
+  await nextTick();
+  if (scrollerEl.value) scrollerEl.value.scrollTop = spot.scrollTop;
+});
+onBeforeRouteLeave((to) => {
+  if (!to.path.startsWith('/explorer/tales')) return;
+  sessionStorage.setItem(SPOT_KEY, JSON.stringify({
+    scope: scope.value,
+    vibe: vibe.value,
+    placeFilter: placeFilter.value,
+    count: feed.items.length,
+    scrollTop: scrollerEl.value?.scrollTop ?? 0,
+    flipped,
+  }));
+});
 
 function clearPlaceFilter() {
   placeFilter.value = '';
@@ -116,7 +153,6 @@ async function post() {
     feed.items.unshift(data);
     Object.assign(draft, { caption: '', vibe: '', place: null, images: [] });
     placeQuery.value = '';
-    storybookRef.value?.finishComposing();
 
   } catch (err) {
     composeError.value = errorMessage(err);
@@ -152,7 +188,7 @@ async function toggleComments(p) {
 
   } catch (error) {
     console.log(error);
-    alert(errorMessage(error));
+    showAlert(errorMessage(error));
   }
 }
 
@@ -176,7 +212,7 @@ async function loadMoreComments(p) {
 
   } catch (error) {
     console.log(error);
-    alert(errorMessage(error));
+    showAlert(errorMessage(error));
   } finally {
     state.loading = false;
   }
@@ -192,7 +228,7 @@ async function comment(p) {
 }
 
 async function removePost(p) {
-  if (!window.confirm('Delete this tale?')) return;
+  if (!(await askConfirm({ title: 'Delete this tale?', confirmLabel: 'Delete tale', danger: true }))) return;
 
   try {
     await api.delete(`/posts/${p.id}`);
@@ -201,13 +237,13 @@ async function removePost(p) {
 
     delete openComments[p.id];
   } catch (error) {
-    alert(errorMessage(error));
+    showAlert(errorMessage(error));
   }
 }
 
 
 async function removeComment(p, c) {
-  if (!window.confirm('Delete this comment?')) return;
+  if (!(await askConfirm({ title: 'Delete this comment?', confirmLabel: 'Delete comment', danger: true }))) return;
 
   try {
     await api.delete(`/posts/${p.id}/comments/${c.id}`);
@@ -220,10 +256,35 @@ async function removeComment(p, c) {
     p.commentCount = Math.max(0, p.commentCount - 1);
 
   } catch (error) {
-    alert(errorMessage(error));
+    showAlert(errorMessage(error));
   }
 }
 
+
+// ---------- postcards ----------
+const flipped = reactive({ ...spot?.flipped }); // post id -> showing the story side
+const composing = ref(false);
+
+const newThisWeek = computed(() => {
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  return feed.items.filter((p) => p.created_at > weekAgo).length;
+});
+const placeName = (p) => p.place?.name || p.custom_place_name || 'Somewhere in JB';
+const moreLink = (p) => {
+  if (p.place) return `/explorer/tales/place/${p.place.id}`;
+  return p.custom_place_name ? `/explorer/tales/custom/${encodeURIComponent(p.custom_place_name)}` : null;
+};
+
+function flip(p) {
+  flipped[p.id] = !flipped[p.id];
+}
+async function send() {
+  await post();
+  if (!composeError.value) composing.value = false;
+}
+
+// ---------- the fire ----------
+const { sky } = useCampSky();
 
 // click-to-enlarge section
 const selectedPhotos = ref([]);
@@ -260,283 +321,964 @@ function handlePhotoKeydown(event) {
   if (event.key === 'ArrowRight') nextPhoto();
   if (event.key === 'ArrowLeft') previousPhoto();
 }
-
-const composerSection = ref(null);
-
-function openComposer() {
-  composerSection.value?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start'
-  });
-}
-
-function changeStorybookFilter(value) {
-  scope.value = value;
-}
-
-function loadOlderTales() {
-  if (feed.nextCursor && !feed.loading) {
-    load(true);
-  }
-}
 </script>
 
 <template>
-  <main class="container page">
-    <span class="tag-stamp" style="color: var(--ember)">Tales</span>
-    <h1 class="display display-lg" style="margin-top: 16px">Stories from the other side.</h1>
-    <br>
+  <main class="tales-page">
+    <SkyBackdrop :path="false" />
+    <RouterLink to="/" class="camp-back home" aria-label="Back to Basecamp">← <span class="home-label">Basecamp</span></RouterLink>
 
-    <div class="layout">
-      <section class="storybook-feed" aria-label="Feed">
-        <TalesStorybook
-          ref="storybookRef"
-          :posts="feed.items"
-          :current-user-id="auth.user?.id"
-          :open-comment-ids="Object.keys(openComments)"
-          @like="like"
-          @comment="toggleComments"
-          @delete="removePost"
-          @filter-change="changeStorybookFilter"
-          @load-more="loadOlderTales"
-          @open-photo="openPhotoViewer"
-        >
-    
-        <template #composer>
-          <form class="notebook-form" @submit.prevent="post">
-            <label class="field">
-              What happened?
-              <textarea v-model="draft.caption" class="textarea" required maxlength="2000" placeholder="Tell us about your JB adventure..." data-cy="tale-caption"></textarea>
-            </label>
-            <div class="field ac">
-              <label for="tale-place">Tag a place</label>
-              <input id="tale-place" v-model="placeQuery" class="input" autocomplete="off" placeholder="Start typing a place..." role="combobox" :aria-expanded="suggestions.length > 0" aria-controls="tale-place-list" />
-              <ul v-if="suggestions.length" id="tale-place-list" class="ac-list" role="listbox">
-                <li v-for="s in suggestions" :key="s.id" role="option" :aria-selected="false">
-                  <button type="button" @click="pickPlace(s)">{{ s.name }}</button>
-                </li>
-              </ul>
-            </div>
-            <label class="field">
-              Vibe
-              <select v-model="draft.vibe" class="select">
-                <option value="">None</option>
-                <option v-for="v in VIBES" :key="v.id" :value="v.id">{{ v.label }}</option>
-              </select>
-            </label>
-            <label class="field">
-              Photos ({{ draft.images.length }}/6)
-              <input type="file" accept="image/*" multiple class="input" :disabled="uploading || draft.images.length >= 6" @change="addImages($event.target.files); $event.target.value = ''" />
-            </label>
-            <div v-if="draft.images.length" class="thumbs">
-              <img v-for="(u, i) in draft.images" :key="u" :src="u" :alt="`Upload ${i + 1}`" />
-            </div>
-            <p v-if="composeError" class="error-text" role="alert">{{ composeError }}</p>
-            <button type="submit" class="btn btn-ember" :disabled="posting || uploading" data-cy="tale-post">
-              {{ uploading ? 'Uploading…' : posting ? 'Posting…' : 'Share by the fire' }}
-            </button>
-          </form>
-        </template>
-        
-      <template #comments="{ post: p }">
-        <Transition name="unroll">
-          <div v-if="openComments[p.id]" class="comment-scroll">
-            <button
-              type="button"
-              class="scroll-roller"
-              aria-label="Close Traveller's Notes"
-              title="Roll up Traveller's Notes"
-              @click="toggleComments(p)"></button>
-            <div class="scroll-paper">
-              <div class="scroll-header">✦ Traveller's Notes ✦</div>
-              <div class="scroll-comments">
-                <div v-if="!openComments[p.id].items.length" class="empty-comments">
-                  No comments yet. Be the first!
-                </div>
-                <div v-for="c in openComments[p.id].items" :key="c.id" class="scroll-comment-row">
-                  <div class="scroll-comment-content">
-                    <strong>{{ c.author?.name ?? 'Traveller' }}</strong>
-                    <p>{{ c.text }}</p>
-                  </div>
-                  <button v-if="c.author?.id === auth.user?.id" type="button" class="scroll-delete" aria-label="Delete comment" @click="removeComment(p, c)">×</button>
-                </div>
-                <button v-if="openComments[p.id].nextCursor" type="button" class="scroll-load-more" :disabled="openComments[p.id].loading" @click="loadMoreComments(p)">
-                  {{ openComments[p.id].loading ? 'Loading...' : 'Load more notes' }}
-                </button>
-              </div>
-              <form class="scroll-comment-form" @submit.prevent="comment(p)">
-                <input v-model="commentDraft[p.id]" maxlength="1000" placeholder="Leave a little note..." :aria-label="`Comment on ${p.author?.name ?? 'this traveller'}'s tale`" />
-                <button type="submit" :disabled="!commentDraft[p.id]?.trim()">Post</button>
-              </form>
-            </div>
-            <div class="scroll-bottom"></div>
+    <section class="bubble" aria-label="Postcards from JB">
+      <header class="toolbar">
+          <div class="b-text">
+            <h1 class="b-title">Postcards from JB</h1>
+            <p class="b-sub">{{ newThisWeek ? `${newThisWeek} new this week` : 'Stories from people who made the crossing' }} · tap a card to read it</p>
           </div>
-        </Transition>
-      </template>
+          <div class="filters">
+            <div class="seg" role="group" aria-label="Whose tales">
+              <button type="button" :aria-pressed="scope === 'everyone'" @click="scope = 'everyone'">Everyone</button>
+              <button type="button" :aria-pressed="scope === 'friends'" @click="scope = 'friends'">My crews</button>
+              <button type="button" :aria-pressed="scope === 'mine'" @click="scope = 'mine'">Mine</button>
+            </div>
+          
+          <div class="custom-dropdown filter-dropdown">
+            <button type="button" class="dropdown-trigger vibe-select" :aria-expanded="openDropdown === 'filter'" @click="toggleDropdown('filter')">
+              <span>{{ VIBES.find(v => v.id === vibe)?.label || 'All vibes' }}</span>
+              <span class="dropdown-arrow" aria-hidden="true"></span>
+            </button>
+            <ul v-if="openDropdown === 'filter'" class="dropdown-list" role="listbox">
+              <li><button type="button" :class="{ selected: vibe === '' }" @click="selectVibe('', 'filter')">All vibes</button></li>
+              <li v-for="v in VIBES" :key="v.id">
+                <button type="button" :class="{ selected: vibe === v.id }" @click="selectVibe(v.id, 'filter')">{{ v.label }}</button>
+              </li>
+            </ul>
+          </div>
 
-      </TalesStorybook>
+            <button v-if="placeFilter" type="button" class="chip-x" @click="clearPlaceFilter">One place only ✕</button>
+          </div>
+          <button type="button" class="send" :aria-expanded="composing" @click="composing = !composing">
+            <template v-if="composing">Close</template><template v-else>+ Send<span class="send-more"> a postcard</span></template>
+          </button>
+      </header>
 
-        <p v-if="feed.error" class="error-text" role="alert">
-          {{ feed.error }}
-        </p>
+      <div ref="scrollerEl" class="scroller">
 
-        <p v-if="feed.loading" class="muted">
-          Loading tales...
-        </p>
+      <!-- composer: a blank postcard -->
+      <form v-if="composing" class="postcard blank" @submit.prevent="send">
+        <div class="pc-left">
+          <label class="field">
+            Your story
+            <textarea v-model="draft.caption" class="textarea hand-input" required maxlength="2000" placeholder="The banana cake at Hiap Joo is gone by 11am. Worth the early start." data-cy="tale-caption" />
+          </label>
+        </div>
+        <div class="pc-right">
+          <span class="stamp-box" aria-hidden="true">JB</span>
+          <div class="field ac">
+            <label for="tale-place">Where?</label>
+            <input id="tale-place" v-model="placeQuery" class="input" autocomplete="off" placeholder="Start typing…" role="combobox" :aria-expanded="suggestions.length > 0" aria-controls="tale-place-list" />
+            <ul v-if="suggestions.length" id="tale-place-list" class="ac-list" role="listbox">
+              <li v-for="s in suggestions" :key="s.id" role="option" :aria-selected="false">
+                <button type="button" @click="pickPlace(s)">{{ s.name }}</button>
+              </li>
+            </ul>
+          </div>
+          
+        <div class="field">
+          <label>Vibe</label>
+          <div class="custom-dropdown">
+            <button type="button" class="dropdown-trigger select" :aria-expanded="openDropdown === 'composer'" @click="toggleDropdown('composer')">
+              <span>{{ VIBES.find(v => v.id === draft.vibe)?.label || 'None' }}</span>
+              <span class="dropdown-arrow" aria-hidden="true"></span>
+            </button>
+            <ul v-if="openDropdown === 'composer'" class="dropdown-list" role="listbox">
+              <li><button type="button" :class="{ selected: draft.vibe === '' }" @click="selectVibe('', 'composer')">None</button></li>
+              <li v-for="v in VIBES" :key="v.id">
+                <button type="button" :class="{ selected: draft.vibe === v.id }" @click="selectVibe(v.id, 'composer')">{{ v.label }}</button>
+              </li>
+            </ul>
+          </div>
+        </div>
 
-        <button
-          v-if="feed.nextCursor"
-          type="button"
-          class="btn btn-ghost"
-          :disabled="feed.loading"
-          @click="loadOlderTales"
-        >
-          Older Tales
+          <label class="field">
+            Photos ({{ draft.images.length }}/6)
+            <input type="file" accept="image/*" multiple class="file" :disabled="uploading || draft.images.length >= 6" @change="addImages($event.target.files); $event.target.value = ''" />
+          </label>
+          <div v-if="draft.images.length" class="thumbs">
+            <img v-for="(u, i) in draft.images" :key="u" :src="u" :alt="`Upload ${i + 1}`" />
+          </div>
+        </div>
+        <p v-if="composeError" class="error-text full" role="alert">{{ composeError }}</p>
+        <button type="submit" class="btn btn-ember full" :disabled="posting || uploading" data-cy="tale-post">
+          {{ uploading ? 'Uploading…' : posting ? 'Posting…' : 'Drop it in the mailbox' }}
         </button>
+      </form>
 
-      </section>
+      <p v-if="feed.error" class="error-text" role="alert">{{ feed.error }}</p>
+
+      <ul class="cards">
+        <li v-for="p in feed.items" :key="p.id" class="card-slot" data-cy="tale">
+          <button
+            type="button"
+            class="postcard flip"
+            :class="{ flipped: flipped[p.id] }"
+            :aria-pressed="Boolean(flipped[p.id])"
+            :aria-label="`${placeName(p)} postcard from ${p.author?.name || 'a traveller'}. ${flipped[p.id] ? 'Showing the story' : 'Flip to read the story'}`"
+            @click="flip(p)"
+          >
+            <span class="face front">
+              <img v-if="p.images?.length" :src="p.images[0]" alt="" class="pc-photo" loading="lazy" />
+              <span v-else class="pc-photo blank-photo" :style="{ background: VIBE_TINT[p.vibe] || '#f6d58e' }">Greetings from<br /><b>{{ placeName(p) }}</b></span>
+              <span class="pc-caption">
+                <strong>{{ placeName(p) }}</strong>
+                <small v-if="p.vibe">{{ VIBE_LABEL[p.vibe] }}</small>
+              </span>
+            </span>
+            <span class="face back">
+              <span class="pc-story">{{ p.caption }}</span>
+              <span class="pc-addr">
+                <span class="stamp-box" :style="{ background: VIBE_TINT[p.vibe] || '#f4c4cf' }" aria-hidden="true">JB</span>
+                <span class="postmark" aria-hidden="true">{{ timeAgo(p.created_at) }}</span>
+                <span class="sig">— {{ p.author?.name?.split(' ')[0] || 'A traveller' }}</span>
+              </span>
+            </span>
+          </button>
+
+          <div class="pc-actions">
+            <button type="button" class="mini" :aria-pressed="p.likedByMe" :class="{ liked: p.likedByMe }" @click="like(p)">♥ {{ p.likeCount }}</button>
+            <button type="button" class="mini" :aria-expanded="Boolean(openComments[p.id])" @click="toggleComments(p)">💬 {{ p.commentCount }}</button>
+            <button v-if="p.images?.length > 1" type="button" class="mini" @click="openPhotoViewer(p.images, 0)">📷 {{ p.images.length }}</button>
+            <RouterLink v-if="moreLink(p)" class="mini" :to="moreLink(p)">More here</RouterLink>
+            <span class="spacer" />
+            <button v-if="p.author?.id === auth.user?.id" type="button" class="mini ghost" @click="removePost(p)">Delete</button>
+          </div>
+
+          <div v-if="openComments[p.id]" class="comments">
+            <p v-for="c in openComments[p.id]?.items ?? []" :key="c.id" class="comment-row">
+              <span><strong>{{ c.author?.name?.split(' ')[0] }}:</strong> {{ c.text }}</span>
+              <button v-if="c.author?.id === auth.user?.id" type="button" class="mini ghost" @click="removeComment(p, c)">Delete</button>
+            </p>
+            <button v-if="openComments[p.id]?.nextCursor" type="button" class="mini" :disabled="openComments[p.id]?.loading" @click="loadMoreComments(p)">
+              {{ openComments[p.id]?.loading ? 'Loading…' : 'Older comments' }}
+            </button>
+            <form class="comment-form" @submit.prevent="comment(p)">
+              <input v-model="commentDraft[p.id]" class="input" maxlength="1000" placeholder="Add a comment…" :aria-label="`Comment on ${p.author?.name}'s tale`" />
+              <button type="submit" class="btn btn-sm btn-dark">Post</button>
+            </form>
+          </div>
+        </li>
+      </ul>
+
+      <p v-if="!feed.loading && !feed.items.length" class="empty">No postcards yet. Be the first by the fire.</p>
+      <p v-if="feed.loading" class="empty" role="status">Checking the mailbox…</p>
+      <button v-if="feed.nextCursor" type="button" class="send older" :disabled="feed.loading" @click="load(true)">Older postcards</button>
+      </div>
+    </section>
+
+    <!-- the whole ring is thinking the one thought bubble above -->
+    <div class="fireside" aria-hidden="true">
+      <FiresideCircle :night="sky.night" />
     </div>
 
-    <!-- Enlarged photo viewer -->
-      <div
-        v-if="selectedPhotos.length"
-        class="photo-overlay"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Photo viewer"
-        tabindex="-1"
-        @click.self="closePhotoViewer"
-        @keydown="handlePhotoKeydown"
-        ref="photoDialog"
-      >
-        <button
-          type="button"
-          class="photo-close"
-          aria-label="Close photo"
-          @click="closePhotoViewer"
-        >
-          ✕
-        </button>
-
-        <button
-          v-if="selectedPhotos.length > 1"
-          type="button"
-          class="photo-prev"
-          aria-label="Previous photo"
-          @click="previousPhoto"
-        >
-          ❮
-        </button>
-
-        <img
-          class="photo-enlarged"
-          :src="selectedPhotos[selectedPhotoIndex]"
-          :alt="`Photo ${selectedPhotoIndex + 1}`"
-        />
-
-        <button
-          v-if="selectedPhotos.length > 1"
-          type="button"
-          class="photo-next"
-          aria-label="Next photo"
-          @click="nextPhoto">
-          ❯
-        </button>
-
-        <div class="photo-counter">
-          {{ selectedPhotoIndex + 1 }} / {{ selectedPhotos.length }}
-        </div>
-      </div>
+    <!-- enlarged photo viewer -->
+    <div
+      v-if="selectedPhotos.length"
+      ref="photoDialog"
+      class="photo-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
+      tabindex="-1"
+      @click.self="closePhotoViewer"
+      @keydown="handlePhotoKeydown"
+    >
+      <button type="button" class="photo-close" aria-label="Close photo" @click="closePhotoViewer">✕</button>
+      <button v-if="selectedPhotos.length > 1" type="button" class="photo-prev" aria-label="Previous photo" @click="previousPhoto">❮</button>
+      <img class="photo-enlarged" :src="selectedPhotos[selectedPhotoIndex]" :alt="`Photo ${selectedPhotoIndex + 1}`" />
+      <button v-if="selectedPhotos.length > 1" type="button" class="photo-next" aria-label="Next photo" @click="nextPhoto">❯</button>
+      <div class="photo-counter">{{ selectedPhotoIndex + 1 }} / {{ selectedPhotos.length }}</div>
+    </div>
   </main>
 </template>
 
 
 <style scoped>
-.storybook-feed { width: 100%; min-width: 0; }
-.ac { position: relative; }
-.ac-list { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; list-style: none; margin: 4px 0 0; padding: 4px; background: #FFF8EA; border: 2px solid #75462D; border-radius: 8px; max-height: 180px; overflow-y: auto; box-shadow: 0 8px 20px rgba(0,0,0,.08); }
-.ac-list button { width: 100%; min-height: 36px; text-align: left; border: 0; background: transparent; padding: 0 10px; cursor: pointer; border-radius: 6px; color: #4A2C20; }
-.ac-list button:hover { background: #E8C99B; }
-.notebook-form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-.notebook-form * { box-sizing: border-box; }
-.notebook-form .field { display: flex; flex-direction: column; gap: 4px; font-family: 'Kalam', cursive; font-size: 16px; font-weight: 700; color: #4A2C20; }
-.notebook-form .input, .notebook-form .textarea, .notebook-form .select { width: 100%; padding: 10px 12px; background: rgba(255,248,236,.88); border: 2px solid #3F2A1D; border-radius: 10px; color: #4A2C20; font-size: 15px; line-height: 1.4; box-shadow: inset 0 1px 0 rgba(255,255,255,.35); }
-.notebook-form .input::placeholder, .notebook-form .textarea::placeholder { color: #7A7A7A; }
-.notebook-form .textarea { min-height: 90px; resize: vertical; }
-.notebook-form .select { appearance: none; background-image: linear-gradient(45deg,transparent 50%,#4A2C20 50%),linear-gradient(135deg,#4A2C20 50%,transparent 50%); background-position: calc(100% - 18px) calc(50% - 3px),calc(100% - 12px) calc(50% - 3px); background-size: 6px 6px,6px 6px; background-repeat: no-repeat; padding-right: 34px; }
-.notebook-form .input:focus, .notebook-form .textarea:focus, .notebook-form .select:focus { outline: none; border-color: #A85A2A; box-shadow: 0 0 0 3px rgba(168,90,42,.18); }
-.notebook-form input[type="file"] { padding: 8px 10px; }
-.notebook-form input[type="file"]::file-selector-button { margin-right: 12px; padding: 8px 14px; background: #F7EDDA; color: #35251A; border: 2px solid #35251A; border-radius: 10px; font-family: 'Kalam', cursive; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 2px 3px 0 #3A2418; }
-.notebook-form input[type="file"]::file-selector-button:hover { background: #E8C99B; }
-.notebook-form .btn-ember { align-self: flex-start; background: #C55222; color: #FFF5E6; border: 3px solid #35251A; border-radius: 16px; padding: 10px 24px; font-family: 'Kalam', cursive; font-size: 17px; font-weight: 700; cursor: pointer; box-shadow: 4px 5px 0 #3A2418; }
-.notebook-form .btn-ember:hover:not(:disabled) { background: #D8652F; transform: translateY(-1px); }
-.notebook-form .btn-ember:disabled { opacity: .6; cursor: not-allowed; }
-.thumbs { display: flex; flex-wrap: wrap; gap: 8px; }
-.thumbs img { width: 58px; height: 58px; object-fit: cover; border: 2px solid #75462D; border-radius: 8px; }
-.photo-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,.92); display: flex; align-items: center; justify-content: center; padding: 55px 50px; }
-.photo-enlarged { max-width: 100%; max-height: 85vh; object-fit: contain; border-radius: 8px; }
-.photo-close { position: absolute; top: 18px; right: 22px; background: transparent; border: 0; color: #FFF; font-size: 30px; cursor: pointer; }
-.photo-prev, .photo-next { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,.15); border: 0; border-radius: 50%; color: #FFF; font-size: 26px; width: 44px; height: 44px; cursor: pointer; }
-.photo-prev { left: 12px; }
-.photo-next { right: 12px; }
-.photo-counter { position: absolute; bottom: 20px; color: #FFF; font-size: 14px; }
-.comment-scroll { position: relative; flex: 0 0 195px; width: 100%; height: 195px; min-height: 0; margin-top: 9px; padding: 8px 3px 5px; font-family: 'Kalam', cursive; transform-origin: top center; }
-.scroll-roller { position: absolute; top: 0; left: -5px; right: -5px; height: 17px; z-index: 2; border: 2px solid #845331; border-radius: 12px; background: linear-gradient(to bottom,#D9B788,#F3DDB5 45%,#BC8B55 85%,#865736); box-shadow: 0 3px 5px rgba(64,35,15,.25); }
-.scroll-roller::before, .scroll-roller::after { content: ''; position: absolute; top: 2px; width: 5px; height: 9px; background: #87512E; border-radius: 3px; }
-.scroll-roller::before { left: 6px; }
-.scroll-roller::after { right: 6px; }
-.scroll-paper { display: flex; flex-direction: column; height: 176px; min-height: 0; padding: 14px 10px 7px; background: repeating-linear-gradient(to bottom,transparent 0px,transparent 22px,rgba(158,112,62,.1) 23px),linear-gradient(90deg,#E4CAA2,#F9EDD5 8%,#F9EDD5 92%,#DEBF92); border-left: 2px solid #B99266; border-right: 2px solid #B99266; box-shadow: 2px 3px 8px rgba(55,32,17,.19); overflow: visible; }
-.scroll-header { flex-shrink: 0; text-align: center; color: #8B5A38; font-size: 14px; font-weight: 700; }
-.scroll-comments { flex: 1 1 auto; min-height: 0; margin: 6px 0; padding: 3px 5px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #B88A5D transparent; }
-.scroll-comments::-webkit-scrollbar { width: 5px; }
-.scroll-comments::-webkit-scrollbar-thumb { background: #B88A5D; border-radius: 10px; }
-.scroll-comment-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 6px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(133,83,49,.28); }
-.scroll-comment-content { flex: 1; min-width: 0; }
-.scroll-comment-content strong { display: block; color: #5F3B26; font-size: 13px; line-height: 1.3; }
-.scroll-comment-content p { margin: 2px 0 0; color: #583B2A; font-size: 13px; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; }
-.scroll-delete { flex-shrink: 0; border: 0; background: transparent; color: #A1674D; font-size: 19px; cursor: pointer; }
-.scroll-load-more { display: block; margin: 5px auto; padding: 4px 8px; border: 0; background: transparent; color: #87512E; font-family: 'Kalam', cursive; font-size: 12px; text-decoration: underline; cursor: pointer; }
-.empty-comments { padding: 10px; text-align: center; color: #947151; font-size: 13px; }
-.scroll-comment-form { display: flex; flex-shrink: 0; gap: 5px; padding-top: 7px; border-top: 1px solid #D6B991; }
-.scroll-comment-form input { flex: 1; min-width: 0; padding: 6px 9px; background: rgba(255,251,239,.8); border: 1px solid #B99770; border-radius: 7px; font-size: 12px; }
-.scroll-comment-form button { flex-shrink: 0; padding: 5px 10px; border: 1px solid #4E301F; border-radius: 7px; background: #75462D; color: #FFF5E6; font-family: 'Kalam', cursive; font-size: 13px; font-weight: 700; cursor: pointer; }
-.scroll-comment-form button:disabled { opacity: .5; cursor: not-allowed; }
-.scroll-bottom { position: relative; height: 11px; margin: 0 -5px; border: 2px solid #90613D; border-radius: 10px; background: linear-gradient(to bottom,#F3DDB5,#C4935D,#865736); box-shadow: 0 3px 5px rgba(64,35,15,.2); }
-.comment-scroll { margin-top: 0; transform-origin: top center; }
-.unroll-enter-active { animation: unfurlScroll .55s cubic-bezier(.2,.75,.25,1) both; }
-.unroll-leave-active { animation: unfurlScroll .3s ease-in reverse both; }
-.book-layout { padding-bottom: 0; }
-.book-layout:has(.comment-scroll) { padding-bottom: 230px; }
-@keyframes unfurlScroll {
-  0% { opacity: 0; transform: translateY(-20px) scaleY(.02); }
-  35% { opacity: 1; }
-  70% { transform: translateY(0) scaleY(1.05); }
-  100% { opacity: 1; transform: translateY(0) scaleY(1); }
+.tales-page {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 1180px) 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  column-gap: 14px;
+  padding: 12px 20px 10px;
+  font-family: var(--font-round);
+  color: #1f2a24;
+  overflow: hidden !important;
 }
-@media (max-width: 600px) {
-  .photo-overlay { padding: 60px 12px; }
-  .photo-prev, .photo-next { width: 36px; height: 36px; font-size: 20px; }
+.home {
+  position: relative;
+  z-index: 3;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  justify-self: start;
+}
+/* ---------- Thought bubble ---------- */
+.bubble {
+  position: relative;
+  z-index: 1;
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 4px 22px 12px;
+  border: 34px solid transparent;
+  border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath d='M40 18A21 15 0 0 1 80 18A16.5 16.5 0 1 1 102 40A15 21 0 0 1 102 80A16.5 16.5 0 1 1 80 102A21 15 0 0 1 40 102A16.5 16.5 0 1 1 18 80A15 21 0 0 1 18 40A16.5 16.5 0 1 1 40 18Z' fill='%23fdf3da' stroke='%231f2a24' stroke-width='2'/%3E%3C/svg%3E") 40 fill / 60px round;
+}
+/* ---------- Toolbar ---------- */
+.toolbar {
+  position: relative;
+  z-index: 200;
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 0 6px 10px;
+  border-bottom: 2px dashed rgba(31, 42, 36, 0.35);
+}
+.b-text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.b-title {
+  margin: 0;
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.1;
+}
+.b-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  opacity: 0.75;
+}
+.send {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 2.5px solid #1f2a24;
+  border-radius: 12px;
+  background: #f5bf4f;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.send:active {
+  translate: 0 2px;
+  box-shadow: none;
+}
+.older {
+  justify-self: center;
+  background: #fffdf7;
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.seg {
+  display: inline-flex;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.seg button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  background: #fffdf7;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.seg button[aria-pressed='true'] {
+  background: #1f2a24;
+  color: #fffdf7;
+}
+.vibe-select,
+.chip-x {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  background: #fffdf7;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* ---------- Scrollable postcard area ---------- */
+.scroller {
+  --fade: 28px;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  overflow: hidden auto;
+  scrollbar-gutter: stable;
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  padding: 14px 6px var(--fade) 6px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+}
+.scroller::-webkit-scrollbar {
+  width: 8px;
+}
+.scroller::-webkit-scrollbar-button {
+  display: none;
+}
+.scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroller::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(31, 42, 36, 0.28);
+}
+.scroller::-webkit-scrollbar-thumb:hover {
+  background: rgba(31, 42, 36, 0.45);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .scroller {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(31, 42, 36, 0.28) transparent;
+  }
+}
+/* ---------- Postcards ---------- */
+.cards {
+  position: relative;
+  z-index: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 30px 26px;
+}
+.card-slot {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.card-slot:nth-child(odd) .postcard {
+  rotate: -1.2deg;
+}
+.card-slot:nth-child(even) .postcard {
+  rotate: 1deg;
+}
+.card-slot.on .postcard {
+  rotate: 0deg;
+  box-shadow: 0 0 0 4px #f5bf4f, 0 6px 0 rgba(0, 0, 0, 0.18);
+}
+.postcard {
+  position: relative;
+  width: 100%;
+  rotate: -1.2deg;
+  border: 2.5px solid #1f2a24;
+  border-radius: 6px;
+  background: #fffaf0;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+  transition: rotate 0.2s, box-shadow 0.2s;
+}
+.flip {
+  display: block;
+  height: clamp(120px, calc(100cqh - 84px), 210px);
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  perspective: 1000px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.face {
+  position: absolute;
+  inset: 0;
+  border: 2.5px solid #1f2a24;
+  border-radius: 6px;
+  background: #fffaf0;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+  backface-visibility: hidden;
+  transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+  overflow: hidden;
+}
+.back {
+  transform: rotateY(180deg);
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+}
+.flip.flipped .front {
+  transform: rotateY(-180deg);
+}
+.flip.flipped .back {
+  transform: rotateY(0deg);
+}
+.flip:focus-visible {
+  outline: none;
+}
+.flip:focus-visible .face {
+  outline: 3px solid #1f2a24;
+  outline-offset: 3px;
+}
+.front {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  padding: 10px 10px 0;
+}
+.pc-photo {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: cover;
+  border: 2px solid #1f2a24;
+  border-radius: 3px;
+}
+.blank-photo {
+  display: grid;
+  place-content: center;
+  text-align: center;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  line-height: 1.1;
+}
+.blank-photo b {
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 24px;
+}
+.pc-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 2px 9px;
+}
+.pc-caption strong {
+  min-width: 0;
+  font-family: var(--font-story);
+  font-weight: 800;
+  font-size: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-caption small {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.pc-story {
+  padding: 14px 12px 14px 14px;
+  border-right: 2px dashed rgba(31, 42, 36, 0.35);
+  font-family: var(--font-hand);
+  font-size: 20px;
+  line-height: 1.15;
+  overflow-y: auto;
+  white-space: pre-line;
+}
+.pc-addr {
+  position: relative;
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  padding: 12px;
+  background: repeating-linear-gradient(transparent 0 30px, rgba(31, 42, 36, 0.25) 30px 31.5px);
+}
+.stamp-box {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 52px;
+  border: 2px dashed #9e3b1b;
+  background: #f4c4cf;
+  font-family: var(--font-display);
+  color: #9e3b1b;
+  font-size: 14px;
+}
+.postmark {
+  position: absolute;
+  top: 42px;
+  right: 40px;
+  padding: 6px 4px;
+  border: 2px solid rgba(46, 107, 70, 0.6);
+  border-radius: 50%;
+  color: rgba(46, 107, 70, 0.85);
+  font-size: 10px;
+  font-weight: 700;
+  rotate: -14deg;
+}
+.sig {
+  font-family: var(--font-hand);
+  font-size: 20px;
+  text-align: right;
+}
+/* ---------- Postcard actions and comments ---------- */
+.pc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.mini {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  background: #fffdf7;
+  color: #1f2a24;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.mini.liked {
+  background: #f4c4cf;
+}
+.mini.ghost {
+  border-style: dashed;
+}
+.spacer {
+  flex: 1;
+}
+.comments {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 2px solid #1f2a24;
+  border-radius: 10px;
+  background: #fffaf0;
+  font-size: 14px;
+}
+.comment-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+.comment-form {
+  display: flex;
+  gap: 6px;
+}
+.empty {
+  margin: 4px 0;
+  text-align: center;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  opacity: 0.75;
+}
+/* ---------- Postcard composer ---------- */
+.blank {
+  position: relative;
+  z-index: 100;
+  width: min(100%, 680px);
+  justify-self: center;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 12px;
+  padding: 14px;
+  rotate: -0.6deg;
+}
+.blank:has(.ac-list) {
+  rotate: 0deg;
+}
+.pc-left {
+  padding-right: 12px;
+  border-right: 2px dashed rgba(31, 42, 36, 0.35);
+}
+.pc-right {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding-top: 56px;
+}
+.hand-input {
+  min-height: 170px;
+  font-family: var(--font-hand);
+  font-size: 20px;
+  line-height: 1.2;
+  background: transparent;
+}
+.file {
+  max-width: 100%;
+  font-size: 12px;
+}
+.thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.thumbs img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border: 2px solid #1f2a24;
+  border-radius: 4px;
+}
+.full {
+  grid-column: 1 / -1;
+}
+/* ---------- Location autocomplete ---------- */
+.ac {
+  position: relative;
+  z-index: 100;
+}
+.pc-right .ac {
+  z-index: 200;
+}
+.ac-list {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
+  background: #fffdf7;
+  border: 2px solid #1f2a24;
+  border-radius: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #a6a69b transparent;
+}
+.ac-list li {
+  margin: 0;
+  padding: 0;
+}
+.ac-list button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  font: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ac-list button:hover,
+.ac-list button:focus-visible {
+  background: #f6e2b3;
+}
+/* ---------- Custom vibe dropdowns ---------- */
+.custom-dropdown {
+  position: relative;
+  min-width: max-content;
+  width: 100%;
+}
+.filter-dropdown {
+  width: max-content;
+}
+.pc-right .custom-dropdown {
+  min-width: 0;
+}
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  color: #1f2a24;
+  background: #fffdf7;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dropdown-trigger.vibe-select {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.dropdown-trigger.select {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 2px solid #1f2a24;
+  border-radius: 8px;
+}
+.dropdown-trigger span:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dropdown-arrow {
+  display: block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-right: 2.5px solid #1f2a24;
+  border-bottom: 2.5px solid #1f2a24;
+  font-size: 0;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  margin-right: 5px;
+  margin-top: -5px;
+}
+.dropdown-trigger[aria-expanded='true'] .dropdown-arrow {
+  transform: rotate(225deg);
+  margin-top: 5px;
+}
+.dropdown-list {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: max-content;
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
+  background: #fffdf7;
+  border: 2px solid #1f2a24;
+  border-radius: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #a6a69b transparent;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+}
+.filter-dropdown .dropdown-list {
+  min-width: 100%;
+  width: max-content;
+}
+.dropdown-list li {
+  margin: 0;
+  padding: 0;
+}
+.dropdown-list button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2a24;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.dropdown-list button:hover,
+.dropdown-list button:focus-visible,
+.dropdown-list button.selected {
+  background: #f6e2b3;
+}
+.dropdown-list button.selected {
+  font-weight: 700;
+}
+/* ---------- Shared dropdown scrollbars ---------- */
+.ac-list::-webkit-scrollbar,
+.dropdown-list::-webkit-scrollbar {
+  width: 7px;
+}
+.ac-list::-webkit-scrollbar-track,
+.dropdown-list::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+.ac-list::-webkit-scrollbar-thumb,
+.dropdown-list::-webkit-scrollbar-thumb {
+  background: #a6a69b;
+  border-radius: 10px;
+}
+.ac-list::-webkit-scrollbar-button,
+.dropdown-list::-webkit-scrollbar-button {
+  display: none;
+}
+/* ---------- Fireside ---------- */
+.fireside {
+  position: relative;
+  z-index: 2;
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: center;
+  width: min(100%, 720px);
+  margin-top: -14px;
+  pointer-events: none;
+}
+/* ---------- Photo viewer ---------- */
+.photo-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 55px 50px;
+}
+.photo-enlarged {
+  max-width: 100%;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.photo-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 30px;
+  cursor: pointer;
+}
+.photo-prev,
+.photo-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 26px;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+}
+.photo-prev {
+  left: 12px;
+}
+.photo-next {
+  right: 12px;
+}
+.photo-counter {
+  position: absolute;
+  bottom: 20px;
+  color: white;
+  font-size: 14px;
+}
+/* ---------- Responsive layout ---------- */
+@media (max-width: 1180px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 960px) {
+  .tales-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    row-gap: 8px;
+    padding: 10px 10px 8px;
+  }
+  .home {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .bubble {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 2px 8px 8px;
+    border-width: 24px;
+    border-image-width: 40px;
+  }
+  .fireside {
+    grid-column: 1;
+    grid-row: 3;
+    margin-top: -16px;
+  }
+  .toolbar {
+    padding: 0 2px 8px;
+  }
+  .scroller {
+    --fade: 20px;
+    padding: 12px 2px var(--fade) 2px;
+  }
+}
+@media (max-width: 680px) {
+  .cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .b-text {
+    flex: 1 1 0;
+  }
+  .b-title {
+    font-size: 20px;
+  }
+  .b-sub,
+  .send-more {
+    display: none;
+  }
+  .send {
+    order: 1;
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .filters {
+    order: 2;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+  }
+  .seg button {
+    padding: 0 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .vibe-select {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 12px;
+  }
+}
+@media (max-height: 640px) {
+  .fireside {
+    width: min(100%, 460px);
+    --k: 0.66;
+  }
+}
+@media (max-width: 520px) {
+  .blank {
+    grid-template-columns: 1fr;
+  }
+  .pc-left {
+    padding-right: 0;
+    border-right: 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .unroll-enter-active, .unroll-leave-active { animation: none; }
+  .face {
+    transition: none;
+  }
 }
-
-.storybook-section { overflow: visible; }
-.journal-stage { overflow: visible; }
-.book-layout { position: relative; padding-bottom: 0; overflow: visible; }
-.book-layout:has(.comment-scroll) { padding-bottom: 235px; }
-.book-cover { overflow: visible; }
-.open-book { overflow: visible; }
-.book-page { position: relative; overflow: visible; z-index: 1; }
-.book-page:has(.comment-scroll) { z-index: 10; }
-.tale-card { overflow: hidden; }
-.comments-drop { position: absolute; top: calc(100% - 47px); left: 24px; right: 24px; z-index: 20; pointer-events: none; }
-.comments-drop.comments-expanded { top: calc(100% + 12px); z-index: 30; }
-.comments-drop :deep(.comment-scroll) { pointer-events: auto; margin-top: 0; }
-
-.scroll-roller { width: auto; padding: 0; cursor: pointer; appearance: none; }
-.scroll-roller:hover { filter: brightness(1.1); }
-.scroll-roller:focus-visible { outline: 3px solid #A85A2A; outline-offset: 3px; }
 </style>
-
-
