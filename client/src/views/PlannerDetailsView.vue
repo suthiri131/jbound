@@ -12,6 +12,7 @@ import ToastMessage from "@/components/common/ToastMessage.vue";
 import TripModal from "@/components/planner/TripModal.vue";
 import DeleteTripModal from "@/components/planner/DeleteTripModal.vue";
 import CampChat from "@/components/planner/CampChat.vue";
+import { useCampSky } from "@/composables/useCampSky";
 
 let isLive;
 const route = useRoute();
@@ -20,6 +21,7 @@ const trips = useTripsStore();
 
 const tripId = computed(() => route.params.tripId || null);
 const crewNotice = ref("");
+const { isNight } = useCampSky({ weather: false });
 const chatOpen = ref(false);
 const chatLauncher = ref(null);
 const chatPanel = ref(null);
@@ -216,7 +218,7 @@ const canMemories = computed(() =>
 </script>
 
 <template>
-  <main class="planner">
+  <main class="planner" :class="{ night: isNight }"> 
     <RouterLink to="/planner" class="camp-back back">← All expeditions</RouterLink>
     <p v-if="loading" class="muted" role="status">Opening your trip…</p>
     <div v-else-if="loadError" class="card-flat card-pad" role="alert">
@@ -230,9 +232,8 @@ const canMemories = computed(() =>
         <strong>This trip is in the Archives.</strong>
         <RouterLink to="/archives">Open its drawer in the tent →</RouterLink>
       </div>
-      <p v-if="crewNotice" class="hand" role="status">{{ crewNotice }}</p>
 
-      <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @joined="crewNotice = $event" />
+      <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @joined="notify" @notify="notify" />
 
       <div class="split">
         <div class="map-column">
@@ -327,28 +328,35 @@ const canMemories = computed(() =>
   gap: 16px;
   padding: 18px clamp(14px, 2.4vw, 34px) 34px;
   font-family: var(--font-round);
+  /* by day a light oak table, by night (see .night below) the dark wood */
+  background: repeating-linear-gradient(90deg, #f3e3bd 0 150px, #e3cc9a 150px 152px, #efdcb0 152px 300px, #e3cc9a 300px 302px);
+  box-shadow: inset 0 0 80px rgba(120, 80, 30, 0.16);
+}
+.planner.night {
   background: repeating-linear-gradient(90deg, #7a4d2c 0 150px, #6c4326 150px 153px, #744829 153px 300px, #6c4326 300px 303px);
   box-shadow: inset 0 0 90px rgba(40, 20, 5, 0.55);
-}
-.back {
+}.back {
   flex: none;
 }
 .planner > .muted,
 .planner > .hand {
-  color: #fbf1dc;
+  color: #5a3a22;
 }
-.archived {
+.planner.night > .muted,
+.planner.night > .hand {
+  color: #fbf1dc;
+}.archived {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   background: var(--paper-deep);
 }
 
-/* the crew: a luggage label */
+/* the crew: a sage-green luggage label, so the people stand out from the beige map and day plan */
 .planner :deep(.crew) {
   border: 0;
   border-radius: 8px;
-  background: #f4e6c4;
+  background: #d5e1bd;
   box-shadow: 0 6px 12px rgba(40, 20, 5, 0.4);
 }
 .planner :deep(.crew h2),

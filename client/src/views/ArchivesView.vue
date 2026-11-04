@@ -232,7 +232,7 @@ async function swapOutReviewed() {
 <template>
   <main class="attic-page">
     <h1 class="sr-only">Archives</h1>
-    <RouterLink v-if="!tripId" to="/" class="camp-back out">← Step outside</RouterLink>
+    <RouterLink v-if="!tripId" to="/" class="camp-back out">← Back</RouterLink>
 
     <div
       v-if="tripId"

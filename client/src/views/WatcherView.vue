@@ -115,7 +115,7 @@ function handleCameraKeydown(event) {
         :holiday="q.holiday"
         :condition="isNow ? condition : 'clear'"
       />
-      <RouterLink to="/" class="camp-back back">← Climb down</RouterLink>
+      <RouterLink to="/" class="camp-back back">← Back</RouterLink>
 
       <div class="dials" role="group" aria-label="What to look at">
         <div class="seg" role="group" aria-label="Checkpoint">

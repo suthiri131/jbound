@@ -367,7 +367,7 @@ function pinFromBackpack(item) {
 <template>
   <main class="notice-page">
     <SkyBackdrop />
-    <RouterLink to="/" class="camp-back back">← Basecamp</RouterLink>
+    <RouterLink to="/" class="camp-back back">← Back</RouterLink>
 
     <div class="board-wrap">
       <header class="roof">

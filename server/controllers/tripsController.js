@@ -5,7 +5,7 @@ import { postSystemMessage, displayName } from '../services/systemMessages.js';
 import { tripPhase, sgToday, addDays, MEMORY_WINDOW_DAYS } from '../services/logic/memoryWindow.js';
 
 const PROFILE = 'id, username, name, avatar_url';
-export const TRIP_FIELDS = 'id, name, mission, cover_color, owner_id, start_date, end_date, invite_code, archived_at, created_at';
+export const TRIP_FIELDS = 'id, name, mission, cover_color, bag_kind, bag_badges, owner_id, start_date, end_date, invite_code, archived_at, created_at';
 
 async function addMember(tripId, userId, role = 'member' , status = 'accepted') {
   const { error } = await supabase.from('trip_members').insert({ trip_id: tripId, user_id: userId, role, status });
@@ -157,8 +157,7 @@ export async function getTrip(req, res) {
 
 /** PATCH /api/trips/:tripId — any trip member, including the owner */
 export async function updateTrip(req, res) {
-  const { name, mission, coverColor, startDate, endDate } = req.valid.body;
-  const nextStart = startDate === undefined ? req.trip.start_date : startDate;
+  const { name, mission, coverColor, bagKind, bagBadges, startDate, endDate } = req.valid.body;  const nextStart = startDate === undefined ? req.trip.start_date : startDate;
   const nextEnd = endDate === undefined ? req.trip.end_date : endDate;
   if (nextStart && nextEnd && nextEnd < nextStart) {
     throw badRequest('End date must be on or after start date');
@@ -167,6 +166,8 @@ export async function updateTrip(req, res) {
   if (name !== undefined) patch.name = name;
   if (mission !== undefined) patch.mission = mission;
   if (coverColor !== undefined) patch.cover_color = coverColor;
+  if (bagKind !== undefined) patch.bag_kind = bagKind;
+  if (bagBadges !== undefined) patch.bag_badges = bagBadges;
   if (startDate !== undefined) patch.start_date = startDate;
   if (endDate !== undefined) patch.end_date = endDate;
   const data = check(await supabase.from('trips').update(patch).eq('id', req.params.tripId).select(TRIP_FIELDS).single());
