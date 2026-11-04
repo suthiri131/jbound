@@ -12,6 +12,7 @@ import utilityRoutes from "./routes/utility.js";
 import placeRoutes from "./routes/places.js";
 import postsRouter from './routes/posts.js';
 import checkpointRouter from './routes/checkpoint.js';
+import internalRoutes from './routes/internal.js';
 
 export const app = express();
 
@@ -60,6 +61,7 @@ app.use("/api/routes", routesRouter);
 app.use("/api/trips", tripRoutes);
 app.use("/api/archives", archiveRoutes);
 app.use("/api/places", placeRoutes);
+app.use("/api/internal", internalRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
