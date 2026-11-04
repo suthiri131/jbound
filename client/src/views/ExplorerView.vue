@@ -12,6 +12,8 @@ import VibeIcon from "@/components/common/VibeIcon.vue";
 import ToastMessage from "@/components/common/ToastMessage.vue";
 import SkyBackdrop from "@/components/scene/SkyBackdrop.vue";
 import FilterMenu from "@/components/explorer/FilterMenu.vue";
+import SearchBar from "@/components/common/SearchBar.vue";
+import SoftPaint from "@/components/scene/SoftPaint.vue";
 import VibeBoard from "@/components/explorer/VibeBoard.vue";
 
 const route = useRoute();
@@ -47,10 +49,6 @@ const loading = ref(false);
 const error = ref("");
 const dealing = ref(false); // places get pinned up one by one right after the vibe screen
 const toast = ref({ message: "", linkTo: "", linkLabel: "" });
-
-const vibeSummary = computed(() =>
-  vibes.value.map((v) => VIBE_LABEL[v]).join(", "),
-);
 
 // ---------- search ----------
 let requestId = 0;
@@ -118,11 +116,6 @@ function submitSearch() {
   syncUrl();
   search();
 }
-function clearSearch() {
-  q.value = "";
-  submitSearch();
-}
-
 function toggleVibe(id) {
   if (q.value) q.value = ""; // picking a category leaves the typed search
   const i = vibes.value.indexOf(id);
@@ -139,6 +132,21 @@ function onExplore(picked) {
   dealing.value = true;
   syncUrl();
   search().finally(() => setTimeout(() => (dealing.value = false), 1600));
+}
+// what's narrowing the board right now, shown under the search bar
+const activeVibes = computed(() => (q.value.trim() ? [] : vibes.value)); // a typed search leaves the categories
+const activeFilters = computed(() => {
+  const f = filters.value;
+  const on = (key) => f[key] !== DEFAULT_FILTERS[key];
+  return [
+    on("checkpoint") && { key: "checkpoint", label: `Crossing at ${f.checkpoint === "tuas" ? "Tuas" : "Woodlands"}` },
+    on("maxDistanceKm") && { key: "maxDistanceKm", label: f.maxDistanceKm >= 60 ? "Any distance" : `Within ${f.maxDistanceKm} km` },
+    on("maxPrice") && { key: "maxPrice", label: `Up to ${price(f.maxPrice)}` },
+    on("hiddenGem") && { key: "hiddenGem", label: "✦ Hidden gems" },
+  ].filter(Boolean);
+});
+function clearFilter(key) {
+  filters.value = { ...filters.value, [key]: DEFAULT_FILTERS[key] };
 }
 function changeVibe() {
   clearTimeout(debounce);
@@ -182,7 +190,7 @@ function previousBoardPage() {
   const previous = router.options.history.state?.back;
   if (typeof previous !== 'string') return null;
   const fromExplorer = /^\/explorer(?:[/?]|$)/.test(previous);
-  const fromTales = route.name !== 'place' && /^\/tales(?:[/?]|$)/.test(previous);
+  const fromTales = /^\/tales(?:[/?]|$)/.test(previous);
   return fromExplorer || fromTales ? previous : null;
 }
 const backDestination = computed(() => {
@@ -193,7 +201,6 @@ const backDestination = computed(() => {
 const backLabel = computed(() => {
   if (!onPlacePage.value) return 'Back to Basecamp';
   if (backDestination.value.startsWith('/tales')) return 'Back to Tales';
-  if (backDestination.value.startsWith('/explorer/place/')) return 'Back to the place';
   return 'Back to the notice board';
 });
 function goBack() {
@@ -396,6 +403,22 @@ function pinFromBackpack(item) {
     <button type="button" class="camp-back back" :aria-label="backLabel" @click="goBack"><BackLabel /></button>
 
     <div class="board-wrap">
+      <!-- only this layer is painted, so the page on top stays crisp -->
+      <SoftPaint />
+      <div class="paint" aria-hidden="true">
+        <i class="p-ground" />
+        <i class="p-post left" />
+        <i class="p-post right" />
+        <i class="p-frame" />
+        <i class="p-rim" />
+        <i class="p-cork" />
+        <i class="p-roof" />
+        <i class="p-lip" />
+        <i class="p-hinge left" />
+        <i class="p-hinge right" />
+        <i class="p-plate" />
+      </div>
+
       <header class="roof">
         <h1 class="roof-title">Notice Board</h1>
       </header>
@@ -410,7 +433,7 @@ function pinFromBackpack(item) {
           </div>
 
           <!-- hidden rather than removed, so coming back keeps the results and your place in them -->
-          <div v-show="!onPlacePage" :key="stage" class="cork-scroll">
+          <div v-show="!onPlacePage" :key="stage" class="cork-scroll" :class="{ 'feed-scroll': stage !== 'board' }">
             <!-- 1. what's the vibe? -->
             <VibeBoard
               v-if="stage === 'board'"
@@ -425,35 +448,42 @@ function pinFromBackpack(item) {
               <section class="note white head" style="--tilt: -0.3deg" aria-label="Search and filter">
                 <i class="pin red" aria-hidden="true" />
                 <div class="head-top">
-                  <div class="head-text">
-                    <h2 class="head-title">JBound's recommendations for you</h2>
-                    <p v-if="q.trim()" class="head-sub">
-                      Results for “{{ q.trim() }}”
-                      <button type="button" class="link" @click="clearSearch">✕ Clear search</button>
-                    </p>
-                    <p v-else class="head-sub">{{ vibes.length ? `Because you're feeling ${vibeSummary}.` : 'A bit of everything around JB.' }}</p>
-                  </div>
-                  <div class="tools">
-                    <form class="search" role="search" @submit.prevent="submitSearch">
-                      <input v-model="q" type="search" placeholder="Search bak kut teh, murals, durian…" aria-label="Search places in JB" data-cy="explorer-search" @input="onSearchInput" />
-                    </form>
-                    <FilterMenu v-model="filters" :defaults="DEFAULT_FILTERS" class="filters" />
-                  </div>
+                  <form class="search" role="search" @submit.prevent="submitSearch">
+                    <SearchBar v-model="q" placeholder="Search a place" data-cy="explorer-search" @update:model-value="onSearchInput" />
+                  </form>
+                  <FilterMenu
+                    v-model="filters"
+                    :defaults="DEFAULT_FILTERS"
+                    :vibes="activeVibes"
+                    class="filters"
+                    @toggle-vibe="toggleVibe"
+                    @clear-vibes="vibes = []"
+                    @change-vibe="changeVibe"
+                  />
                 </div>
 
-                <div class="cats" role="group" aria-label="Filter by vibe">
+                <div v-if="activeVibes.length || activeFilters.length" class="chosen" role="group" aria-label="Selected filters">
                   <button
-                    v-for="v in VIBES"
-                    :key="v.id"
+                    v-for="v in activeVibes"
+                    :key="v"
                     type="button"
                     class="vibe"
-                    :aria-pressed="!q.trim() && vibes.includes(v.id)"
-                    :data-cy="`vibe-${v.id}`"
-                    @click="toggleVibe(v.id)"
+                    :aria-label="`Remove ${VIBE_LABEL[v]} filter`"
+                    :data-cy="`chosen-${v}`"
+                    @click="toggleVibe(v)"
                   >
-                    <VibeIcon :vibe="v.id" :size="15" /> {{ v.label }}
+                    <VibeIcon :vibe="v" :size="15" /> {{ VIBE_LABEL[v] }} <span aria-hidden="true">✕</span>
                   </button>
-                  <button type="button" class="vibe change" data-cy="change-vibe" @click="changeVibe">↺ Change my vibe</button>
+                  <button
+                    v-for="f in activeFilters"
+                    :key="f.key"
+                    type="button"
+                    class="vibe"
+                    :aria-label="`Remove ${f.label} filter`"
+                    @click="clearFilter(f.key)"
+                  >
+                    {{ f.label }} <span aria-hidden="true">✕</span>
+                  </button>
                 </div>
 
                 <p class="status" aria-live="polite">
@@ -521,7 +551,6 @@ function pinFromBackpack(item) {
                         <div class="f-actions">
                           <RouterLink v-if="placeLink(p)" :to="keepQuery(placeLink(p))" class="btn btn-sm btn-ghost">View place</RouterLink>
                           <button type="button" class="btn btn-primary btn-sm" data-cy="pin" @click="openPin(p)">+ Pin to trip</button>
-                          <RouterLink v-if="p.id" :to="keepQuery(`/explorer/tales/place/${p.id}`)" class="btn btn-sm btn-ghost">Read tales</RouterLink>
                         </div>
                       </div>
                       <span class="stamp keep-stamp" aria-hidden="true">PACK IT</span>
@@ -530,8 +559,7 @@ function pinFromBackpack(item) {
                   </ul>
                 </div>
 
-                <aside class="note kraft backpack" style="--tilt: 0.8deg" aria-labelledby="bp-title">
-                  <i class="pin green" aria-hidden="true" />
+                <aside class="backpack" aria-labelledby="bp-title">
                   <h2 id="bp-title" class="note-title">Backpack <small>{{ backpack.length }}</small></h2>
                   <p v-if="!backpack.length" class="bp-empty">Places you pack land here, ready to pin to a trip.</p>
                   <ul v-else class="bp-list">
@@ -548,8 +576,6 @@ function pinFromBackpack(item) {
         </div>
       </div>
 
-      <i class="post left" aria-hidden="true" />
-      <i class="post right" aria-hidden="true" />
     </div>
 
     <ToastMessage v-bind="toast" @close="toast.message = ''" />
@@ -608,6 +634,15 @@ function pinFromBackpack(item) {
 
 /* ---------- the board itself ---------- */
 .board-wrap {
+  --roof-h: 84px;
+  --lip-h: 20px;
+  --frame-inset: 14px; /* how far the roof overhangs the frame */
+  --frame-pad: 24px;
+  --frame-foot: 30px;
+  --green-light: #a9c192;
+  --green: #8ba674;
+  --green-shade: #6f8a5c;
+  --green-deep: #566e47;
   position: relative;
   flex: 1;
   min-height: 0;
@@ -615,25 +650,147 @@ function pinFromBackpack(item) {
   display: flex;
   flex-direction: column;
 }
+/* ---------- the painted board: every piece goes through one watercolour filter ---------- */
+.paint {
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 -28px;
+  filter: url(#soft-paint);
+  pointer-events: none;
+}
+.paint i {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: 2.6px solid var(--ink);
+}
+/* the shadow it throws on the ground */
+.paint .p-ground {
+  left: 3%;
+  right: 3%;
+  bottom: 0;
+  height: 22px;
+  border: 0;
+  background: radial-gradient(closest-side, rgba(20, 25, 15, 0.5), transparent);
+}
+/* legs: lit from the left, turning away on the right */
+.p-post {
+  top: var(--roof-h);
+  bottom: 4px;
+  width: 38px;
+  background: linear-gradient(90deg, var(--green-light) 0 18%, var(--green) 18% 68%, var(--green-deep) 68%);
+}
+.p-post.left {
+  left: 6%;
+}
+.p-post.right {
+  right: 6%;
+}
+/* the frame: light catches the top and left edges, the bottom and right fall into shade */
+.p-frame {
+  top: calc(var(--roof-h) - 8px);
+  left: var(--frame-inset);
+  right: var(--frame-inset);
+  bottom: 28px;
+  border-radius: 4px;
+  background: var(--green);
+  box-shadow:
+    inset 5px 0 0 var(--green-light),
+    inset -6px 0 0 var(--green-shade),
+    inset 0 -8px 0 var(--green-deep),
+    0 7px 8px rgba(30, 35, 20, 0.4);
+}
+/* the inner rim: its edges face the other way, so the cork looks set back into the frame */
+.paint .p-rim {
+  border-width: 1.6px;
+  top: calc(var(--roof-h) + var(--frame-pad) - 8px);
+  left: calc(var(--frame-inset) + var(--frame-pad) - 8px);
+  right: calc(var(--frame-inset) + var(--frame-pad) - 8px);
+  bottom: calc(28px + var(--frame-foot) - 8px);
+  background: var(--green-shade);
+  box-shadow:
+    inset 3px 3px 0 var(--green-deep),
+    inset -3px -3px 0 var(--green-light);
+}
+.p-cork {
+  top: calc(var(--roof-h) + var(--frame-pad));
+  left: calc(var(--frame-inset) + var(--frame-pad));
+  right: calc(var(--frame-inset) + var(--frame-pad));
+  bottom: calc(28px + var(--frame-foot));
+  background: radial-gradient(rgba(100, 62, 28, 0.3) 1.2px, transparent 1.6px) 0 0 / 9px 9px, #dcb077;
+}
+/* the roof: a slope narrowing away from you, sat on a front lip */
+.paint .p-roof {
+  top: 2px;
+  left: 0;
+  right: 0;
+  height: calc(var(--roof-h) - var(--lip-h));
+  border: 0;
+  background: var(--ink);
+  clip-path: polygon(3.5% 0, 96.5% 0, 100% 100%, 0 100%);
+}
+.p-roof::before {
+  content: "";
+  position: absolute;
+  inset: 3px 3px 0;
+  background:
+    linear-gradient(90deg, transparent 33%, rgba(42, 33, 23, 0.35) 33% 33.2%, transparent 33.2% 66.8%, rgba(42, 33, 23, 0.35) 66.8% 67%, transparent 67%),
+    linear-gradient(var(--green-light), var(--green));
+  clip-path: polygon(3.5% 0, 96.5% 0, 100% 100%, 0 100%);
+}
+.p-lip {
+  top: calc(var(--roof-h) - var(--lip-h));
+  left: 0;
+  right: 0;
+  height: var(--lip-h);
+  border-radius: 2px 2px 5px 5px;
+  background: linear-gradient(var(--green-shade), var(--green-deep));
+  box-shadow: 0 9px 9px rgba(30, 35, 20, 0.45);
+}
+/* brushed metal, with the hinge pin running across the middle */
+.p-hinge,
+.p-plate {
+  background: linear-gradient(#f4f2e6, #bdb9a6);
+  box-shadow: 0 3px 3px rgba(30, 35, 20, 0.45);
+}
+.p-hinge {
+  top: calc(var(--roof-h) - 14px);
+  width: 38px;
+  height: 30px;
+  border-radius: 3px;
+  background:
+    linear-gradient(transparent 42%, var(--ink) 42% 46%, #8d8a78 46% 54%, var(--ink) 54% 58%, transparent 58%),
+    linear-gradient(#f4f2e6, #bdb9a6);
+}
+.p-hinge.left {
+  left: 22%;
+}
+.p-hinge.right {
+  right: 22%;
+}
+.p-plate {
+  bottom: 33px;
+  left: 50%;
+  width: 84px;
+  height: 18px;
+  margin-left: -42px;
+  border-radius: 3px;
+}
 .roof {
   position: relative;
   z-index: 2;
   flex: none;
   display: grid;
   place-items: center;
-  height: 72px;
-  margin: 0 -2%;
-  background: linear-gradient(90deg, #bf6a48 50%, #9c4d31 50%);
-  clip-path: polygon(50% 0, 100% 86%, 100% 100%, 0 100%, 0 86%);
-  border-bottom: 10px solid #5c3520;
+  height: var(--roof-h);
 }
 .roof-title {
-  margin: 12px 0 0;
-  color: #fff8ea;
+  margin: 0 0 calc(var(--lip-h) - 2px);
+  color: #fffdf6;
   font-family: var(--font-story);
   font-weight: 800;
   font-size: 28px;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+  text-shadow: 0 2px 0 rgba(42, 33, 23, 0.55);
 }
 .frame {
   position: relative;
@@ -641,17 +798,25 @@ function pinFromBackpack(item) {
   flex: 1;
   min-height: 0;
   display: flex;
-  padding: 16px;
-  background: #8a5a34;
-  border-bottom: 12px solid #6f4426;
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+  padding: var(--frame-pad) calc(var(--frame-inset) + var(--frame-pad)) var(--frame-foot);
 }
 .cork {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
-  background: radial-gradient(rgba(100, 62, 28, 0.35) 1.2px, transparent 1.6px) 0 0 / 9px 9px, #c9975f;
-  box-shadow: inset 0 3px 10px rgba(60, 30, 10, 0.4);
+}
+/* the frame's shadow falls across the cork and whatever's pinned to it; flyers slide under the frame as they scroll */
+.cork::after {
+  content: "";
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 12px 12px -6px rgba(50, 28, 8, 0.55),
+    inset 10px 0 10px -6px rgba(50, 28, 8, 0.4),
+    inset -3px -3px 6px -3px rgba(50, 28, 8, 0.25);
 }
 .cork-scroll {
   flex: 1;
@@ -681,6 +846,10 @@ function pinFromBackpack(item) {
     scrollbar-color: rgba(60, 30, 10, 0.45) transparent;
   }
 }
+/* the feed drops the bottom padding so the backpack can reach the frame */
+.cork-scroll.feed-scroll {
+  padding-bottom: 0;
+}
 /* a place page: one big sheet pinned over the whole board */
 .cork-scroll:focus {
   outline: none;
@@ -702,33 +871,15 @@ function pinFromBackpack(item) {
     translate: 0 10px;
   }
 }
-.post {
-  position: absolute;
-  z-index: 0;
-  top: 40px;
-  bottom: -26px;
-  width: 26px;
-  background: #5c3520;
-}
-.post.left {
-  left: 5%;
-}
-.post.right {
-  right: 5%;
-}
-
 /* ---------- notes ---------- */
 .note {
   position: relative;
   padding: 16px 16px 12px;
   rotate: var(--tilt);
-  box-shadow: 0 6px 12px rgba(50, 25, 5, 0.3);
+  box-shadow: 3px 7px 10px rgba(50, 25, 5, 0.35);
 }
 .white {
   background: #fffdf7;
-}
-.kraft {
-  background: #f0d09d;
 }
 .pin {
   position: absolute;
@@ -780,7 +931,9 @@ function pinFromBackpack(item) {
 
 /* ---------- the header note: search, filters, vibes ---------- */
 .feed {
+  flex: 1;
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 24px;
 }
 .head {
@@ -795,42 +948,9 @@ function pinFromBackpack(item) {
   justify-content: space-between;
   gap: 10px 18px;
 }
-.head-text {
-  flex: 1 1 320px;
-  min-width: 0;
-}
-.head-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: clamp(21px, 2.1vw, 28px);
-  line-height: 1.1;
-}
-.head-sub {
-  margin: 3px 0 0;
-  font-size: 13.5px;
-  color: var(--ink-soft);
-}
-.tools {
-  flex: 0 1 460px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
 .search {
   flex: 1;
   min-width: 0;
-}
-.search input {
-  width: 100%;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 2px solid #1f2a24;
-  border-radius: 999px;
-  background: #fffdf7;
-  font: inherit;
-  font-size: 14px;
 }
 .filters :deep(.filter-btn) {
   min-height: 40px;
@@ -838,7 +958,7 @@ function pinFromBackpack(item) {
   font-size: 13px;
   box-shadow: none;
 }
-.cats {
+.chosen {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -851,19 +971,12 @@ function pinFromBackpack(item) {
   padding: 0 10px;
   border: 2px solid #1f2a24;
   border-radius: 999px;
-  background: #fffdf7;
+  background: #1f2a24;
+  color: #fffdf7;
   font: inherit;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-}
-.vibe[aria-pressed='true'] {
-  background: #1f2a24;
-  color: #fffdf7;
-}
-.vibe.change {
-  border-style: dashed;
-  background: transparent;
 }
 .status {
   display: flex;
@@ -887,6 +1000,9 @@ function pinFromBackpack(item) {
 }
 
 /* ---------- the flyers ---------- */
+.results {
+  padding-bottom: 26px;
+}
 .feed-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 224px;
@@ -1082,12 +1198,35 @@ function pinFromBackpack(item) {
 }
 
 /* ---------- backpack ---------- */
+/* a clean sheet of a spiral notepad */
 .backpack {
   position: sticky;
-  top: 8px;
+  top: 20px;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
-  max-height: 340px;
+  margin-top: 12px;
+  padding: 28px 16px 16px;
+  background: #fffdf7;
+  box-shadow: 3px 7px 10px rgba(50, 25, 5, 0.35);
+}
+.backpack::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 10px;
+  right: 10px;
+  height: 28px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='28'%3E%3Ccircle cx='13' cy='21' r='4' fill='%23d9d0bd'/%3E%3Crect x='9' y='1' width='8' height='22' rx='4' fill='none' stroke='%231f2a24' stroke-width='2'/%3E%3C/svg%3E") 0 0 / 26px 28px round no-repeat;
+}
+@media (min-width: 961px) {
+  .feed-scroll {
+    container-type: size;
+  }
+  /* no taller than the visible cork below its sticky offset (cqh leaves out the same 20px as top padding), so it stays in reach while the flyers scroll */
+  .backpack {
+    max-height: 100cqh;
+  }
 }
 .bp-empty {
   margin: 0;
@@ -1146,16 +1285,17 @@ function pinFromBackpack(item) {
     align-self: flex-start;
     margin-bottom: 6px;
   }
-  .roof {
-    margin: 0;
-  }
-  .frame {
-    padding: 10px;
+  .board-wrap {
+    --roof-h: 72px;
+    --lip-h: 14px;
+    --frame-inset: 6px;
+    --frame-pad: 14px;
+    --frame-foot: 20px;
   }
   .cork-scroll {
     padding: 18px 12px 20px;
   }
-  .post {
+  .p-post {
     display: none;
   }
   /* the backpack moves above the flyers so it stays in reach */
@@ -1166,28 +1306,11 @@ function pinFromBackpack(item) {
     position: relative;
     top: 0;
     order: -1;
-    max-height: 200px;
-  }
-  .tools {
-    flex: 1 1 100%;
+    align-self: start;
+    max-height: 220px;
   }
   .attribution {
     margin-left: 0;
-  }
-}
-@media (max-width: 640px) {
-  /* one swipeable row of vibes, so the first flyer isn't pushed off the screen */
-  .cats {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 4px;
-  }
-  .cats > * {
-    flex: none;
-  }
-  .head-title {
-    font-size: 19px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

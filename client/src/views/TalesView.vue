@@ -18,9 +18,10 @@ const auth = useAuthStore();
 
 const feed = reactive({ items: [], nextCursor: null, loading: false, error: '' });
 
-// Coming back from a place's tales on the notice board picks up where you left off.
+// Coming back from a place on the notice board picks up where you left off.
 const SPOT_KEY = 'jbound.talesSpot';
-const cameBack = router.options.history.state?.forward?.startsWith('/explorer/tales');
+const isPlacePage = (path) => /^\/explorer\/(place|tales)\//.test(path ?? '');
+const cameBack = isPlacePage(router.options.history.state?.forward);
 const spot = cameBack ? JSON.parse(sessionStorage.getItem(SPOT_KEY) || 'null') : null;
 sessionStorage.removeItem(SPOT_KEY);
 const scrollerEl = ref(null);
@@ -83,7 +84,7 @@ onMounted(async () => {
   if (scrollerEl.value) scrollerEl.value.scrollTop = spot.scrollTop;
 });
 onBeforeRouteLeave((to) => {
-  if (!to.path.startsWith('/explorer/tales')) return;
+  if (!isPlacePage(to.path)) return;
   sessionStorage.setItem(SPOT_KEY, JSON.stringify({
     scope: scope.value,
     vibe: vibe.value,
@@ -272,7 +273,8 @@ const newThisWeek = computed(() => {
 });
 const placeName = (p) => p.place?.name || p.custom_place_name || 'Somewhere in JB';
 const moreLink = (p) => {
-  if (p.place) return `/explorer/tales/place/${p.place.id}`;
+  if (p.place?.google_place_id) return `/explorer/place/${encodeURIComponent(p.place.google_place_id)}`;
+  if (p.place) return `/explorer/tales/place/${p.place.id}`; // our own places have no Google page
   return p.custom_place_name ? `/explorer/tales/custom/${encodeURIComponent(p.custom_place_name)}` : null;
 };
 

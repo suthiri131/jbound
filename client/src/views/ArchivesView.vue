@@ -354,12 +354,21 @@ async function swapOutReviewed() {
 
 /* the drawer's wood around the book, matching the piece it came out of */
 .drawer-frame {
+  --wood: #6c2b1d; --wood-light: #8d4630; --wood-deep: #4a1a10;
+  position: relative; isolation: isolate;
   width: min(100%, 1180px); padding: clamp(10px, 1.6vw, 18px);
-  background: #6c2b1d; border: 3px solid #2a1810; border-radius: 8px;
-  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .05), 0 18px 40px rgba(0, 0, 0, .45);
+  border: 3px solid transparent; border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .45);
   will-change: transform;
 }
-.drawer-frame.chest { background: #7a4a2a; }
+/* painted behind the book, so the pages stay crisp */
+.drawer-frame::before {
+  content: ''; position: absolute; z-index: -1; inset: -3px;
+  background: linear-gradient(var(--wood-light), var(--wood) 12%); border: 3px solid #2a1810; border-radius: 8px;
+  box-shadow: inset 5px 0 0 var(--wood-light), inset -6px 0 0 var(--wood-deep), inset 0 -8px 0 var(--wood-deep);
+  filter: url(#soft-paint-dark);
+}
+.drawer-frame.chest { --wood: #7a4a2a; --wood-light: #9a6a42; --wood-deep: #54311a; }
 .drawer-frame :deep(.scrapbook) { padding-bottom: 6px; border-radius: 4px; background: #3a2216; box-shadow: inset 0 6px 14px rgba(0, 0, 0, .45); }
 .drawer-frame :deep(.page-label) { color: #f3e6c8; }
 .drawer-frame :deep(.hint) { color: #d9c7a3; }

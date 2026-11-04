@@ -5,7 +5,7 @@ const POST_AUTHOR =
   'author:profiles!posts_user_id_fkey(id, username, name, avatar_url)';
 const COMMENT_AUTHOR =
   'author:profiles!post_comments_user_id_fkey(id, username, name, avatar_url)';
-const POST_FIELDS = `id, caption, vibe, images, created_at, place_id, custom_place_name, ${POST_AUTHOR}, place:places(id, name, vibes, lat, lng), likes:post_likes(count), comments:post_comments(count)`;
+const POST_FIELDS = `id, caption, vibe, images, created_at, place_id, custom_place_name, ${POST_AUTHOR}, place:places(id, google_place_id, name, vibes, lat, lng), likes:post_likes(count), comments:post_comments(count)`;
 
 function shape(post, likedIds = new Set()) {
     const {likes, comments, ...rest} = post
@@ -28,13 +28,13 @@ async function likedSet(userId, postIds) {
 
 // handles the friends only feed
 async function friendIds(userId) {
-  const mine = check(await supabase.from('trip_members').select('trip_id').eq('user_id', userId));
+  const mine = check(await supabase.from('trip_members').select('trip_id').eq('user_id', userId).eq('status', 'accepted'));
   const tripIds = mine.map((m) => m.trip_id);
   if (!tripIds.length) {
     return [userId];
   }
 
-  const members = check(await supabase.from('trip_members').select('user_id').in('trip_id', tripIds));
+  const members = check(await supabase.from('trip_members').select('user_id').in('trip_id', tripIds).eq('status', 'accepted'));
   return [...new Set([userId, ...members.map((m) => m.user_id)])];
 }
 

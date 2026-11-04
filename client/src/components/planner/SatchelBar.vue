@@ -8,6 +8,7 @@ import Pagination from '@/components/common/Pagination.vue';
 import TripModal from './TripModal.vue';
 import JoinTripForm from './JoinTripForm.vue';
 import BagEditor from './BagEditor.vue'
+import { useTripsStore } from '@/stores/trips';
 
 const props = defineProps({
   search: { type: String, default: '' },
@@ -64,6 +65,8 @@ async function loadPage() {
   }
 }
 watch(() => [route.query.page, props.search, props.phase], loadPage, { immediate: true });
+// an invite accepted from the notifications, which open on top of this page
+watch(() => useTripsStore().invitesAccepted, loadPage);
 const listQuery = computed(() => ({
   ...(props.search ? { search: props.search } : {}),
   ...(props.phase ? { phase: props.phase } : {}),

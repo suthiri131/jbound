@@ -6,6 +6,7 @@ import { useTripsStore } from '@/stores/trips';
 import { errorMessage } from '@/lib/api';
 import { useCampSky } from '@/composables/useCampSky';
 import SatchelBar from '@/components/planner/SatchelBar.vue';
+import SearchBar from '@/components/common/SearchBar.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -61,11 +62,7 @@ watch(() => route.query.join, async (code) => {
         </RouterLink>
       </template>
       <template #search>
-        <label class="search">
-          <span class="sr-only">Search your trips</span>
-          <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
-          <input :value="search" class="input" type="search" placeholder="Search your trips" @input="setFilter('search', $event.target.value)" />
-        </label>
+        <SearchBar :model-value="search" placeholder="Search your trips" @update:model-value="setFilter('search', $event)" />
       </template>
       <template #filters>
         <div class="tabs" role="group" aria-label="Trip status">
@@ -121,30 +118,6 @@ watch(() => route.query.join, async (code) => {
   box-sizing: border-box;
   padding: 0 14px;
   gap: 6px;
-}
-
-/* search: magnifier inside the bar on the left */
-.search {
-  position: relative;
-  flex: 1 1 260px;
-  min-width: 0;
-}
-.search-icon {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  translate: 0 -50%;
-  color: #5a4a36;
-  pointer-events: none;
-}
-.search .input {
-  width: 100%;
-  height: 46px;
-  min-height: 46px;
-  margin: 0;
-  padding-left: 46px;
-  border-radius: 999px;
-  line-height: normal;
 }
 
 /* status tabs, like dividers in a bag */

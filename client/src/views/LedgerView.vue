@@ -432,7 +432,7 @@ onMounted(loadConversionRate);
 }
 .stall-wrap {
   position: relative;
-  width: min(100%, 720px, calc((100dvh - 180px) * 1.2));
+  width: min(100%, 880px, calc((100dvh - 180px) * 1.23));
 }
 .crew-line {
   position: absolute;
@@ -907,7 +907,7 @@ label.tick {
     padding: 66px 12px 16px;
   }
   .stall-wrap {
-    width: min(100%, 440px);
+    width: min(100%, 520px);
   }
   .receipt-wrap {
     width: 100%;
