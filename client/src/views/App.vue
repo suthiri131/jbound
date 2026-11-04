@@ -49,7 +49,7 @@ function onPointerOut(e) {
 <template>
   <div
     class="app"
-    :class="{ 'full-bleed': fullBleed, 'peek-hold': peekHold }"
+    :class="{ 'full-bleed': fullBleed, 'peek-hold': peekHold, 'notif-open': notifOpen }"
     :style="{ '--peek-nav-h': navHeight + 'px' }"
     @pointerover="onPointerOver"
     @pointerout="onPointerOut"
@@ -102,6 +102,10 @@ function onPointerOut(e) {
   text-align: center;
 }
 
+/* the notifications drawer sits on top of the page, so a dropped-down nav goes behind it */
+.app.notif-open .nav-shell.peek {
+  z-index: 49;
+}
 /* ---- peek nav: hidden above the screen, slides down when the mouse touches the top edge ---- */
 /* Mouse devices only. Touch screens can't hover, so they keep the normal nav. */
 @media (hover: hover) and (pointer: fine) {

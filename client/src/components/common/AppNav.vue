@@ -38,7 +38,7 @@ const closeOnEscape = (e) => {
   }
 };
 onMounted(() => {
-  if (auth.isLoggedIn) notifications.fetchInviteCount();
+  if (auth.isLoggedIn) notifications.fetchBadgeCount();
   document.addEventListener("click", closeOnOutsideClick);
   document.addEventListener("keydown", closeOnEscape);
   mobileMedia = window.matchMedia(MOBILE_QUERY);
@@ -151,7 +151,7 @@ async function logout() {
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
-          <span v-if="notifications.inviteCount" class="badge-dot">{{ notifications.inviteCount }}</span>
+          <span v-if="notifications.badgeCount" class="badge-dot">{{ notifications.badgeCount }}</span>
           </button>
         <div v-if="auth.isLoggedIn" ref="menuRoot" class="account">
           <button

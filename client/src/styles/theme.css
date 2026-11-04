@@ -402,6 +402,11 @@ button {
   border: 0;
 }
 
+/* the kraft paper of the notifications mail pouch */
+.pouch-paper {
+  background: radial-gradient(rgba(90, 60, 25, 0.16) 1px, transparent 1.4px) 0 0 / 7px 7px, #dcc08e;
+}
+
 /* ---------- overlays ---------- */
 .scrim {
   position: fixed;

@@ -1,150 +1,45 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { api, errorMessage } from '@/lib/api';
-import { timeAgo } from '@/utils/format';
-import { useNotificationsStore } from '@/stores/notifications';
-import { useTripsStore } from '@/stores/trips';
+import NotificationsList from './NotificationsList.vue';
 
 const emit = defineEmits(['close']);
-const notifications = useNotificationsStore();
-const tripsStore = useTripsStore();
-const loading = ref(false);
-const loadError = ref('');
-const items = ref([]);
-const invites = ref([]);
-
-function dateLabel(iso) {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-
-  const sameDay = (a, b) => a.toDateString() === b.toDateString();
-
-  if (sameDay(d, today)) return 'Today';
-  if (sameDay(d, yesterday)) return 'Yesterday';
-  return d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-const grouped = computed(() => {
-  const groups = [];
-  let lastLabel = null;
-  for (const item of items.value) {
-    const label = dateLabel(item.created_at);
-    if (label !== lastLabel) {
-      groups.push({ label, items: [] });
-      lastLabel = label;
-    }
-    groups[groups.length - 1].items.push(item);
-  }
-  return groups;
-});
-
-async function load() {
-  loading.value = true;
-  loadError.value = '';
-  try {
-    const { data: trips } = await api.get('/trips', { params: { include: 'all' } });
-
-    const perTrip = await Promise.all(
-      trips.map((t) =>
-        api
-          .get(`/trips/${t.id}/messages`, { params: { limit: 50 } })
-          .then((res) => res.data.map((m) => ({ ...m, trip: t })))
-          .catch(() => []),
-      ),
-    );
-
-    items.value = perTrip
-      .flat()
-      .filter((m) => m.kind === 'system')
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  } catch (err) {
-    loadError.value = errorMessage(err);
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function loadInvites() {
-  try {
-    const { data } = await api.get('/trips/invites');
-    invites.value = data;
-    notifications.inviteCount = data.length;
-  } catch {
-    invites.value = [];
-  }
-}
-
-async function respond(tripId, action) {
-  await tripsStore.respondToInvite(tripId, action);
-  invites.value = invites.value.filter((t) => t.id !== tripId);
-  notifications.inviteCount = invites.value.length;
-}
-
-onMounted(() => {
-  load();
-  loadInvites();
-});
 </script>
 
 <template>
   <div class="scrim" @click="emit('close')" />
-  <aside class="drawer" aria-label="Notifications" @keydown.esc="emit('close')">
-    <div class="row">
-      <h2 class="display display-md">Notifications</h2>
-      <span class="spacer" />
-      <button type="button" class="btn btn-icon" aria-label="Close notifications" @click="emit('close')">✕</button>
-    </div>
-
-    <p v-if="loadError" class="error-text card-flat card-pad" role="alert">{{ loadError }}</p>
-    <p v-if="loading" class="hand muted">Loading…</p>
-
-    <section v-if="invites.length" class="group">
-      <h2 class="group-label">Invites</h2>
-      <ul class="feed">
-        <li v-for="t in invites" :key="t.id" class="row-item">
-          <span>You've been invited to <strong>{{ t.name }}</strong></span>
-          <span class="invite-actions">
-            <button type="button" class="btn btn-sm" @click="respond(t.id, 'accept')">Accept</button>
-            <button type="button" class="btn btn-sm btn-ghost" @click="respond(t.id, 'decline')">Decline</button>
-          </span>
-        </li>
-      </ul>
-    </section>
-
-    <section v-if="!loading && !items.length && !invites.length" class="card card-pad empty">
-      <p>Nothing yet. Activities across your trips will show up here.</p>
-    </section>
-
-    <div v-for="group in grouped" :key="group.label" class="group">
-      <h2 class="group-label">{{ group.label }}</h2>
-      <ul class="feed">
-        <li v-for="item in group.items" :key="item.id">
-          <RouterLink :to="item.trip.phase === 'archived' ? `/archives/${item.trip.id}` : `/planner/${item.trip.id}`" class="row-item" @click="emit('close')">
-            <span class="text">{{ item.text }}</span>
-            <span class="meta">
-              <span class="trip-name">{{ item.trip.name }}</span>
-              <span class="dot">·</span>
-              <span class="time">{{ timeAgo(item.created_at) }}</span>
-            </span>
-          </RouterLink>
-        </li>
-      </ul>
-    </div>
+  <aside class="drawer pouch-paper" aria-label="Notifications" @keydown.esc="emit('close')">
+    <NotificationsList @navigate="emit('close')">
+      <template #actions>
+        <button type="button" class="btn btn-icon close" aria-label="Close notifications" @click="emit('close')">✕</button>
+      </template>
+    </NotificationsList>
   </aside>
 </template>
 
 <style scoped>
-.drawer { position: fixed; z-index: 51; top: 0; right: 0; bottom: 0; width: min(420px, 100%); overflow: auto; padding: 24px; background: var(--paper-deep); border-left: 2px solid var(--ink); box-shadow: -8px 0 0 var(--ink); }
-.group { margin-top: 24px; }
-.group-label { font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-mute); margin: 0 0 8px; }
-.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.row-item { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; text-align: left; background: var(--card); border: 2px solid var(--ink); border-radius: 10px; padding: 12px 14px; cursor: pointer; font: inherit; color: inherit; text-decoration: none; }
-.row-item:hover { box-shadow: var(--shadow-sm); }
-.text { font-size: 15px; }
-.meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-mute); }
-.trip-name { font-weight: 700; }
-.invite-actions { display: flex; gap: 8px; margin-top: 6px; }
-.empty { margin-top: 20px; }
+/* the inside of a kraft mail pouch, stitched down its open edge */
+.drawer {
+  position: fixed;
+  z-index: 51;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 100%);
+  overflow: auto;
+  padding: 24px 22px 32px 28px;
+  border-left: 3px solid var(--ink);
+  box-shadow: inset 12px 0 0 #c9a971, -6px 0 18px rgba(30, 20, 8, 0.4);
+}
+.drawer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  border-left: 2px dashed #fbf6e9;
+}
+.close {
+  flex: none;
+  border-radius: 50%;
+  background: var(--card);
+}
 </style>

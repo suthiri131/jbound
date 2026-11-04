@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { supabase } from '../db/supabase.js';
 import { badRequest, check, conflict, forbidden, notFound } from '../utils/httpError.js';
 import { postSystemMessage, displayName } from '../services/systemMessages.js';
-import { tripPhase, sgToday, addDays, MEMORY_WINDOW_DAYS } from '../services/logic/memoryWindow.js';
+import { tripPhase, sgToday, addDays, memoryReminders, MEMORY_WINDOW_DAYS } from '../services/logic/memoryWindow.js';
 
 const PROFILE = 'id, username, name, avatar_url';
 export const TRIP_FIELDS = 'id, name, mission, cover_color, bag_kind, bag_badges, owner_id, start_date, end_date, invite_code, archived_at, created_at';
@@ -276,6 +276,28 @@ export async function regenerateInviteCode(req, res) {
   res.json(rows.filter((r) => r.trip).map((r) => r.trip))
  }
 
+
+/** GET /api/trips/memory-reminders  Reminders to add photos to my trips that have just ended, newest first */
+export async function listMemoryReminders(req, res) {
+  const rows = check(
+    await supabase
+      .from('trip_members')
+      .select('trip:trips(id, name, start_date, end_date, archived_at)')
+      .eq('user_id', req.user.id)
+      .eq('status', 'accepted'),
+  );
+  const today = sgToday();
+  const open = rows.map((r) => r.trip).filter((trip) => trip && tripPhase(trip, today).phase === 'memory_box');
+  if (!open.length) return res.json([]);
+
+  const mine = check(
+    await supabase.from('memories').select('trip_id').eq('user_id', req.user.id).in('trip_id', open.map((t) => t.id)),
+  );
+  const withPhotos = new Set(mine.map((m) => m.trip_id));
+  const reminders = open.flatMap((trip) => memoryReminders(trip, withPhotos.has(trip.id), today));
+  reminders.sort((a, b) => b.date.localeCompare(a.date));
+  res.json(reminders);
+}
 
  /** POST /api/trips/:tripID/invite/accept */
  export async function acceptInvite(req,res) {
