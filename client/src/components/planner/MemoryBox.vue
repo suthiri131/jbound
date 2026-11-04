@@ -8,8 +8,10 @@ import { useTripRealtime } from '@/composables/useTripRealtime';
 import ArchiveTripModal from '@/components/planner/ArchiveTripModal.vue';
 import { askConfirm } from '@/lib/dialog';
 import WanderingEyes from '@/components/common/WanderingEyes.vue';
+import { useNotificationsStore } from '@/stores/notifications';
 
 const props = defineProps({ trip: { type: Object, required: true } });
+const notifications = useNotificationsStore();
 const emit = defineEmits(['show-map', 'archived', 'error']);
 // const auth = useAuthStore();
 
@@ -64,6 +66,7 @@ async function uploadFiles(fileList) {
     }
   }
   load();
+  notifications.fetchBadgeCount(); // this trip may no longer need photos from you
 }
 
 function onDrop(e) {
@@ -85,6 +88,7 @@ async function remove(m) {
   try {
     await api.delete(`/trips/${props.trip.id}/memories/${m.id}`);
     load();
+    notifications.fetchBadgeCount(); // that may have been your only photo
   } catch (err) {
     emit('error', errorMessage(err));
   }

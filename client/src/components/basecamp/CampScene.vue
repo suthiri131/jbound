@@ -705,7 +705,7 @@ const highlighted = (id) => nearby.value === id || hovered.value === id || enter
 const stationList = [
   { id: 'watcher', name: 'Watcher' },
   { id: 'explorer', name: 'Explorer' },
-  { id: 'trips', name: 'Trips' },
+  { id: 'trips', name: 'Planner' },
   { id: 'tales', name: 'Tales' },
   { id: 'archives', name: 'Archives' },
   { id: 'ledger', name: 'Ledger' },

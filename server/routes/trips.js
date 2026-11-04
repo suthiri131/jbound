@@ -48,6 +48,7 @@ r.get("/:tripId", member, trips.getTrip);
 r.get('/:tripId/expenses', member, expenses.getExpenses);
 r.post('/:tripId/expenses', member, validate({ body: s.createExpenseBody }), expenses.createExpense);
 r.put('/:tripId/expenses/:expenseId', memberWith(s.tripExpenseParam), validate({ body: s.createExpenseBody }), expenses.updateExpense);
+r.delete('/:tripId/expenses/:expenseId', memberWith(s.tripExpenseParam), expenses.deleteExpense);
 r.get('/:tripId/expenses/balances', member, validate({ query: s.balancesQuery }), expenses.getBalances);
 r.post('/:tripId/expenses/settlements', member, validate({ body: s.settlementBody }), expenses.createSettlement);
 r.patch(

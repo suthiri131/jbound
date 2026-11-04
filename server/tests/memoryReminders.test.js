@@ -20,6 +20,13 @@ test('the day after the trip ends: told there are 7 days left', () => {
   assert.deepEqual(rest, []);
 });
 
+test('the days left count down rather than staying at 7', () => {
+  const [opened] = onDay(3);
+  assert.equal(opened.daysLeft, 5);
+  assert.match(opened.text, /5 days left/);
+  assert.equal(opened.date, addDays(END, 1));
+});
+
 test('no second reminder until 5 days have gone by', () => {
   assert.deepEqual(kinds(onDay(5)), ['opened']);
 });

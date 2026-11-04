@@ -55,8 +55,8 @@ export function memoryReminders(trip, hasPhotos, today = sgToday()) {
     ...base,
     id: `${trip.id}-opened`,
     date: info.opensOn,
-    daysLeft: MEMORY_WINDOW_DAYS,
-    text: `"${trip.name}" has ended. You have ${daysText(MEMORY_WINDOW_DAYS)} left to add your photos to the archive.`,
+    daysLeft: info.daysLeft,
+    text: `"${trip.name}" has ended. You have ${daysText(info.daysLeft)} left to add your photos to the archive.`,
   }];
   if (!hasPhotos && info.daysLeft <= REMINDER_DAYS_LEFT) {
     list.unshift({

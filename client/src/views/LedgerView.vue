@@ -11,6 +11,8 @@ import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
 import MarketStall from '@/components/scene/MarketStall.vue';
 import AvatarFlat from '@/components/scene/AvatarFlat.vue';
 import WanderingEyes from '@/components/common/WanderingEyes.vue';
+import { askConfirm } from '@/lib/dialog';
+import { customAmountsFor } from '@/utils/expenseForm';
 
 const route = useRoute();
 const router = useRouter();
@@ -127,8 +129,12 @@ function resetForm() {
   Object.assign(form, emptyForm(), { paidBy: auth.user?.id || members.value[0]?.id || '', splitAmong: members.value.map(({ id }) => id) });
 }
 function editExpense(expense) {
-  editingId.value = expense.id; customSplit.value = false;
+  editingId.value = expense.id;
   Object.assign(form, { description: expense.description, amount: expense.amount, currency: expense.currency, paidBy: expense.paid_by, splitAmong: [...expense.splitAmong] });
+  for (const key of Object.keys(customAmounts)) delete customAmounts[key];
+  const amounts = customAmountsFor(expense);
+  customSplit.value = Boolean(amounts);
+  if (amounts) Object.assign(customAmounts, amounts);
 }
 function setEqualSplit() { form.splitAmong = members.value.map(({ id }) => id); customSplit.value = false; }
 function toggleCustom() { customSplit.value = !customSplit.value; if (!customSplit.value) setEqualSplit(); }
@@ -156,6 +162,17 @@ async function saveExpense() {
     const result = await apiRequest(isEditing.value ? `${path}/${encodeURIComponent(editingId.value)}` : path, { method: isEditing.value ? 'PUT' : 'POST', data: payload });
     if (!result.expense) throw new Error('The server did not return the saved expense.');
     resetForm(); await loadLedger();
+  } catch (error) { errorMessage.value = error.message; }
+  finally { saving.value = false; }
+}
+async function deleteExpense() {
+  const description = form.description;
+  if (!(await askConfirm({ title: `Delete "${description}"?`, message: 'Everyone\'s balances will be worked out again without it.', confirmLabel: 'Delete expense', danger: true }))) return;
+  saving.value = true; errorMessage.value = '';
+  try {
+    await apiRequest(`/trips/${encodeURIComponent(tripId.value)}/expenses/${encodeURIComponent(editingId.value)}`, { method: 'DELETE' });
+    resetForm(); formOpen.value = false;
+    await loadLedger();
   } catch (error) { errorMessage.value = error.message; }
   finally { saving.value = false; }
 }
@@ -388,6 +405,7 @@ onMounted(loadConversionRate);
                 {{ saving ? 'Saving…' : isEditing ? 'Save changes' : 'Add it' }}
               </button>
               <button class="btn btn-ghost" type="button" @click="cancelForm">Cancel</button>
+              <button v-if="isEditing" class="link delete-expense" type="button" :disabled="saving" @click="deleteExpense">Delete</button>
             </div>
           </form>
 
@@ -475,6 +493,10 @@ onMounted(loadConversionRate);
 }
 .down .say {
   background: #f8d4cb;
+}
+.delete-expense {
+  margin-left: auto;
+  color: var(--brick);
 }
 .receipt-wrap {
   position: relative;

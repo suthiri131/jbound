@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import MemoryBox from './MemoryBox.vue';
 import { api } from '@/lib/api';
 
@@ -11,6 +12,7 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/composables/useTripRealtime', () => ({ useTripRealtime: vi.fn() }));
 
 const trip = { id: 'trip-1', itinerary: [] };
+beforeEach(() => setActivePinia(createPinia()));
 const dialog = () => document.querySelector('[role="alertdialog"]');
 const dialogButton = (label) => [...dialog().querySelectorAll('button')].find((b) => b.textContent.includes(label));
 
@@ -62,5 +64,28 @@ describe('MemoryBox: sending a trip to the Archives', () => {
     await flushPromises();
     expect(dialog().querySelector('[role="alert"]').textContent).toContain('Could not send');
     expect(wrapper.emitted('archived')).toBeUndefined();
+  });
+});
+
+describe('MemoryBox: the bell keeps up', () => {
+  it('rechecks the notification badge after a photo is added', async () => {
+    api.get.mockReset();
+    api.post.mockReset();
+    api.get.mockImplementation(async (path) => (path.endsWith('/memories')
+      ? { data: { window: { phase: 'memory_box', daysLeft: 3 }, memories: [], contributors: [] } }
+      : { data: [] }));
+    api.post.mockResolvedValue({ data: {} });
+    const wrapper = mount(MemoryBox, { props: { trip }, attachTo: document.body });
+    await flushPromises();
+    api.get.mockClear();
+
+    const input = wrapper.get('[data-cy="memory-input"]');
+    Object.defineProperty(input.element, 'files', { value: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })], configurable: true });
+    await input.trigger('change');
+    await flushPromises();
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.get.mock.calls.map(([path]) => path)).toContain('/trips/memory-reminders');
+    wrapper.unmount();
   });
 });

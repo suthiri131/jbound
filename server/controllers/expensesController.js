@@ -120,14 +120,35 @@ async function loadSettlements(tripId) {
   return check({ data, error });
 }
 
+/**
+ * Deleting an account takes that member's share of each expense with it, which can leave a split that no longer
+ * adds up. The payer absorbs what's missing, so nobody else's debt changes and one old expense can't stop the
+ * whole ledger from adding up.
+ */
+export function repairSplit({ paid_by: paidBy, amount_sgd: amountSgd, splitAmong, splitAmounts }) {
+  if (!splitAmong.length) return { splitAmong: [paidBy], splitAmounts: null };
+  if (!splitAmounts) return { splitAmong, splitAmounts };
+
+  const missing = toCents(amountSgd) - splitAmounts.reduce((sum, { amountCents }) => sum + amountCents, 0);
+  if (missing === 0) return { splitAmong, splitAmounts };
+  if (missing < 0) return { splitAmong, splitAmounts: null }; // the shares can't be right, so split it evenly
+
+  const payerShare = splitAmounts.find(({ memberId }) => memberId === paidBy);
+  return {
+    splitAmong: payerShare ? splitAmong : [...splitAmong, paidBy],
+    splitAmounts: payerShare
+      ? splitAmounts.map((share) => (share === payerShare ? { ...share, amountCents: share.amountCents + missing } : share))
+      : [...splitAmounts, { memberId: paidBy, amountCents: missing }],
+  };
+}
+
 function computeTripSplit(expenses, settlements, memberIds = []) {
   const split = calculateExpenseSplit(
     expenses.map((expense) => ({
       amount: expense.amount_sgd,
       currency: 'SGD',
       paidBy: expense.paid_by,
-      splitAmong: expense.splitAmong,
-      splitAmounts: expense.splitAmounts,
+      ...repairSplit(expense),
     })),
     SGD_RATES,
   );
@@ -192,11 +213,12 @@ export async function createExpense(req, res) {
   const { error: splitError } = await supabase.from('expense_splits').insert(
     splitAmong.map((userId) => ({ expense_id: expense.id, user_id: userId, amount_sgd: shares?.get(userId) ?? null })),
   );
+  if (splitError) await supabase.from('expenses').delete().eq('id', expense.id); // don't leave it behind with no split
   check({ data: null, error: splitError });
   res.status(201).json({ expense: { ...expense, splitAmong } });
 }
 
-export async function updateExpense(req, res) {
+async function assertCanChangeExpense(req) {
   const { tripId, expenseId } = req.params;
   const { data: existing, error: findError } = await supabase
     .from('expenses')
@@ -207,8 +229,13 @@ export async function updateExpense(req, res) {
   check({ data: existing, error: findError });
   if (!existing) throw notFound('Expense not found');
   if (existing.created_by !== req.user.id && req.membership.role !== 'owner') {
-    throw forbidden('Only the expense creator or trip owner can edit this expense');
+    throw forbidden('Only the expense creator or trip owner can change this expense');
   }
+}
+
+export async function updateExpense(req, res) {
+  const { tripId, expenseId } = req.params;
+  await assertCanChangeExpense(req);
 
   const { amount, currency, description, paidBy, splitAmong, splitAmounts } = req.valid.body;
   const memberIds = await getTripMemberIds(tripId);
@@ -233,6 +260,14 @@ export async function updateExpense(req, res) {
   );
   check({ data: null, error: insertError });
   res.json({ expense: { ...expense, splitAmong } });
+}
+
+export async function deleteExpense(req, res) {
+  const { tripId, expenseId } = req.params;
+  await assertCanChangeExpense(req);
+  const { error } = await supabase.from('expenses').delete().eq('id', expenseId).eq('trip_id', tripId);
+  check({ data: null, error });
+  res.status(204).end();
 }
 
 export async function getBalances(req, res) {
