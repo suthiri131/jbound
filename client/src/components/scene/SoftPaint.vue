@@ -23,19 +23,6 @@
           <feMergeNode in="liteIn" />
         </feMerge>
       </filter>
-      <!-- for dark pieces, where any pale highlight turns to haze: a slight wobble and faint darkening only -->
-      <filter id="soft-paint-dark" x="-10%" y="-10%" width="120%" height="120%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="1" seed="4" result="n1" />
-        <feDisplacementMap in="SourceGraphic" in2="n1" scale="1.5" xChannelSelector="R" yChannelSelector="G" result="wob" />
-        <feColorMatrix in="wob" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 12 -11" result="solid" />
-        <feTurbulence type="fractalNoise" baseFrequency="0.006 0.009" numOctaves="4" seed="11" result="n2" />
-        <feColorMatrix in="n2" type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.05  0 0 0 0 0.02  0.12 0 0 0 -0.05" result="blot" />
-        <feComposite in="blot" in2="solid" operator="in" result="blotIn" />
-        <feMerge>
-          <feMergeNode in="wob" />
-          <feMergeNode in="blotIn" />
-        </feMerge>
-      </filter>
     </defs>
   </svg>
 </template>
