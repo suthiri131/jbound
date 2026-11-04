@@ -52,6 +52,14 @@ const subtitles = reactive({
 const traffic = reactive({ toJb: undefined, toSg: undefined });
 const sgd = (n) => `S$${Number(n || 0).toFixed(2)}`;
 
+// A positive balance means the crew owes you.
+function ledgerSubtitle({ balances, totalSpent }) {
+  const cents = balances.find((b) => b.memberId === auth.user?.id)?.balanceCents ?? 0;
+  if (cents > 0) return `You're owed ${sgd(cents / 100)}`;
+  if (cents < 0) return `You owe ${sgd(-cents / 100)}`;
+  return `All square · ${sgd(totalSpent)} spent`;
+}
+
 // ---------- sky: Singapore's clock + NEA forecast, with a manual day/night override ----------
 const { mode, condition, forecast, forced, isNight, modeLabel, cycleMode, conditionLabel } = useCampSky();
 
@@ -121,7 +129,7 @@ async function loadPrivate() {
   await trips.fetch().catch(() => {});
   const [arch, bal, mates] = await Promise.allSettled([
     api.get("/archives"),
-    trips.defaultTrip ? api.get(`/trips/${trips.defaultTrip.id}/balances`) : Promise.reject(),
+    trips.defaultTrip ? api.get(`/trips/${trips.defaultTrip.id}/expenses/balances`) : Promise.reject(),
     api.get("/auth/crew"),
   ]);
   if (arch.status === "fulfilled") {
@@ -129,8 +137,7 @@ async function loadPrivate() {
     subtitles.archives = totalTrips ? `${totalTrips} trips in ${years.length} year${years.length === 1 ? "" : "s"}` : "Empty for now";
   }
   if (bal.status === "fulfilled") {
-    const summary = bal.value.data.mySummary;
-    subtitles.ledger = summary[0] || `All square · ${sgd(bal.value.data.totalSpent)} spent`;
+    subtitles.ledger = ledgerSubtitle(bal.value.data);
   }
   if (mates.status === "fulfilled") {
     crew.value = mates.value.data;

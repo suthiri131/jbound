@@ -1,9 +1,4 @@
 <script setup>
-/**
- * The view from the watchtower, where the picture is the data: how many cars there are and how fast they crawl come
- * from the congestion score, they drive in the direction you picked, the sky matches the hour you are looking at,
- * bunting goes up for holidays, and Woodlands and Tuas are drawn as different crossings.
- */
 import { computed } from 'vue';
 import { flatSky } from '@/lib/camp/sky';
 import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
@@ -47,7 +42,6 @@ const PIERS = [12, 28, 44, 60, 76, 92];
       <!-- the bridge itself: Tuas stands on tall piers, the Causeway is a solid low wall -->
       <template v-if="isTuas">
         <i v-for="x in PIERS" :key="x" class="pier" :style="{ left: `${x}%` }" />
-        <i class="tower" style="left: 34%" /><i class="tower" style="left: 66%" />
       </template>
       <i v-else class="wall" />
       <div class="road"><i class="dash" /></div>
@@ -150,15 +144,6 @@ const PIERS = [12, 28, 44, 60, 76, 92];
   width: 30px;
   margin-left: -15px;
   background: #958b7d;
-}
-.tower {
-  position: absolute;
-  bottom: 40%;
-  height: 300px;
-  width: 22px;
-  margin-left: -11px;
-  background: #a2988a;
-  z-index: -1;
 }
 
 /* ---------- traffic ---------- */

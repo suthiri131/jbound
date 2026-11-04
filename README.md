@@ -1,29 +1,31 @@
 # JBound
 
-JBound is a Singapore–Johor Bahru travel companion. Friends use it to plan trips together, check how busy the border is, split costs in S$ and RM, and keep a scrapbook of past trips.
+JBound is a Singapore–Johor Bahru travel companion. Friends use it to plan trips together, check how busy the border is, split costs in S$ and RM, discover places, share tales about them, and keep a scrapbook of past trips.
 
 ## Tech stack
 
-- **Client:** Vue 3, Vite, Vue Router, Pinia, axios, and the Google Maps JavaScript API
-- **Server:** Node.js, Express 5, CORS, zod, and multer
+- **Client:** Vue 3, Vite, Vue Router, Pinia, axios, Three.js, and the Google Maps JavaScript API
+- **Server:** Node.js, Express 5, CORS, helmet, morgan, zod, and multer
 - **Database & auth:** Supabase (Postgres, Auth, Storage, and Realtime)
-- **External APIs:** Google Places API (New), LTA DataMall (traffic cameras), Frankfurter (exchange rates), and OpenRouteService (driving routes)
+- **External APIs:** Google Places API (New), LTA DataMall (traffic cameras), Frankfurter (exchange rates), OpenRouteService (driving routes), and data.gov.sg (weather forecasts)
 
 ## Run locally
 
-Install [Node.js](https://nodejs.org) 18 or newer and [pnpm](https://pnpm.io/installation) if they are not already installed, then install dependencies from the repository root:
+Install [Node.js](https://nodejs.org) 20.19+ or 22.12+ and [pnpm](https://pnpm.io/installation) if they are not already installed, then install dependencies from the repository root:
 
 ```sh
 pnpm install
 ```
 
 ### Database
-Schema changes live in `supabase/migrations/`. Never edit the remote database by hand.
+Schema changes and the starter places live in `supabase/migrations/`. Never edit the remote database by hand.
 ```sh
 npx supabase login
 npx supabase link --project-ref <your-project-ref>
 npx supabase db push
 ```
+
+### Environment variables
 
 Copy the example environment files:
 
@@ -40,8 +42,8 @@ Google Maps needs a [Google Cloud](https://console.cloud.google.com) project wit
 
 | | Browser key | Server key |
 |---|---|---|
-| Goes in | `VITE_GOOGLE_MAPS_API_KEY` in `client/.env.local` (and Vercel) | `GOOGLE_PLACES_API_KEY` in `server/.env` (and Render) |
-| Application restrictions | **Websites**: `http://localhost:5173/*` and `https://your-app.vercel.app/*` | **None**. Render's free tier has no fixed IP address, so this key is protected by staying secret on the server. |
+| Goes in | `VITE_GOOGLE_MAPS_API_KEY` in `client/.env.local` (and your client host) | `GOOGLE_PLACES_API_KEY` in `server/.env` (and your API host) |
+| Application restrictions | **Websites**: `http://localhost:5173/*` and `https://your-app.vercel.app/*` | **None**. Hosts such as Vercel have no fixed IP address, so this key is protected by staying secret on the server. |
 | API restrictions | Restrict key → **Maps JavaScript API** only | Restrict key → **Places API (New)** only |
 
 The browser key is visible to anyone who opens the site, which is why it is locked to your addresses. Add your Vercel URL to it after deploying, or the map will not load in production. New restrictions can take about five minutes to apply.
@@ -50,36 +52,47 @@ To avoid surprise charges, set a budget alert under **Billing → Budgets & aler
 
 `VITE_GOOGLE_MAP_ID` can stay as `DEMO_MAP_ID` during development. Without the Google keys, the route map and Google search show a setup message, and the rest of the app still works.
 
-If your database was created before Google Places was added, also run `server/db/migrations/002_google_places.sql` in the Supabase SQL Editor.
+### Start the app
 
-For an existing database, run `server/db/migrations/003_ledger_currency.sql` to add the SGD conversion amount and exchange-rate date to ledger expenses.
-
-Load the demo users, trips, reviews and expenses:
-
-```sh
-pnpm seed:demo
-```
-
-Start the Vite client and Express API together:
+Start the Vite client and the Express API in separate terminals:
 
 ```sh
 pnpm dev
 ```
 
-Open the client at [http://localhost:5173](http://localhost:5173) and sign in with `alex@jbound.test` and the password `JBound123!`. The API is available at [http://localhost:3000](http://localhost:3000), and its health check is at `/api/health`.
+```sh
+pnpm --filter jbound-server dev
+```
+
+Open the client at [http://localhost:5173](http://localhost:5173) and create an account on the sign-up page. No email confirmation is needed. There is no demo data seed, so trips, tales and expenses start empty. The API is available at [http://localhost:3001](http://localhost:3001), and its health check is at `/api/health`.
+
+### API notes
+
 
 Driving directions are available at `POST /api/routes`. Send JSON with a `coordinates` array containing at least two `[longitude, latitude]` pairs; the response is ORS GeoJSON.
 
 Trip expense endpoints are mounted at `/api/trips/:tripId/expenses`. They require a signed-in trip member and support listing/creating/updating expenses, retrieving SGD balances, and recording SGD settlements. MYR expenses include the exchange rate and its effective date.
 
-The server only accepts requests from the origins listed in `CLIENT_ORIGIN` in `server/.env`, which is `http://localhost:5173` by default. To change the API port, set `PORT` in `server/.env`. If you do, also update `VITE_API_URL` in `client/.env.local` to match.
+The server accepts browser requests from the origins listed in `CLIENT_ORIGIN` in `server/.env` (`http://localhost:5173` if unset) and from any `*.vercel.app` origin, so that preview deployments work. To change the API port, set `PORT` in `server/.env`. If you do, also update `VITE_API_URL` in `client/.env.local` to match.
 
-To run either service separately, use `pnpm dev:client` or `pnpm dev:server` from the repository root. Run the server's unit and API tests with `pnpm test`.
+## Tests
 
-Run the Planner map end-to-end specs with the client running at `http://localhost:5173` and `pnpm --filter jbound-client test:e2e:cypress`.
+Run the server's unit and API tests:
+
+```sh
+pnpm test
+```
+
+Run the client's unit tests in watch mode:
+
+```sh
+pnpm --filter jbound-client test:unit
+```
+
+The Cypress spec in `cypress/e2e/map.cy.js` (`pnpm --filter jbound-client test:e2e:cypress`) is out of date: it targets Planner markup and demo data that no longer exist, so expect it to fail until it is rewritten.
 
 ## Build the client
 
 ```sh
-pnpm build
+pnpm --filter jbound-client build
 ```
