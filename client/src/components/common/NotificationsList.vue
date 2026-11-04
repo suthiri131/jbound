@@ -5,6 +5,7 @@ import { api, errorMessage } from '@/lib/api';
 import { showAlert } from '@/lib/dialog';
 import { useNotificationsStore } from '@/stores/notifications';
 import { useTripsStore } from '@/stores/trips';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 defineProps({
   headingTag: { type: String, default: 'h2' },
@@ -72,7 +73,7 @@ onMounted(load);
     </header>
 
     <p v-if="loadError" class="error-text problem" role="alert">{{ loadError }}</p>
-    <p v-if="loading" class="hand sorting" role="status">Sorting the post…</p>
+    <WanderingEyes v-if="loading" class="sorting" center text="Checking for news…" />
 
     <section v-if="invites.length" class="pile" aria-labelledby="post-invites">
       <h3 id="post-invites" class="pile-label">Invites</h3>
@@ -163,7 +164,7 @@ onMounted(load);
   line-height: 1.1;
 }
 .sorting {
-  margin: 20px 0 0;
+  margin-top: 20px;
 }
 .problem {
   margin: 16px 0 0;

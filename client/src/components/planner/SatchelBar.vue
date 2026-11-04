@@ -8,6 +8,7 @@ import Pagination from '@/components/common/Pagination.vue';
 import TripModal from './TripModal.vue';
 import JoinTripForm from './JoinTripForm.vue';
 import BagEditor from './BagEditor.vue'
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 import { useTripsStore } from '@/stores/trips';
 
 const props = defineProps({
@@ -129,7 +130,7 @@ function created(trip) {
       </div>
     </div>
 
-    <p v-if="loading" role="status" class="note">Loading your trips…</p>
+    <WanderingEyes v-if="loading" center :size="80" text="Loading your trips…" />    
     <div v-else-if="loadError" role="alert" class="note">
       <p class="error-text">{{ loadError }}</p>
       <button type="button" class="btn btn-sm" @click="loadPage">Retry loading trips</button>

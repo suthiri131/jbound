@@ -6,6 +6,8 @@ import { useAuthStore } from '@/stores/auth';
 import { VIBE_LABEL, VIBE_TINT } from '@/utils/constants';
 import { timeAgo, initials } from '@/utils/format';
 import { askConfirm, showAlert } from '@/lib/dialog';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
+
 
 /** The tales about one place: a saved place (placeId) or a typed-in name (customName). */
 const props = defineProps({
@@ -169,7 +171,7 @@ defineExpose({ openPhotoViewer });
 
 <template>
   <div>
-    <p v-if="loading">Loading Tales...</p>
+    <WanderingEyes v-if="loading" center text="Loading tales…" />
     <p v-else-if="error" class="error-text">{{ error }}</p>
 
     <div v-else class="place-feed">

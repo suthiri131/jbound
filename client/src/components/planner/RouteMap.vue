@@ -5,6 +5,7 @@ import { api, errorMessage } from '@/lib/api';
 import { loadGoogleMaps, hasGoogleMaps, MAP_ID } from '@/lib/googleMaps';
 import { dayLabel } from '@/utils/format';
 import RouteMap3D from '@/components/planner/RouteMap3D.vue';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 const view3d = ref(false);
 const props = defineProps({
@@ -264,6 +265,7 @@ const stopBufferMinutes = computed(() => {
     </div>
 
     <div class="map-wrap">
+      <div v-if="loading" class="map-loading"><WanderingEyes center :size="88" text="Plotting the route…" /></div>
       <div v-show="!view3d" ref="el" class="map" role="region" aria-label="Map of the day's stops" />
       <RouteMap3D v-if="view3d" :stops="result?.stops || []" :path="(result?.route?.latlngs || []).map(([lat, lng]) => ({ lat, lng }))" :legs="result?.route?.legs || []" @select-stop="emit('select-stop', $event)" />      <p v-if="mapError" class="map-msg">{{ mapError }}</p>
     </div>
@@ -319,5 +321,15 @@ const stopBufferMinutes = computed(() => {
   .bar .field { max-width: 100%; flex-wrap: wrap; }
   .bar select { max-width: 100%; }
   .legend { padding: 12px; }
+}
+.map-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  background: rgba(243, 234, 211, 0.72);
+  color: #2a1b0e;
+  pointer-events: none;
 }
 </style>

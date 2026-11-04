@@ -3,7 +3,6 @@ import { ref, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { api, assetUrl, errorMessage } from '@/lib/api';
 import PlaceTalesFeed from '@/components/tales/PlaceTalesFeed.vue';
-
 // For tales with no Google place page: typed-in names and our own curated places.
 const route = useRoute();
 

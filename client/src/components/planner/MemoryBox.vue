@@ -7,6 +7,7 @@ import { shortDate } from '@/utils/format';
 import { useTripRealtime } from '@/composables/useTripRealtime';
 import ArchiveTripModal from '@/components/planner/ArchiveTripModal.vue';
 import { askConfirm } from '@/lib/dialog';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 const props = defineProps({ trip: { type: Object, required: true } });
 const emit = defineEmits(['show-map', 'archived', 'error']);
@@ -30,12 +31,15 @@ const countdown = computed(() =>
 );
 // const missing = computed(() => data.value.contributors.filter((c) => c.count === 0 && c.id !== auth.user?.id));
 
+const loading = ref(true);
 async function load() {
   try {
     const res = await api.get(`/trips/${props.trip.id}/memories`);
     data.value = res.data;
   } catch (err) {
     emit('error', errorMessage(err));
+  } finally {
+    loading.value = false;
   }
 }
 watch(() => props.trip.id, load, { immediate: true });
@@ -160,9 +164,9 @@ async function archiveNow() {
         -->
       </div>
 
+      <WanderingEyes v-if="loading && !data.memories.length" center text="Opening the memory box…" />
       <div class="grid">
-        <figure v-for="m in data.memories" :key="m.id" class="polaroid">
-          <img v-if="m.image_url" :src="m.image_url" :alt="m.caption || `Photo by ${m.author?.name}`" loading="lazy" />
+        <figure v-for="m in data.memories" :key="m.id" class="polaroid">          <img v-if="m.image_url" :src="m.image_url" :alt="m.caption || `Photo by ${m.author?.name}`" loading="lazy" />
           <div v-else class="placeholder-photo" style="height: 130px">[photo · {{ m.author?.name }}]</div>
           <button type="button" class="x" :aria-label="`Remove photo by ${m.author?.name}`" @click="remove(m)">✕</button>
           <figcaption>

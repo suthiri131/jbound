@@ -6,6 +6,7 @@ import { useTripsStore } from '@/stores/trips';
 import { errorMessage } from '@/lib/api';
 import { useCampSky } from '@/composables/useCampSky';
 import SatchelBar from '@/components/planner/SatchelBar.vue';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 import SearchBar from '@/components/common/SearchBar.vue';
 
 const route = useRoute();
@@ -54,7 +55,7 @@ watch(() => route.query.join, async (code) => {
     <div v-if="loadError" class="card-flat card-pad" role="alert">
       <p class="error-text">{{ loadError }}</p>
     </div>
-    <p v-if="joining" class="muted" role="status">Joining your crew…</p>
+    <WanderingEyes v-if="joining" center text="Joining your crew…" />
     <SatchelBar :search="search" :phase="phase" :start-open="Boolean(route.query.new)">
       <template #lead>
         <RouterLink to="/" class="camp-back back-camp" aria-label="Back to Basecamp" title="Back to Basecamp">

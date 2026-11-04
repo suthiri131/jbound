@@ -10,6 +10,7 @@ import { lookFromId } from '@/lib/camp/look';
 import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
 import MarketStall from '@/components/scene/MarketStall.vue';
 import AvatarFlat from '@/components/scene/AvatarFlat.vue';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -286,8 +287,7 @@ onMounted(loadConversionRate);
 
         <p v-if="!trips.length && !loading" class="r-empty">Join or create a trip to open a tab.</p>
         <p v-if="errorMessage" class="error-text" role="alert">{{ errorMessage }}</p>
-        <p v-if="loading" class="r-empty" role="status">Totting up the tab…</p>
-
+        <WanderingEyes v-if="loading" center text="Totting up the tab…" />
         <template v-if="tripId && !loading">
           <hr class="dash" />
           <p v-if="!expenses.length" class="r-empty">Nothing on the tab yet. Add the first shared cost below.</p>

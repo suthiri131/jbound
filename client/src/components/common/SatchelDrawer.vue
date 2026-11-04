@@ -2,6 +2,7 @@
 import { onMounted } from 'vue';
 import { useTripsStore } from '@/stores/trips';
 import TripCover from './TripCover.vue';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 const emit = defineEmits(['close']);
 const tripsStore = useTripsStore();
@@ -20,7 +21,7 @@ onMounted(() => tripsStore.fetch());
       <button type="button" class="btn btn-icon" aria-label="Close trips" @click="emit('close')">✕</button>
     </div>
 
-    <p v-if="tripsStore.loading" class="muted">Loading your trips…</p>
+    <WanderingEyes v-if="tripsStore.loading" center text="Loading your trips…" />
     <div class="list">
       <RouterLink v-for="t in tripsStore.trips" :key="t.id" :to="`/planner/${t.id}`" class="cover-link" @click="emit('close')">
         <TripCover :trip="t" />

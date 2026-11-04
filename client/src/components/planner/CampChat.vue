@@ -4,6 +4,7 @@ import { ref, watch, nextTick, onBeforeUnmount } from 'vue';
 import { api, errorMessage } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/utils/format';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 const props = defineProps({ tripId: { type: String, required: true } });
 
@@ -46,17 +47,21 @@ function cleanup() {
   clearInterval(poll);
 }
 
+const loading = ref(false);
 async function open(id) {
   cleanup();
   messages.value = [];
   error.value = '';
+  loading.value = true;
   try {
     const { data } = await api.get(`/trips/${id}/messages`, { params: { limit: 50 } });
     messages.value = data;
     scrollDown();
   } catch (err) {
     error.value = errorMessage(err);
-  }
+  } finally {
+    loading.value = false;
+  }  
   if (!supabase) return startPolling();
   channel = supabase
     .channel(`chat-${id}`)
@@ -101,7 +106,8 @@ async function send() {
           <p class="text">{{ m.text }}</p>
         </div>
       </template>
-      <p v-if="!messages.length" class="muted" style="color: var(--line)">Quiet campfire. Say hi to the crew.</p>
+      <WanderingEyes v-if="loading" center text="Gathering round the fire…" />
+      <p v-else-if="!messages.length" class="muted" style="color: var(--line)">Quiet campfire. Say hi to the crew.</p>
     </div>
     <p v-if="error" class="error-text" style="margin: 0 20px; color: var(--clay)">{{ error }}</p>
     <form class="compose" @submit.prevent="send">
