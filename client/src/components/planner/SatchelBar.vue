@@ -3,7 +3,7 @@
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage } from '@/lib/api';
-import TripCover from '@/components/common/TripCover.vue';
+import TripBackpack from './TripBackpack.vue';
 import Pagination from '@/components/common/Pagination.vue';
 import TripModal from './TripModal.vue';
 import JoinTripForm from './JoinTripForm.vue';
@@ -90,46 +90,46 @@ function created(trip) {
 
 <template>
   <section class="satchel" aria-label="Your trips">
-    <header class="head">
-      <div class="heading">
-        <div class="heading-title">
-          <h1 class="display display-md">Your trips</h1>
-          <span v-if="!loading && !loadError && total > 0" class="trip-count muted" role="status">· {{ total }} {{ search.trim() || phase ? 'matching ' : '' }}trip{{ total === 1 ? '' : 's' }}</span>
-        </div>
-        <p class="muted">Your next adventure starts here. Pick a trip to keep planning.</p>
-      </div>
-      <div class="actions">
-      <JoinTripForm id="join-crew" class="join" @joined="joined" />
-        <button type="button" class="btn btn-primary" data-cy="new-trip" @click="showNew = true">+ New trip</button>
-      </div>
-    </header>
+    <h1 class="sr-only">Your trips</h1>
 
-    <div class="toolbar">
-      <slot name="filters" />
-
+    <!-- one row under the nav: back to camp, search, join code -->
+    <div class="topbar">
+      <slot name="lead" />
+      <slot name="search" />
+      <JoinTripForm id="join-crew" class="join" compact @joined="joined" />
     </div>
 
-    <p v-if="loading" role="status" class="muted">Loading your trips…</p>
-    <div v-else-if="loadError" role="alert">
+    <div class="subbar">
+      <slot name="filters" />
+      <span v-if="!loading && !loadError && total > 0" class="trip-count" role="status">
+        {{ total }} {{ search.trim() || phase ? 'matching ' : '' }}trip{{ total === 1 ? '' : 's' }}
+      </span>
+    </div>
+
+    <p v-if="loading" role="status" class="note">Loading your trips…</p>
+    <div v-else-if="loadError" role="alert" class="note">
       <p class="error-text">{{ loadError }}</p>
       <button type="button" class="btn btn-sm" @click="loadPage">Retry loading trips</button>
     </div>
-    <div v-else-if="!total && !search && !phase" class="empty">
-      <h3 class="display display-sm">No trips yet</h3>
-      <p>Create a new trip above, or join a friend's crew with an invite code.</p>
-    </div>
-    <p v-else-if="!total" role="status">No trips match your search and status filter.</p>
-    <div v-else class="shelf">
-      <RouterLink
-        v-for="t in pageTrips"
-        :key="t.id"
-        :to="{ path: `/planner/${t.id}`, query: listQuery }"
-        class="slot"
-        data-cy="trip-tab"
-      >
-        <TripCover :trip="t" />
-      </RouterLink>
-    </div>
+    <template v-else>
+      <p v-if="!total && (search || phase)" role="status" class="note">No trips match your search and status filter.</p>
+      <div class="shelf">
+        <!-- an empty bag first: start a new trip -->
+        <button type="button" class="slot new-slot" data-cy="new-trip" aria-label="New trip" @click="showNew = true">
+          <TripBackpack is-new />
+        </button>
+        <RouterLink
+          v-for="t in pageTrips"
+          :key="t.id"
+          :to="{ path: `/planner/${t.id}`, query: listQuery }"
+          class="slot"
+          data-cy="trip-tab"
+          :aria-label="t.name"
+        >
+          <TripBackpack :trip="t" />
+        </RouterLink>
+      </div>
+    </template>
 
     <Pagination v-if="!loading && !loadError && total > 0" class="trip-pagination" :page="page" :total-pages="totalPages" label="Trip pages" @page-change="setPage" />
 
@@ -138,34 +138,54 @@ function created(trip) {
 </template>
 
 <style scoped>
-.satchel { display: flex; flex-direction: column; gap: 28px; }
+.satchel { display: flex; flex-direction: column; gap: 18px; }
 .trip-pagination { margin-top: auto; }
-.head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 24px; }
-.heading h1 { display: flex; align-items: center; gap: 14px; margin: 8px 0 10px; }
-.heading-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; }
-.trip-count { font-size: 15px; }
-.heading p { margin: 0; font-size: 15px; }
-.actions { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 28px; }
-.actions .btn { min-height: 46px; white-space: nowrap; }
-.toolbar { display: flex; align-items: flex-start; gap: 16px; }
-.join { width: 268px; min-width: 0; }
+
+.topbar { display: flex; align-items: center; gap: 12px; }
+.join { flex: 0 1 340px; min-width: 0; }
+.join :deep(.field) { margin: 0; }
 .join :deep(.row) { align-items: center; }
 .join :deep(.input), .join :deep(.btn) { height: 46px; min-height: 46px; }
 .join :deep(.input) { min-width: 0; flex: 1; }
-.join :deep(.btn) { flex-shrink: 0; }
-.shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, max(240px, calc((100% - 60px) / 4))), 1fr)); gap: 20px; padding: 0 4px 20px 0; }
-.empty { text-align: center; padding: 48px 20px; border: 2px dashed var(--ink); border-radius: var(--radius); background: var(--paper-deep); }
-.slot { min-width: 0; text-decoration: none; }
-.slot :deep(.cover) { height: 100%; }
-@media (max-width: 800px) {
-  .toolbar { flex-direction: column; }
+.join :deep(.btn) { flex-shrink: 0; padding-inline: 20px; }
+
+.subbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.trip-count { color: #f1dfb6; font-weight: 700; font-size: 14px; }
+.note { width: fit-content; margin: 0; padding: 8px 14px; border-radius: 10px; background: #f1dfb6; color: #2a1b0e; }
+
+.shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 30px 22px;
+  padding: 10px 4px 24px;
 }
-@media (max-width: 600px) {
-  .satchel { gap: 24px; }
-  .head { gap: 20px; }
-  .actions { width: 100%; }
-  .join { flex: 1 1 100%; width: 100%; }
-  .actions > .btn { flex: 1; }
-  .heading p { max-width: 32ch; line-height: 1.6; }
+.slot {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 16px;
+}
+.slot:focus-visible { outline: 3px solid #e0a43b; outline-offset: 6px; }
+/* pick a bag up: a little hop and wobble */
+.slot:hover :deep(.bag),
+.slot:focus-visible :deep(.bag) { transform: translateY(-8px) rotate(-3deg); }
+.slot:nth-child(even):hover :deep(.bag),
+.slot:nth-child(even):focus-visible :deep(.bag) { transform: translateY(-8px) rotate(3deg); }
+
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; }
+  .join { flex: 1 1 100%; }
+}
+@media (max-width: 480px) {
+  .shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slot:hover :deep(.bag), .slot:focus-visible :deep(.bag) { transform: none; }
 }
 </style>

@@ -10,6 +10,9 @@ const code = ref('');
 const error = ref('');
 const busy = ref(false);
 const errId = `join-err-${Math.random().toString(36).slice(2, 8)}`;
+const props = defineProps({
+  compact: { type: Boolean, default: false }
+})
 
 /** Forgive copy-paste: stray spaces, capitals, or the whole link ("…/planner?join=a3f9c21e"). */
 function cleanCode(raw) {
@@ -41,18 +44,18 @@ async function submit() {
 </script>
 
 <template>
-  <form novalidate @submit.prevent="submit">
+  <form novalidate :class="{ compact: props.compact }" @submit.prevent="submit">
     <label class="field">
-      Join a crew with an invite code
+      <span :class="{ 'sr-only': props.compact }">Join a crew with an invite code</span>
       <span class="row join-controls">
         <input
           v-model="code"
           class="input"
-          placeholder="e.g. a3f9c21e"
           maxlength="200"
           autocomplete="off"
           autocapitalize="none"
           spellcheck="false"
+          :placeholder="props.compact ? 'Join code, e.g. a3f9c21e' : 'e.g. a3f9c21e'"
           :disabled="busy"
           :aria-describedby="error ? errId : undefined"
           data-cy="join-code"
@@ -67,6 +70,10 @@ async function submit() {
 </template>
 
 <style scoped>
+.compact .join-controls { gap: 10px; }
+.compact .input { border-radius: 999px; padding-inline: 18px; }
+.compact .error-text { position: absolute; margin-top: 6px !important; padding: 4px 10px; border-radius: 8px; background: #f1dfb6; }
+.compact { position: relative; }
 .join-controls { gap: 16px; flex-wrap: nowrap; }
 .join-controls .btn { box-shadow: var(--shadow-sm); }
 .join-controls .btn:disabled { opacity: 1; }
