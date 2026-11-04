@@ -242,7 +242,8 @@ export async function getBalances(req, res) {
   ]);
   const memberIds = await getTripMemberIds(req.params.tripId);
   const result = computeTripSplit(expenses, settlements, memberIds);
-  res.json({ ...result, transactions: settlements, currency: 'SGD' });
+  const totalSpent = dollars(expenses.reduce((sum, expense) => sum + toCents(expense.amount_sgd), 0));
+  res.json({ ...result, totalSpent, transactions: settlements, currency: 'SGD' });
 }
 
 export async function createSettlement(req, res) {
