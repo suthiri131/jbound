@@ -439,7 +439,7 @@ onBeforeUnmount(removeMarker);
 
       <!-- 5. TALES: what the JBound crew said about this place -->
       <section ref="talesSection" class="tales" aria-labelledby="place-tales-title">
-        <h2 id="place-tales-title" class="display display-sm section-title">From the JBound crew</h2>
+        <h2 id="place-tales-title" class="display display-sm section-title">From the JBound Community</h2>
         <PlaceTalesFeed v-if="place.id" :place-id="place.id" />
         <p v-else class="muted">
           No tales yet. Pin this place to a trip and be the first to share one.
