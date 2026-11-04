@@ -230,9 +230,8 @@ const canMemories = computed(() =>
         <strong>This trip is in the Archives.</strong>
         <RouterLink to="/archives">Open its drawer in the tent →</RouterLink>
       </div>
-      <p v-if="crewNotice" class="hand" role="status">{{ crewNotice }}</p>
 
-      <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @joined="crewNotice = $event" />
+      <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @joined="notify" @notify="notify" />
 
       <div class="split">
         <div class="map-column">
@@ -344,11 +343,11 @@ const canMemories = computed(() =>
   background: var(--paper-deep);
 }
 
-/* the crew: a luggage label */
+/* the crew: a sage-green luggage label, so the people stand out from the beige map and day plan */
 .planner :deep(.crew) {
   border: 0;
   border-radius: 8px;
-  background: #f4e6c4;
+  background: #d5e1bd;
   box-shadow: 0 6px 12px rgba(40, 20, 5, 0.4);
 }
 .planner :deep(.crew h2),
