@@ -151,8 +151,19 @@ function refreshSoon() {
   clearTimeout(t);
   t = setTimeout(refresh, 300);
 } 
-({isLive} =useTripRealtime(tripId, ["itinerary_items"], refreshSoon));
-
+// Our own ticks come back as realtime events too: skip the full reload (route + timings) for those
+const ownTicks = new Map(); // itemId -> ignore until (ms)
+function ignoreOwnTick(id) {
+  ownTicks.set(String(id), Date.now() + 4000);
+}
+({ isLive } = useTripRealtime(tripId, ["itinerary_items"], (_table, payload) => {
+  const id = payload?.new?.id != null ? String(payload.new.id) : null;
+  if (id && (ownTicks.get(id) || 0) > Date.now()) {
+    ownTicks.delete(id);
+    return;
+  }
+  refreshSoon();
+}));
 // Joins, invites, leaves and removals are posted as "...the crew" system messages. trip_members is not in
 // the realtime publication, so listen for those messages to keep everyone's crew list live.
 let crewTimer;
@@ -278,9 +289,9 @@ const canMemories = computed(() =>
           :active-stop-id="activeStopId"
           class="left"
           @changed="refresh"
+          @ticked="ignoreOwnTick"
           @error="notify"
-          @select-stop="activeStopId = $event"
-          @edit="editing = true"
+          @select-stop="activeStopId = $event"          @edit="editing = true"
           @delete="requestDelete"
         />
       </div>

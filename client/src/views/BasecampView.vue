@@ -6,7 +6,6 @@ import { useAuthStore } from "@/stores/auth";
 import { useTripsStore } from "@/stores/trips";
 import { useCampPresence } from "@/composables/useCampPresence";
 import { useCampSky } from "@/composables/useCampSky";
-import { useCampMusic } from "@/composables/useCampMusic"
 import { shortDate } from "@/utils/format";
 import CampScene from "@/components/basecamp/CampScene.vue";
 
@@ -63,15 +62,13 @@ function ledgerSubtitle({ balances, totalSpent }) {
 // ---------- sky: Singapore's clock + NEA forecast, with a manual day/night override ----------
 const { mode, condition, forecast, forced, isNight, modeLabel, cycleMode, conditionLabel } = useCampSky();
 
-// background music: day and night playlists, swapped when the sky changes
-const music = useCampMusic();
 // place labels: hidden until you walk up to a place, unless you switch them all on (remembered)
 const LABELS_KEY = "jbound:camp-labels";
 const readLabels = () => {
   try {
     return localStorage.getItem(LABELS_KEY) === "all";
   } catch {
-    return false;
+    return true;
   }
 };
 const showLabels = ref(readLabels());
@@ -179,7 +176,7 @@ onMounted(() => {
         </span>
         <button
           type="button"
-          class="round"
+          class="round labels"
           :aria-pressed="showLabels"
           :aria-label="showLabels ? 'Hide place labels' : 'Show all place labels'"
           :title="showLabels ? 'Labels: all shown' : 'Labels: only when you walk up'"
@@ -191,24 +188,6 @@ onMounted(() => {
               <path d="M7 9h10M7 12h6" />
             </template>
             <path v-else d="M3 3l18 18" />
-          </svg>
-        </button>
-
-        <button
-          type="button"
-          class="round music"
-          :aria-pressed="music.on.value"
-          :aria-label="music.on.value ? 'Turn music off' : 'Turn music on'"
-          :title="music.on.value ? 'Music on' : 'Music off'"
-          @click="music.toggle"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 9v6h4l5 4V5L8 9Z" class="fill" />
-            <template v-if="music.on.value">
-              <path d="M16.5 8.5a5 5 0 0 1 0 7" />
-              <path d="M19 6a8.5 8.5 0 0 1 0 12" />
-            </template>
-            <path v-else d="M16 9l5 6M21 9l-5 6" />
           </svg>
         </button>
 
@@ -425,7 +404,7 @@ kbd {
     font-size: 11px;
   }
 }
-@media (max-width: 700px), (pointer: coarse) {
+@media (pointer: coarse) {
   /* the joystick takes this corner; trips are one walk away at the trailer */
   .next-trip {
     display: none;
@@ -446,8 +425,8 @@ kbd {
     top: 18px;
     right: 18px;
   }
-  .music {
-    right: 76px; /* beside the sky button */
+  .labels{
+    right: 76px;
   }
   .chip-weather {
     position: absolute;

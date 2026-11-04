@@ -22,7 +22,7 @@ const props = defineProps({
   mode: { type: String, default: 'auto' }, // 'auto' | 'day' | 'night'
   condition: { type: String, default: 'clear' },
   returnFrom: { type: String, default: null },
-  showLabels: { type: Boolean, default: false},
+  showLabels: { type: Boolean, default: true},
   traffic: { type: Object, default: () => ({}) },
   locked: { type: Array, default: () => [] },
   viewShift : { type: Object, default: () => ({ x: 0, y: 0}) },
@@ -40,9 +40,13 @@ const wipe = ref(props.returnFrom ? 'out' : null); // 'in' = iris closing as you
 const ready = ref(false);
 const COMPACT_QUERY = '(max-width: 700px), (pointer: coarse)';
 const compactMedia = typeof window !== 'undefined' ? window.matchMedia?.(COMPACT_QUERY) : null;
-const compact = ref(Boolean(compactMedia?.matches)); // joystick + follow camera instead of tap-to-walk + overview
+const compact = ref(Boolean(compactMedia?.matches)); // small screen: follow camera instead of the overview
 const onCompactChange = (e) => (compact.value = e.matches);
-const knob = ref(null);
+// touch screens only: joystick instead of tap-to-walk (a narrow desktop window still uses the mouse)
+const TOUCH_QUERY = '(pointer: coarse)';
+const touchMedia = typeof window !== 'undefined' ? window.matchMedia?.(TOUCH_QUERY) : null;
+const touch = ref(Boolean(touchMedia?.matches));
+const onTouchChange = (e) => (touch.value = e.matches);const knob = ref(null);
 const people = shallowRef([]); // name tags: [{ id, name, live }]
 
 const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -388,7 +392,7 @@ function onPointerUp(e) {
   if (wasDrag || entering.value) return;
   const { stationId, ray } = pick(e);
   if (stationId) return enter(stationId);
-  if (compact.value) return; // the joystick does the walking here
+  if (touch.value) return; // the joystick does the walking here
   const hit = ray.intersectPlane(groundPlane, new THREE.Vector3());
   if (hit) {
     collide(hit);
@@ -668,6 +672,7 @@ onMounted(() => {
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
   compactMedia?.addEventListener?.('change', onCompactChange);
+  touchMedia?.addEventListener?.('change', onTouchChange);
   frame();
   ready.value = true;
 });
@@ -680,8 +685,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('keyup', onKeyUp);
   window.removeEventListener('blur', onBlur);
   compactMedia?.removeEventListener?.('change', onCompactChange);
-  player.avatar?.dispose();
-  mates.forEach((m) => m.avatar.dispose());
+  touchMedia?.removeEventListener?.('change', onTouchChange);
+  player.avatar?.dispose();  mates.forEach((m) => m.avatar.dispose());
   camp?.dispose();
   renderer?.dispose();
   renderer?.forceContextLoss();
@@ -712,7 +717,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   <div
     ref="host"
     class="camp"
-    :class="{ 'is-entering': entering, compact }"
+    :class="{ 'is-entering': entering, compact, touch }"
     tabindex="-1"
     @pointermove="onPointerMove"
     @pointerleave="hovered = null"
@@ -742,7 +747,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
 
     <div aria-live="polite">
       <button v-if="nearby && !entering" type="button" class="prompt" @click="enter(nearby)">
-        <kbd v-if="!compact">E</kbd> Enter {{ nearbyName(nearby) }}
+        <kbd v-if="!touch">E</kbd> Enter {{ nearbyName(nearby) }}
       </button>
     </div>
 
@@ -750,7 +755,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
 
     <!-- stations stay reachable without it: every bubble is a button -->
     <div
-      v-if="compact"
+      v-if="touch"
       class="joystick"
       aria-hidden="true"
       @pointerdown.prevent="onJoystickDown"
@@ -954,7 +959,7 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   animation: pop 0.2s ease-out;
 }
 /* the bottom-left corner belongs to the joystick */
-.compact .prompt {
+.touch .prompt {
   left: auto;
   right: 18px;
   bottom: 56px;
