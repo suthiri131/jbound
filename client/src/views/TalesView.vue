@@ -35,12 +35,22 @@ const suggestions = ref([]);
 const uploading = ref(false);
 const posting = ref(false);
 const composeError = ref(''); 
+const openDropdown = ref('');
 
 // comments per post id
 const openComments = reactive({});
 const commentDraft = reactive({});
 
 const photoDialog = ref(null);
+
+function toggleDropdown(name) {
+  openDropdown.value = openDropdown.value === name ? '' : name;
+}
+function selectVibe(value, type) {
+  if (type === 'filter') vibe.value = value;
+  else draft.vibe = value;
+  openDropdown.value = '';
+}
 
 async function load(more = false) {
   feed.loading = true;
@@ -330,10 +340,20 @@ function handlePhotoKeydown(event) {
               <button type="button" :aria-pressed="scope === 'friends'" @click="scope = 'friends'">My crews</button>
               <button type="button" :aria-pressed="scope === 'mine'" @click="scope = 'mine'">Mine</button>
             </div>
-            <select v-model="vibe" class="vibe-select" aria-label="Filter by vibe">
-              <option value="">All vibes</option>
-              <option v-for="v in VIBES" :key="v.id" :value="v.id">{{ v.label }}</option>
-            </select>
+          
+          <div class="custom-dropdown filter-dropdown">
+            <button type="button" class="dropdown-trigger vibe-select" :aria-expanded="openDropdown === 'filter'" @click="toggleDropdown('filter')">
+              <span>{{ VIBES.find(v => v.id === vibe)?.label || 'All vibes' }}</span>
+              <span class="dropdown-arrow" aria-hidden="true"></span>
+            </button>
+            <ul v-if="openDropdown === 'filter'" class="dropdown-list" role="listbox">
+              <li><button type="button" :class="{ selected: vibe === '' }" @click="selectVibe('', 'filter')">All vibes</button></li>
+              <li v-for="v in VIBES" :key="v.id">
+                <button type="button" :class="{ selected: vibe === v.id }" @click="selectVibe(v.id, 'filter')">{{ v.label }}</button>
+              </li>
+            </ul>
+          </div>
+
             <button v-if="placeFilter" type="button" class="chip-x" @click="clearPlaceFilter">One place only ✕</button>
           </div>
           <button type="button" class="send" :aria-expanded="composing" @click="composing = !composing">
@@ -362,12 +382,23 @@ function handlePhotoKeydown(event) {
               </li>
             </ul>
           </div>
-          <label class="field">Vibe
-            <select v-model="draft.vibe" class="select">
-              <option value="">None</option>
-              <option v-for="v in VIBES" :key="v.id" :value="v.id">{{ v.label }}</option>
-            </select>
-          </label>
+          
+        <div class="field">
+          <label>Vibe</label>
+          <div class="custom-dropdown">
+            <button type="button" class="dropdown-trigger select" :aria-expanded="openDropdown === 'composer'" @click="toggleDropdown('composer')">
+              <span>{{ VIBES.find(v => v.id === draft.vibe)?.label || 'None' }}</span>
+              <span class="dropdown-arrow" aria-hidden="true"></span>
+            </button>
+            <ul v-if="openDropdown === 'composer'" class="dropdown-list" role="listbox">
+              <li><button type="button" :class="{ selected: draft.vibe === '' }" @click="selectVibe('', 'composer')">None</button></li>
+              <li v-for="v in VIBES" :key="v.id">
+                <button type="button" :class="{ selected: draft.vibe === v.id }" @click="selectVibe(v.id, 'composer')">{{ v.label }}</button>
+              </li>
+            </ul>
+          </div>
+        </div>
+
           <label class="field">
             Photos ({{ draft.images.length }}/6)
             <input type="file" accept="image/*" multiple class="file" :disabled="uploading || draft.images.length >= 6" @change="addImages($event.target.files); $event.target.value = ''" />
@@ -469,18 +500,18 @@ function handlePhotoKeydown(event) {
   </main>
 </template>
 
+
 <style scoped>
 .tales-page {
   position: relative;
   display: grid;
-  /* the button sits beside the bubble, which takes the full height above the fire */
   grid-template-columns: 1fr minmax(0, 1180px) 1fr;
   grid-template-rows: minmax(0, 1fr) auto;
   column-gap: 14px;
   padding: 12px 20px 10px;
   font-family: var(--font-round);
   color: #1f2a24;
-  overflow: hidden !important; /* the fire stays put, the postcards scroll inside the bubble */
+  overflow: hidden !important;
 }
 .home {
   position: relative;
@@ -490,7 +521,7 @@ function handlePhotoKeydown(event) {
   align-self: start;
   justify-self: start;
 }
-/* a cloud of a thought bubble: the scalloped outline is a 9-slice image, so it fits any size of bubble */
+/* ---------- Thought bubble ---------- */
 .bubble {
   position: relative;
   z-index: 1;
@@ -504,7 +535,10 @@ function handlePhotoKeydown(event) {
   border: 34px solid transparent;
   border-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath d='M40 18A21 15 0 0 1 80 18A16.5 16.5 0 1 1 102 40A15 21 0 0 1 102 80A16.5 16.5 0 1 1 80 102A21 15 0 0 1 40 102A16.5 16.5 0 1 1 18 80A15 21 0 0 1 18 40A16.5 16.5 0 1 1 40 18Z' fill='%23fdf3da' stroke='%231f2a24' stroke-width='2'/%3E%3C/svg%3E") 40 fill / 60px round;
 }
+/* ---------- Toolbar ---------- */
 .toolbar {
+  position: relative;
+  z-index: 200;
   flex: none;
   display: flex;
   flex-wrap: wrap;
@@ -512,45 +546,6 @@ function handlePhotoKeydown(event) {
   gap: 8px 14px;
   padding: 0 6px 10px;
   border-bottom: 2px dashed rgba(31, 42, 36, 0.35);
-}
-/* a size container: the postcards use its height so the first row always fits, buttons and all */
-.scroller {
-  --fade: 28px; /* matches the bottom padding, so the first row's buttons stay clear of the fade */
-  flex: 1;
-  min-height: 0;
-  container-type: size;
-  overflow: hidden auto;
-  scrollbar-gutter: stable;
-  display: grid;
-  align-content: start;
-  gap: 22px;
-  padding: 14px 6px var(--fade) 6px;
-  /* postcards fade out into the cloud rather than stopping at a hard line */
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
-}
-/* a slim thumb with no track or arrows, so nothing sits on the cloud's edge */
-.scroller::-webkit-scrollbar {
-  width: 8px;
-}
-.scroller::-webkit-scrollbar-button {
-  display: none;
-}
-.scroller::-webkit-scrollbar-track {
-  background: transparent;
-}
-.scroller::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(31, 42, 36, 0.28);
-}
-.scroller::-webkit-scrollbar-thumb:hover {
-  background: rgba(31, 42, 36, 0.45);
-}
-@supports not selector(::-webkit-scrollbar) {
-  .scroller {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(31, 42, 36, 0.28) transparent;
-  }
 }
 .b-text {
   flex: 1 1 240px;
@@ -626,30 +621,62 @@ function handlePhotoKeydown(event) {
   font-weight: 600;
   cursor: pointer;
 }
-
-/* ---------- postcards ---------- */
+/* ---------- Scrollable postcard area ---------- */
+.scroller {
+  --fade: 28px;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  overflow: hidden auto;
+  scrollbar-gutter: stable;
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  padding: 14px 6px var(--fade) 6px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent);
+}
+.scroller::-webkit-scrollbar {
+  width: 8px;
+}
+.scroller::-webkit-scrollbar-button {
+  display: none;
+}
+.scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroller::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(31, 42, 36, 0.28);
+}
+.scroller::-webkit-scrollbar-thumb:hover {
+  background: rgba(31, 42, 36, 0.45);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .scroller {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(31, 42, 36, 0.28) transparent;
+  }
+}
+/* ---------- Postcards ---------- */
 .cards {
+  position: relative;
+  z-index: 1;
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start; /* opening one card's comments doesn't stretch its neighbours */
+  align-items: start;
   gap: 30px 26px;
 }
 .card-slot {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr); /* a long place name truncates instead of widening the card */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 .card-slot:nth-child(odd) .postcard {
-  rotate: -1.2deg;
-}
-.card-slot:nth-child(even) .postcard {
-  rotate: 1deg;
-}
-.postcard {
   rotate: -1.2deg;
 }
 .card-slot:nth-child(even) .postcard {
@@ -662,6 +689,7 @@ function handlePhotoKeydown(event) {
 .postcard {
   position: relative;
   width: 100%;
+  rotate: -1.2deg;
   border: 2.5px solid #1f2a24;
   border-radius: 6px;
   background: #fffaf0;
@@ -807,7 +835,7 @@ function handlePhotoKeydown(event) {
   font-size: 20px;
   text-align: right;
 }
-
+/* ---------- Postcard actions and comments ---------- */
 .pc-actions {
   display: flex;
   flex-wrap: wrap;
@@ -864,9 +892,10 @@ function handlePhotoKeydown(event) {
   font-size: 20px;
   opacity: 0.75;
 }
-
-/* composer */
+/* ---------- Postcard composer ---------- */
 .blank {
+  position: relative;
+  z-index: 100;
   width: min(100%, 680px);
   justify-self: center;
   display: grid;
@@ -874,6 +903,9 @@ function handlePhotoKeydown(event) {
   gap: 12px;
   padding: 14px;
   rotate: -0.6deg;
+}
+.blank:has(.ac-list) {
+  rotate: 0deg;
 }
 .pc-left {
   padding-right: 12px;
@@ -912,38 +944,187 @@ function handlePhotoKeydown(event) {
 .full {
   grid-column: 1 / -1;
 }
+/* ---------- Location autocomplete ---------- */
 .ac {
   position: relative;
+  z-index: 100;
+}
+.pc-right .ac {
+  z-index: 200;
 }
 .ac-list {
   position: absolute;
-  z-index: 5;
-  top: 100%;
+  z-index: 1000;
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
   list-style: none;
-  margin: 4px 0 0;
-  padding: 4px;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
   background: #fffdf7;
   border: 2px solid #1f2a24;
   border-radius: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #a6a69b transparent;
+}
+.ac-list li {
+  margin: 0;
+  padding: 0;
 }
 .ac-list button {
+  display: block;
   width: 100%;
-  min-height: 40px;
+  min-height: 44px;
   text-align: left;
   border: 0;
   background: none;
-  padding: 0 10px;
+  padding: 8px 10px;
   cursor: pointer;
   border-radius: 6px;
   font: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
-.ac-list button:hover {
+.ac-list button:hover,
+.ac-list button:focus-visible {
   background: #f6e2b3;
 }
-
-/* ---------- the fire and the people around it ---------- */
+/* ---------- Custom vibe dropdowns ---------- */
+.custom-dropdown {
+  position: relative;
+  min-width: max-content;
+  width: 100%;
+}
+.filter-dropdown {
+  width: max-content;
+}
+.pc-right .custom-dropdown {
+  min-width: 0;
+}
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  color: #1f2a24;
+  background: #fffdf7;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dropdown-trigger.vibe-select {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 2px solid #1f2a24;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.dropdown-trigger.select {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 2px solid #1f2a24;
+  border-radius: 8px;
+}
+.dropdown-trigger span:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dropdown-arrow {
+  display: block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-right: 2.5px solid #1f2a24;
+  border-bottom: 2.5px solid #1f2a24;
+  font-size: 0;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+  margin-right: 5px;
+  margin-top: -5px;
+}
+.dropdown-trigger[aria-expanded='true'] .dropdown-arrow {
+  transform: rotate(225deg);
+  margin-top: 5px;
+}
+.dropdown-list {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  min-width: max-content;
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
+  background: #fffdf7;
+  border: 2px solid #1f2a24;
+  border-radius: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #a6a69b transparent;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+}
+.filter-dropdown .dropdown-list {
+  min-width: 100%;
+  width: max-content;
+}
+.dropdown-list li {
+  margin: 0;
+  padding: 0;
+}
+.dropdown-list button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2a24;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+.dropdown-list button:hover,
+.dropdown-list button:focus-visible,
+.dropdown-list button.selected {
+  background: #f6e2b3;
+}
+.dropdown-list button.selected {
+  font-weight: 700;
+}
+/* ---------- Shared dropdown scrollbars ---------- */
+.ac-list::-webkit-scrollbar,
+.dropdown-list::-webkit-scrollbar {
+  width: 7px;
+}
+.ac-list::-webkit-scrollbar-track,
+.dropdown-list::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+.ac-list::-webkit-scrollbar-thumb,
+.dropdown-list::-webkit-scrollbar-thumb {
+  background: #a6a69b;
+  border-radius: 10px;
+}
+.ac-list::-webkit-scrollbar-button,
+.dropdown-list::-webkit-scrollbar-button {
+  display: none;
+}
+/* ---------- Fireside ---------- */
 .fireside {
   position: relative;
   z-index: 2;
@@ -951,11 +1132,10 @@ function handlePhotoKeydown(event) {
   grid-row: 2;
   justify-self: center;
   width: min(100%, 720px);
-  margin-top: -14px; /* the biggest thought clouds drift up against the bubble */
+  margin-top: -14px;
   pointer-events: none;
 }
-
-/* photo viewer */
+/* ---------- Photo viewer ---------- */
 .photo-overlay {
   position: fixed;
   inset: 0;
@@ -1008,13 +1188,13 @@ function handlePhotoKeydown(event) {
   color: white;
   font-size: 14px;
 }
+/* ---------- Responsive layout ---------- */
 @media (max-width: 1180px) {
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 960px) {
-  /* the button gets its own row, so the bubble is centred on the page */
   .tales-page {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
@@ -1049,7 +1229,6 @@ function handlePhotoKeydown(event) {
   .cards {
     grid-template-columns: minmax(0, 1fr);
   }
-  /* a compact header, so a whole postcard and its buttons still fit on a small phone */
   .b-text {
     flex: 1 1 0;
   }
@@ -1085,10 +1264,6 @@ function handlePhotoKeydown(event) {
 @media (max-height: 640px) {
   .fireside {
     width: min(100%, 460px);
-  }
-}
-@media (max-height: 640px) {
-  .fireside {
     --k: 0.66;
   }
 }
