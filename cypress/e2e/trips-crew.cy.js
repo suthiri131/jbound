@@ -13,8 +13,6 @@ function login(email, password) {
 }
 
 function logout() {
-  // ToastMessage.vue auto-dismisses after exactly 6000ms, which races our old 6s wait —
-  // dismiss it directly instead of waiting for the timer.
   cy.get('body').then(($body) => {
     if ($body.find('.toast[role="status"]').length) {
       cy.get('[aria-label="Dismiss"]').click();
@@ -51,8 +49,6 @@ describe('Trips and crew', () => {
     cy.get('[data-cy="trip-create"]').click();
     cy.url().should('match', /\/planner\/[\w-]+$/);
 
-    // Two levels of disclosure now: the Invite popover opens first (with the code),
-    // then 'Invite a friend' inside it reveals the actual username input.
     cy.get('[data-cy="invite-open"]').click();
     cy.contains('button', 'Invite a friend').click();
     cy.get('#invite-user').type(Cypress.env('TEST2_USERNAME'));

@@ -44,10 +44,6 @@ describe('Notifications', () => {
   });
 
   it('shows items in the notifications list', function () {
-    // The old generic "system messages" feed was replaced by NotificationsList.vue, which shows
-    // pending invites and photo reminders (data-cy="memory-reminder" on each reminder row).
-    // Reminders only show up near a trip's end, so seed a pending invite instead — it's the
-    // one notification kind this test can create deterministically on demand.
     if (!Cypress.env('TEST2_EMAIL')) this.skip();
     const name = `Pulai Springs Day Trip ${Math.random().toString(36).slice(2, 6)}`;
     cy.visit('/planner');
