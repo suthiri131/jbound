@@ -1,8 +1,4 @@
 <script setup>
-/**
- * The notice board's opening screen, sat on the cork: pick the flyers you're feeling. On explore the flyers come
- * unpinned and flutter off the board, then `explore` fires so the page can pin the places up in their place.
- */
 import { ref } from "vue";
 import { VIBES, VIBE_TINT, VIBE_FLYER } from "@/utils/constants";
 import VibeIcon from "@/components/common/VibeIcon.vue";

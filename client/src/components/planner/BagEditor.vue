@@ -60,7 +60,6 @@ async function save() {
   }
 }
 
-// a proper dialog: focus moves in, Tab stays inside, Esc closes, focus goes back to the bag you picked
 const dialog = ref(null);
 let previousFocus;
 onMounted(() => {

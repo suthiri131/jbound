@@ -1,20 +1,19 @@
 <script setup>
-/** The camp's post: trip invites arrive as airmail, and the reminders to add photos as taped-up notes. */
-import { ref, onMounted } from 'vue';
-import { api, errorMessage } from '@/lib/api';
-import { showAlert } from '@/lib/dialog';
-import { useNotificationsStore } from '@/stores/notifications';
-import { useTripsStore } from '@/stores/trips';
-import WanderingEyes from '@/components/common/WanderingEyes.vue';
+import { ref, onMounted } from "vue";
+import { api, errorMessage } from "@/lib/api";
+import { showAlert } from "@/lib/dialog";
+import { useNotificationsStore } from "@/stores/notifications";
+import { useTripsStore } from "@/stores/trips";
+import WanderingEyes from "@/components/common/WanderingEyes.vue";
 
 defineProps({
-  headingTag: { type: String, default: 'h2' },
+  headingTag: { type: String, default: "h2" },
 });
-const emit = defineEmits(['navigate']);
+const emit = defineEmits(["navigate"]);
 const notifications = useNotificationsStore();
 const tripsStore = useTripsStore();
 const loading = ref(true);
-const loadError = ref('');
+const loadError = ref("");
 const invites = ref([]);
 const reminders = ref([]);
 
@@ -23,27 +22,36 @@ function dateLabel(date) {
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-SG", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 async function loadReminders() {
-  const { data } = await api.get('/trips/memory-reminders');
+  const { data } = await api.get("/trips/memory-reminders");
   reminders.value = data;
   notifications.setReminders(data);
 }
 
 async function load() {
   loading.value = true;
-  loadError.value = '';
+  loadError.value = "";
   // separately, so a problem with one still leaves the other on show
-  const [invited, reminded] = await Promise.allSettled([api.get('/trips/invites'), loadReminders()]);
-  if (invited.status === 'fulfilled') {
+  const [invited, reminded] = await Promise.allSettled([
+    api.get("/trips/invites"),
+    loadReminders(),
+  ]);
+  if (invited.status === "fulfilled") {
     invites.value = invited.value.data;
     notifications.inviteCount = invited.value.data.length;
   }
-  const failed = [invited, reminded].find((result) => result.status === 'rejected');
+  const failed = [invited, reminded].find(
+    (result) => result.status === "rejected",
+  );
   if (failed) loadError.value = errorMessage(failed.reason);
   loading.value = false;
 }
@@ -53,7 +61,7 @@ async function respond(tripId, action) {
     await tripsStore.respondToInvite(tripId, action);
     invites.value = invites.value.filter((t) => t.id !== tripId);
     notifications.inviteCount = invites.value.length;
-    if (action === 'accept') await loadReminders(); // the trip may already have ended
+    if (action === "accept") await loadReminders(); // the trip may already have ended
   } catch (err) {
     showAlert(errorMessage(err));
   }
@@ -72,8 +80,15 @@ onMounted(load);
       <slot name="actions" />
     </header>
 
-    <p v-if="loadError" class="error-text problem" role="alert">{{ loadError }}</p>
-    <WanderingEyes v-if="loading" class="sorting" center text="Checking for news…" />
+    <p v-if="loadError" class="error-text problem" role="alert">
+      {{ loadError }}
+    </p>
+    <WanderingEyes
+      v-if="loading"
+      class="sorting"
+      center
+      text="Checking for news…"
+    />
 
     <section v-if="invites.length" class="pile" aria-labelledby="post-invites">
       <h3 id="post-invites" class="pile-label">Invites</h3>
@@ -85,22 +100,44 @@ onMounted(load);
                 <path d="M0 44V0h40v44z" fill="#cfe0d9" />
                 <circle cx="29" cy="11" r="5" fill="#e0a43b" />
                 <path d="M0 37c8-6 28-6 40 0v7H0z" fill="#6f9a52" />
-                <path d="M20 13 7 36h26z" fill="#b4471f" stroke="#2a2117" stroke-width="1.6" stroke-linejoin="round" />
+                <path
+                  d="M20 13 7 36h26z"
+                  fill="#b4471f"
+                  stroke="#2a2117"
+                  stroke-width="1.6"
+                  stroke-linejoin="round"
+                />
                 <path d="M20 22l-5 14h10z" fill="#2a2117" />
               </svg>
             </span>
             <p class="invited">You're invited to</p>
             <p class="trip-name">{{ t.name }}</p>
             <div class="actions">
-              <button type="button" class="btn btn-sm btn-primary" @click="respond(t.id, 'accept')">Accept</button>
-              <button type="button" class="btn btn-sm btn-ghost" @click="respond(t.id, 'decline')">Decline</button>
+              <button
+                type="button"
+                class="btn btn-sm btn-primary"
+                @click="respond(t.id, 'accept')"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-ghost"
+                @click="respond(t.id, 'decline')"
+              >
+                Decline
+              </button>
             </div>
           </div>
         </li>
       </ul>
     </section>
 
-    <section v-if="reminders.length" class="pile" aria-labelledby="post-reminders">
+    <section
+      v-if="reminders.length"
+      class="pile"
+      aria-labelledby="post-reminders"
+    >
       <h3 id="post-reminders" class="pile-label">Photos for the archive</h3>
       <ul class="pile-list">
         <li
@@ -113,25 +150,73 @@ onMounted(load);
           <i class="tape" aria-hidden="true" />
           <span v-if="r.daysLeft" class="postmark" aria-hidden="true">
             <b>{{ r.daysLeft }}</b>
-            <small>{{ r.daysLeft === 1 ? 'day' : 'days' }} left</small>
+            <small>{{ r.daysLeft === 1 ? "day" : "days" }} left</small>
           </span>
           <p class="note-text">{{ r.text }}</p>
           <p class="note-date">{{ dateLabel(r.date) }}</p>
-          <RouterLink :to="`/planner/${r.tripId}`" class="btn btn-sm btn-mustard add" @click="emit('navigate')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
+          <RouterLink
+            :to="`/planner/${r.tripId}`"
+            class="btn btn-sm btn-mustard add"
+            @click="emit('navigate')"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+              <circle cx="12" cy="13" r="3.5" />
+            </svg>
             Add photos
           </RouterLink>
         </li>
       </ul>
     </section>
 
-    <section v-if="!loading && !loadError && !invites.length && !reminders.length" class="empty">
+    <section
+      v-if="!loading && !loadError && !invites.length && !reminders.length"
+      class="empty"
+    >
       <svg viewBox="0 0 120 110" width="120" height="110" aria-hidden="true">
-        <path d="M54 60h12v46H54z" fill="#7a4a29" stroke="#2a2117" stroke-width="3" />
-        <path d="M22 62V38a18 18 0 0 1 36 0v24z" fill="#8a4a33" stroke="#2a2117" stroke-width="3" stroke-linejoin="round" />
-        <path d="M40 20h44a18 18 0 0 1 18 18v24H58V38a18 18 0 0 0-18-18z" fill="#b4623f" stroke="#2a2117" stroke-width="3" stroke-linejoin="round" />
-        <path d="M84 44V58" stroke="#2a2117" stroke-width="3" stroke-linecap="round" />
-        <path d="M84 58h13v-8H84z" fill="#b4471f" stroke="#2a2117" stroke-width="2.4" stroke-linejoin="round" />
+        <path
+          d="M54 60h12v46H54z"
+          fill="#7a4a29"
+          stroke="#2a2117"
+          stroke-width="3"
+        />
+        <path
+          d="M22 62V38a18 18 0 0 1 36 0v24z"
+          fill="#8a4a33"
+          stroke="#2a2117"
+          stroke-width="3"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M40 20h44a18 18 0 0 1 18 18v24H58V38a18 18 0 0 0-18-18z"
+          fill="#b4623f"
+          stroke="#2a2117"
+          stroke-width="3"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M84 44V58"
+          stroke="#2a2117"
+          stroke-width="3"
+          stroke-linecap="round"
+        />
+        <path
+          d="M84 58h13v-8H84z"
+          fill="#b4471f"
+          stroke="#2a2117"
+          stroke-width="2.4"
+          stroke-linejoin="round"
+        />
       </svg>
       <p class="hand empty-title">No post today</p>
       <p class="empty-text">Trip invites and photo reminders will land here.</p>
@@ -196,7 +281,13 @@ onMounted(load);
 .envelope {
   padding: 7px;
   overflow-wrap: anywhere;
-  background: repeating-linear-gradient(-45deg, #b4471f 0 11px, #fbf6e9 11px 20px, #1f4e5a 20px 31px, #fbf6e9 31px 40px);
+  background: repeating-linear-gradient(
+    -45deg,
+    #b4471f 0 11px,
+    #fbf6e9 11px 20px,
+    #1f4e5a 20px 31px,
+    #fbf6e9 31px 40px
+  );
   border: 2px solid var(--ink);
   border-radius: 3px;
   box-shadow: 2px 4px 0 rgba(42, 33, 23, 0.55);

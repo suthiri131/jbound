@@ -1,5 +1,4 @@
 <script setup>
-
 import { ref, computed, nextTick, onBeforeUnmount } from "vue";
 import { VIBES } from "@/utils/constants";
 import VibeIcon from "@/components/common/VibeIcon.vue";
@@ -9,7 +8,12 @@ const props = defineProps({
   defaults: { type: Object, required: true },
   vibes: { type: Array, default: () => [] },
 });
-const emit = defineEmits(["update:modelValue", "toggle-vibe", "clear-vibes", "change-vibe"]);
+const emit = defineEmits([
+  "update:modelValue",
+  "toggle-vibe",
+  "clear-vibes",
+  "change-vibe",
+]);
 
 const open = ref(false);
 const pop = ref(null);
@@ -33,9 +37,9 @@ const activeCount = computed(
 
 const price = (n) => "$".repeat(n);
 
-// ---------- the pop-up: closes when tapping outside or pressing Esc ----------
 function onOutsideClick(e) {
-  if (!pop.value?.contains(e.target) && !button.value?.contains(e.target)) close(false);
+  if (!pop.value?.contains(e.target) && !button.value?.contains(e.target))
+    close(false);
 }
 function onKey(e) {
   if (e.key === "Escape") close();
@@ -118,7 +122,14 @@ onBeforeUnmount(() => {
           >
             <VibeIcon :vibe="v.id" :size="15" /> {{ v.label }}
           </button>
-          <button type="button" class="vibe change" data-cy="change-vibe" @click="emit('change-vibe')">↺ Change my vibe</button>
+          <button
+            type="button"
+            class="vibe change"
+            data-cy="change-vibe"
+            @click="emit('change-vibe')"
+          >
+            ↺ Change my vibe
+          </button>
         </div>
       </div>
 
@@ -201,11 +212,7 @@ onBeforeUnmount(() => {
         >
           Reset
         </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-primary"
-          @click="close()"
-        >
+        <button type="button" class="btn btn-sm btn-primary" @click="close()">
           Done
         </button>
       </div>

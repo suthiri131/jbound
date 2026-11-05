@@ -2,8 +2,8 @@
 import { computed, useId } from "vue";
 import { PHASE_STAMP } from "@/utils/constants";
 import { dateRange } from "@/utils/format";
-import { bagBadgesFor, bagColour, bagKindFor } from '@/utils/bags';
-import BagBadge from './BagBadge.vue';
+import { bagBadgesFor, bagColour, bagKindFor } from "@/utils/bags";
+import BagBadge from "./BagBadge.vue";
 
 const props = defineProps({
   trip: { type: Object, default: null },
@@ -21,17 +21,66 @@ const handFilter = computed(() =>
 );
 const softFilter = `url(#${ids.soft})`;
 
-const variant = computed(() => (props.isNew ? 'tote' : props.kind || bagKindFor(props.trip)));
-const colour = computed(() => bagColour(props.coverColor || props.trip?.cover_color));
+const variant = computed(() =>
+  props.isNew ? "tote" : props.kind || bagKindFor(props.trip),
+);
+const colour = computed(() =>
+  bagColour(props.coverColor || props.trip?.cover_color),
+);
 
 // where the name label and the status tag sit on each bag, in px of the 260 x 300 drawing
 // where the name label, the status tag and the (up to 4) badges sit on each bag, in px of the 260 x 300 drawing
 const SPOT = {
-  rucksack: { label: [114, 224, 98, 32], tag: [21, 111], pins: [[100, 100], [210, 100], [155, 90], [72, 238]] },
-  daypack: { label: [114, 100, 88, 32], tag: [177, 21], pins: [[196, 226], [134, 180], [198, 178], [134, 230]] },
-  messenger: { label: [92, 140, 100, 32], tag: [13, 210], pins: [[78, 132], [214, 134], [112, 118], [214, 176]] },
-  tote: { label: [84, 176, 100, 36], tag: [21, 75], pins: [[88, 152], [182, 150], [134, 146], [188, 240]] },
-  satchel: { label: [84, 140, 98, 34], tag: [10, 93], pins: [[132, 122], [64, 166], [202, 166], [132, 234]] },
+  rucksack: {
+    label: [114, 224, 98, 32],
+    tag: [21, 111],
+    pins: [
+      [100, 100],
+      [210, 100],
+      [155, 90],
+      [72, 238],
+    ],
+  },
+  daypack: {
+    label: [114, 100, 88, 32],
+    tag: [177, 21],
+    pins: [
+      [196, 226],
+      [134, 180],
+      [198, 178],
+      [134, 230],
+    ],
+  },
+  messenger: {
+    label: [92, 140, 100, 32],
+    tag: [13, 210],
+    pins: [
+      [78, 132],
+      [214, 134],
+      [112, 118],
+      [214, 176],
+    ],
+  },
+  tote: {
+    label: [84, 176, 100, 36],
+    tag: [21, 75],
+    pins: [
+      [88, 152],
+      [182, 150],
+      [134, 146],
+      [188, 240],
+    ],
+  },
+  satchel: {
+    label: [84, 140, 98, 34],
+    tag: [10, 93],
+    pins: [
+      [132, 122],
+      [64, 166],
+      [202, 166],
+      [132, 234],
+    ],
+  },
 };
 const labelBox = computed(() => {
   const [x, y, w, h] = SPOT[variant.value].label;
@@ -50,7 +99,14 @@ const pinned = computed(() => {
   if (props.isNew) return [];
   const list = props.badges || bagBadgesFor(props.trip, variant.value);
   const spots = SPOT[variant.value].pins;
-  return list.slice(0, spots.length).map((kind, i) => ({ kind, x: spots[i][0], y: spots[i][1], turn: [-12, 9, -5, 14][i] }));
+  return list
+    .slice(0, spots.length)
+    .map((kind, i) => ({
+      kind,
+      x: spots[i][0],
+      y: spots[i][1],
+      turn: [-12, 9, -5, 14][i],
+    }));
 });
 
 const stamp = computed(
@@ -66,7 +122,11 @@ const progress = computed(() => {
 </script>
 
 <template>
-  <div class="pack" :class="[`is-${variant}`, { new: isNew, bare }]" :style="{ '--bag': colour }">
+  <div
+    class="pack"
+    :class="[`is-${variant}`, { new: isNew, bare }]"
+    :style="{ '--bag': colour }"
+  >
     <div class="bag">
       <svg viewBox="0 0 260 300" aria-hidden="true">
         <defs>
@@ -746,8 +806,12 @@ const progress = computed(() => {
           <path class="string tie" d="M56 132 C46 120 34 112 22 108" />
         </g>
         <!-- badges pinned on the bag -->
-        <g v-for="(p, i) in pinned" :key="`${p.kind}-${i}`" :transform="`translate(${p.x} ${p.y}) rotate(${p.turn})`">
-        <BagBadge :kind="p.kind" />
+        <g
+          v-for="(p, i) in pinned"
+          :key="`${p.kind}-${i}`"
+          :transform="`translate(${p.x} ${p.y}) rotate(${p.turn})`"
+        >
+          <BagBadge :kind="p.kind" />
         </g>
       </svg>
 
@@ -974,7 +1038,6 @@ const progress = computed(() => {
   text-align: center;
 }
 
-/* the "new trip" bag: an empty dashed tote waiting to be packed */
 .new .s,
 .new .ink {
   stroke: #9a7448;
@@ -1002,7 +1065,7 @@ const progress = computed(() => {
   display: none;
 }
 .bare .tie {
-  display: none
+  display: none;
 }
 .new-text {
   flex-direction: column;

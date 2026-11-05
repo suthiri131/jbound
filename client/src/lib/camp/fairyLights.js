@@ -1,20 +1,20 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
-const WARM = ['#ffe9a8', '#ffd27a', '#fff4d6', '#ffe0a0'];
-const PARTY = ['#ffb3c7', '#b8e0ff', '#c9f2b0', '#f7c6ff'];
+const WARM = ["#ffe9a8", "#ffd27a", "#fff4d6", "#ffe0a0"];
+const PARTY = ["#ffb3c7", "#b8e0ff", "#c9f2b0", "#f7c6ff"];
 
 /** soft round glow, drawn once on a canvas */
 function glowTexture() {
-  if (typeof document === 'undefined') return null;
-  const c = document.createElement('canvas');
+  if (typeof document === "undefined") return null;
+  const c = document.createElement("canvas");
   c.width = c.height = 64;
-  const ctx = c.getContext?.('2d');
+  const ctx = c.getContext?.("2d");
   if (!ctx) return null;
   const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.18, 'rgba(255,255,255,0.95)');
-  g.addColorStop(0.45, 'rgba(255,255,255,0.25)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.18, "rgba(255,255,255,0.95)");
+  g.addColorStop(0.45, "rgba(255,255,255,0.25)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 64, 64);
   const tex = new THREE.CanvasTexture(c);
@@ -42,7 +42,13 @@ function spiral(tree, r) {
       y = 2.3 + Math.sin(lat) * 1.28;
       rad = Math.cos(lat) * 1.28;
     }
-    pts.push(new THREE.Vector3(tree.x + Math.cos(a) * rad * tree.scale, y * tree.scale, tree.z + Math.sin(a) * rad * tree.scale));
+    pts.push(
+      new THREE.Vector3(
+        tree.x + Math.cos(a) * rad * tree.scale,
+        y * tree.scale,
+        tree.z + Math.sin(a) * rad * tree.scale,
+      ),
+    );
   }
   return pts;
 }
@@ -64,7 +70,7 @@ function drape(a, b, sag, spacing = 0.42) {
 // trees
 export function buildFairyLights(trees, r = Math.random) {
   const group = new THREE.Group();
-  group.name = 'fairy-lights';
+  group.name = "fairy-lights";
   const bulbs = []; // Vector3
   const wires = []; // line segments (pairs of Vector3), for the dark cable between bulbs
 
@@ -78,7 +84,8 @@ export function buildFairyLights(trees, r = Math.random) {
 
   // strings draped between near neighbours, each tree used at most once
   const used = new Set();
-  const top = (t) => new THREE.Vector3(t.x, (t.pine ? 2.2 : 2.5) * t.scale, t.z);
+  const top = (t) =>
+    new THREE.Vector3(t.x, (t.pine ? 2.2 : 2.5) * t.scale, t.z);
   for (let i = 0; i < trees.length; i++) {
     if (used.has(i)) continue;
     let best = -1;
@@ -112,8 +119,8 @@ export function buildFairyLights(trees, r = Math.random) {
     speed[i] = 1.2 + r() * 2.4;
   });
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
   const map = glowTexture();
   const mat = new THREE.PointsMaterial({
     size: map ? 0.85 : 0.16,
@@ -131,7 +138,11 @@ export function buildFairyLights(trees, r = Math.random) {
 
   // the cable
   const wireGeo = new THREE.BufferGeometry().setFromPoints(wires);
-  const wireMat = new THREE.LineBasicMaterial({ color: '#1b1f1a', transparent: true, opacity: 0 });
+  const wireMat = new THREE.LineBasicMaterial({
+    color: "#1b1f1a",
+    transparent: true,
+    opacity: 0,
+  });
   const cable = new THREE.LineSegments(wireGeo, wireMat);
   cable.visible = false;
   group.add(cable);
@@ -149,9 +160,8 @@ export function buildFairyLights(trees, r = Math.random) {
     tick(t) {
       if (!points.visible) return;
       for (let i = 0; i < count; i++) {
-        // mostly steady with a soft shimmer; now and then a bulb dips low, like real fairy lights
         const s = Math.sin(t * speed[i] + phase[i]);
-        const k = (0.75 + 0.25 * s - (s > 0.97 ? 0.45 : 0)) * 1.7; // over 1 on purpose: additive glow reads brighter
+        const k = (0.75 + 0.25 * s - (s > 0.97 ? 0.45 : 0)) * 1.7;
         col[i * 3] = base[i].r * k;
         col[i * 3 + 1] = base[i].g * k;
         col[i * 3 + 2] = base[i].b * k;

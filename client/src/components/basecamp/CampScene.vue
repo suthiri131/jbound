@@ -1,33 +1,31 @@
 <script setup>
-/**
- * The 3D basecamp. You walk your character around and step up to a station to go in: the camera swoops to it,
- * its door opens, and `enter` fires so the page can change route.
- * Desktop: WASD / arrows / click the ground, with the whole camp in view.
- * Phones and touch screens: an on-screen joystick, with the camera following close behind you.
- *
- * Props:
- *  - returnFrom: start zoomed in on this station and pull back (you just walked out of it)
- */
-import { onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
-import * as THREE from 'three';
-import { buildCamp, CAMP_RADIUS } from '@/lib/camp/world';
-import { buildAvatar, lookFromId } from '@/lib/camp/avatar';
-import { environmentFor, sgHours } from '@/lib/camp/environment';
+import {
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  watch,
+} from "vue";
+import * as THREE from "three";
+import { buildCamp, CAMP_RADIUS } from "@/lib/camp/world";
+import { buildAvatar, lookFromId } from "@/lib/camp/avatar";
+import { environmentFor, sgHours } from "@/lib/camp/environment";
 
 const props = defineProps({
   me: { type: Object, default: null }, // { id, name, look }
   crew: { type: Array, default: () => [] }, // offline crewmates: [{ id, name, look }]
   live: { type: Object, default: () => ({}) }, // online crewmates by id: { name, look, x, z, ry, waveAt }
   subtitles: { type: Object, default: () => ({}) }, // station id -> one-liner under its name
-  mode: { type: String, default: 'auto' }, // 'auto' | 'day' | 'night'
-  condition: { type: String, default: 'clear' },
+  mode: { type: String, default: "auto" }, // 'auto' | 'day' | 'night'
+  condition: { type: String, default: "clear" },
   returnFrom: { type: String, default: null },
-  showLabels: { type: Boolean, default: true},
+  showLabels: { type: Boolean, default: true },
   traffic: { type: Object, default: () => ({}) },
   locked: { type: Array, default: () => [] },
-  viewShift : { type: Object, default: () => ({ x: 0, y: 0}) },
+  viewShift: { type: Object, default: () => ({ x: 0, y: 0 }) },
 });
-const emit = defineEmits(['enter', 'move', 'wave', 'locked']);
+const emit = defineEmits(["enter", "move", "wave", "locked"]);
 
 const host = ref(null);
 const canvasWrap = ref(null);
@@ -36,24 +34,36 @@ const tagEls = {};
 const nearby = ref(null); // station you are standing next to
 const hovered = ref(null);
 const entering = ref(null); // station being entered
-const wipe = ref(props.returnFrom ? 'out' : null); // 'in' = iris closing as you step through, 'out' = opening as you walk back out
+const wipe = ref(props.returnFrom ? "out" : null); // 'in' = iris closing as you step through, 'out' = opening as you walk back out
 const ready = ref(false);
-const COMPACT_QUERY = '(max-width: 700px), (pointer: coarse)';
-const compactMedia = typeof window !== 'undefined' ? window.matchMedia?.(COMPACT_QUERY) : null;
+const COMPACT_QUERY = "(max-width: 700px), (pointer: coarse)";
+const compactMedia =
+  typeof window !== "undefined" ? window.matchMedia?.(COMPACT_QUERY) : null;
 const compact = ref(Boolean(compactMedia?.matches)); // small screen: follow camera instead of the overview
 const onCompactChange = (e) => (compact.value = e.matches);
 // touch screens only: joystick instead of tap-to-walk (a narrow desktop window still uses the mouse)
-const TOUCH_QUERY = '(pointer: coarse)';
-const touchMedia = typeof window !== 'undefined' ? window.matchMedia?.(TOUCH_QUERY) : null;
+const TOUCH_QUERY = "(pointer: coarse)";
+const touchMedia =
+  typeof window !== "undefined" ? window.matchMedia?.(TOUCH_QUERY) : null;
 const touch = ref(Boolean(touchMedia?.matches));
-const onTouchChange = (e) => (touch.value = e.matches);const knob = ref(null);
+const onTouchChange = (e) => (touch.value = e.matches);
+const knob = ref(null);
 const people = shallowRef([]); // name tags: [{ id, name, live }]
 
-const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const reduceMotion =
+  typeof window !== "undefined" &&
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 let renderer, scene, camera, camp, raf, resizeObs, envTimer;
 const clock = new THREE.Clock();
-const player = { avatar: null, pos: new THREE.Vector3(0, 0, 8.5), ry: Math.PI, target: null, speed: 0, waveT: -1 };
+const player = {
+  avatar: null,
+  pos: new THREE.Vector3(0, 0, 8.5),
+  ry: Math.PI,
+  target: null,
+  speed: 0,
+  waveT: -1,
+};
 const mates = new Map(); // id -> { avatar, pos, ry, target, wait, live, lookKey, waveT }
 const keys = new Set();
 const joy = { pointerId: null, x: 0, z: 0 }; // x / z are -1..1; length = how hard you are pushing
@@ -66,8 +76,6 @@ let doorTween = null; // { station, from, to, t, dur }
 const doors = reactive({}); // station id -> open amount 0..1
 let arrivalResolve = null;
 
-// ---------- camera framing ----------
-
 const OVERVIEW_POS = new THREE.Vector3(0, 13, 27);
 const OVERVIEW_TARGET = new THREE.Vector3(0, 2.4, -2);
 
@@ -77,7 +85,10 @@ const FOLLOW_LOOK = new THREE.Vector3(0, 3, -2); // what it looks at, relative t
 // Narrow screens (phones held upright) don't zoom out to fit the whole camp any more. Like Pocket Camp, the
 // camera stays close, looks down a little more, follows you around, and you can drag to look around.
 const CAM_DIST = OVERVIEW_POS.distanceTo(OVERVIEW_TARGET);
-const WIDE_PITCH = Math.atan2(OVERVIEW_POS.y - OVERVIEW_TARGET.y, OVERVIEW_POS.z - OVERVIEW_TARGET.z); 
+const WIDE_PITCH = Math.atan2(
+  OVERVIEW_POS.y - OVERVIEW_TARGET.y,
+  OVERVIEW_POS.z - OVERVIEW_TARGET.z,
+);
 const TALL_PITCH = THREE.MathUtils.degToRad(30); // phones: more ground, less sky (the Causeway still shows)
 const MIN_HALF_W = 8.5; // world units kept visible either side of centre, about one station and its neighbours
 const MAX_ZOOM_OUT = 1.35; // the old code went to 2.3, which is what made the camp tiny
@@ -100,7 +111,11 @@ function framing() {
   const tall = THREE.MathUtils.clamp((1.3 - freeAspect) / 0.8, 0, 1); // 0 = landscape, 1 = phone upright
   const halfTan = Math.tan(THREE.MathUtils.degToRad((camera?.fov ?? 40) / 2));
   const wantHalfW = THREE.MathUtils.lerp(WIDE_HALF_W, MIN_HALF_W, tall);
-  const k = THREE.MathUtils.clamp(wantHalfW / (CAM_DIST * halfTan * aspect * freeW), 1, MAX_ZOOM_OUT);
+  const k = THREE.MathUtils.clamp(
+    wantHalfW / (CAM_DIST * halfTan * aspect * freeW),
+    1,
+    MAX_ZOOM_OUT,
+  );
 
   const halfW = CAM_DIST * k * halfTan * aspect; // half the visible width, at the point we look at
   return {
@@ -108,17 +123,27 @@ function framing() {
     k,
     pitch: THREE.MathUtils.lerp(WIDE_PITCH, TALL_PITCH, tall),
     roam: Math.max(0, CAMP_HALF_W - halfW), // how far the view can slide before showing past the camp
-    worldPerPx: (2 * CAM_DIST * k * halfTan) / (renderer?.domElement.clientHeight || 800),
+    worldPerPx:
+      (2 * CAM_DIST * k * halfTan) / (renderer?.domElement.clientHeight || 800),
   };
 }
 
-/** Where the camera wants to be when nothing special is happening. */
-function overview(out = { pos: new THREE.Vector3(), target: new THREE.Vector3() }) {
+function overview(
+  out = { pos: new THREE.Vector3(), target: new THREE.Vector3() },
+) {
   if (compact.value) {
     // close behind you. A drag looks around, as far as the edge of the camp; walking brings the view back
-    pan.x = THREE.MathUtils.clamp(pan.x, Math.min(0, -CAMP_HALF_W - player.pos.x), Math.max(0, CAMP_HALF_W - player.pos.x));
+    pan.x = THREE.MathUtils.clamp(
+      pan.x,
+      Math.min(0, -CAMP_HALF_W - player.pos.x),
+      Math.max(0, CAMP_HALF_W - player.pos.x),
+    );
     const lookZ = player.pos.z + FOLLOW_LOOK.z;
-    pan.y = THREE.MathUtils.clamp(pan.y, Math.min(0, CAMP_Z[0] - lookZ), Math.max(0, CAMP_Z[1] - lookZ));
+    pan.y = THREE.MathUtils.clamp(
+      pan.y,
+      Math.min(0, CAMP_Z[0] - lookZ),
+      Math.max(0, CAMP_Z[1] - lookZ),
+    );
     out.target.copy(player.pos).add(FOLLOW_LOOK);
     out.pos.copy(player.pos).add(FOLLOW_OFFSET);
     out.target.x += pan.x;
@@ -132,15 +157,30 @@ function overview(out = { pos: new THREE.Vector3(), target: new THREE.Vector3() 
   const followX = THREE.MathUtils.lerp(0.18, 1, f.tall);
   const followZ = THREE.MathUtils.lerp(0.08, 0.6, f.tall);
   const limitX = f.roam + 2.5;
-  const cx = THREE.MathUtils.clamp(player.pos.x * followX + pan.x, -limitX, limitX);
+  const cx = THREE.MathUtils.clamp(
+    player.pos.x * followX + pan.x,
+    -limitX,
+    limitX,
+  );
   const lookAhead = -2.5 * f.tall; // on a phone, look a little past you so the camp fills the screen, not the grass in front
-  const cz = THREE.MathUtils.clamp(OVERVIEW_TARGET.z + lookAhead + (player.pos.z - 6) * followZ + pan.y, CAMP_Z[0], CAMP_Z[1]);
+  const cz = THREE.MathUtils.clamp(
+    OVERVIEW_TARGET.z + lookAhead + (player.pos.z - 6) * followZ + pan.y,
+    CAMP_Z[0],
+    CAMP_Z[1],
+  );
   // keep the drag inside the same limits, so it never builds up past the edge
-  pan.set(cx - player.pos.x * followX, cz - OVERVIEW_TARGET.z - lookAhead - (player.pos.z - 6) * followZ);
+  pan.set(
+    cx - player.pos.x * followX,
+    cz - OVERVIEW_TARGET.z - lookAhead - (player.pos.z - 6) * followZ,
+  );
 
   out.target.set(cx, THREE.MathUtils.lerp(OVERVIEW_TARGET.y, 1.2, f.tall), cz);
   const d = CAM_DIST * f.k;
-  out.pos.set(cx, out.target.y + Math.sin(f.pitch) * d, cz + Math.cos(f.pitch) * d);
+  out.pos.set(
+    cx,
+    out.target.y + Math.sin(f.pitch) * d,
+    cz + Math.cos(f.pitch) * d,
+  );
   return out;
 }
 
@@ -159,7 +199,14 @@ function tweenCamera(to, dur) {
       done();
       return;
     }
-    cam.tween = { fromPos: cam.pos.clone(), fromTarget: cam.target.clone(), to, t: 0, dur, done };
+    cam.tween = {
+      fromPos: cam.pos.clone(),
+      fromTarget: cam.target.clone(),
+      to,
+      t: 0,
+      dur,
+      done,
+    };
   });
 }
 
@@ -194,7 +241,8 @@ function syncMates() {
   if (!scene) return;
   const wanted = new Map();
   for (const m of props.crew) wanted.set(m.id, { ...m, live: false });
-  for (const [id, m] of Object.entries(props.live)) wanted.set(id, { ...(wanted.get(id) || {}), ...m, id, live: true });
+  for (const [id, m] of Object.entries(props.live))
+    wanted.set(id, { ...(wanted.get(id) || {}), ...m, id, live: true });
 
   for (const [id, mate] of mates) {
     if (!wanted.has(id)) {
@@ -214,26 +262,43 @@ function syncMates() {
         scene.remove(mate.avatar.group);
         mate.avatar.dispose();
       }
-      mate = { avatar: buildAvatar(look), pos, ry: r() * Math.PI * 2, target: null, wait: r() * 3, lookKey, waveT: -1 };
+      mate = {
+        avatar: buildAvatar(look),
+        pos,
+        ry: r() * Math.PI * 2,
+        target: null,
+        wait: r() * 3,
+        lookKey,
+        waveT: -1,
+      };
       scene.add(mate.avatar.group);
       mates.set(id, mate);
     }
     mate.live = info.live;
     mate.name = info.name;
-    if (info.live && info.x !== undefined) mate.target = new THREE.Vector3(info.x, 0, info.z);
+    if (info.live && info.x !== undefined)
+      mate.target = new THREE.Vector3(info.x, 0, info.z);
     if (info.live && info.ry !== undefined) mate.liveRy = info.ry;
     if (info.waveAt && info.waveAt !== mate.lastWave) {
       mate.lastWave = info.waveAt;
       mate.waveT = 0;
     }
   }
-  people.value = [...mates.entries()].map(([id, m]) => ({ id, name: (m.name || 'Crewmate').split(' ')[0], live: m.live }));
+  people.value = [...mates.entries()].map(([id, m]) => ({
+    id,
+    name: (m.name || "Crewmate").split(" ")[0],
+    live: m.live,
+  }));
 }
 
 function randomSpot(r = Math.random) {
   // somewhere near a station's doorstep, so idle crewmates look like they are hanging out
   const s = camp.stations[Math.floor(r() * camp.stations.length)];
-  return new THREE.Vector3(s.approachPoint.x + (r() - 0.5) * 2.5, 0, s.approachPoint.z + (r() - 0.5) * 2.5);
+  return new THREE.Vector3(
+    s.approachPoint.x + (r() - 0.5) * 2.5,
+    0,
+    s.approachPoint.z + (r() - 0.5) * 2.5,
+  );
 }
 
 /** Keep feet out of buildings, trees and the pond, and inside the island. */
@@ -274,11 +339,24 @@ function turn(from, to, dt) {
 
 // ---------- input ----------
 
-const MOVE_KEYS = { w: [0, -1], arrowup: [0, -1], s: [0, 1], arrowdown: [0, 1], a: [-1, 0], arrowleft: [-1, 0], d: [1, 0], arrowright: [1, 0] };
+const MOVE_KEYS = {
+  w: [0, -1],
+  arrowup: [0, -1],
+  s: [0, 1],
+  arrowdown: [0, 1],
+  a: [-1, 0],
+  arrowleft: [-1, 0],
+  d: [1, 0],
+  arrowright: [1, 0],
+};
 
 function typing(e) {
   const el = e.target;
-  return el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
+  return (
+    el &&
+    (el.isContentEditable ||
+      ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))
+  );
 }
 
 function onKeyDown(e) {
@@ -286,14 +364,25 @@ function onKeyDown(e) {
   const k = e.key.toLowerCase();
   if (MOVE_KEYS[k]) {
     // arrows only move you when focus is on the camp itself, so they still scroll / work in other controls
-    if (k.startsWith('arrow') && document.activeElement && document.activeElement !== document.body && !host.value?.contains(document.activeElement)) return;
+    if (
+      k.startsWith("arrow") &&
+      document.activeElement &&
+      document.activeElement !== document.body &&
+      !host.value?.contains(document.activeElement)
+    )
+      return;
     keys.add(k);
     player.target = null;
     e.preventDefault();
-  } else if ((k === 'e' || (k === ' ' && document.activeElement?.tagName !== 'BUTTON')) && nearby.value) { // Space also presses a focused button
+  } else if (
+    (k === "e" ||
+      (k === " " && document.activeElement?.tagName !== "BUTTON")) &&
+    nearby.value
+  ) {
+    // Space also presses a focused button
     e.preventDefault();
     enter(nearby.value);
-  } else if (k === 'q') {
+  } else if (k === "q") {
     wave();
   }
 }
@@ -318,7 +407,8 @@ function moveJoystick(e) {
     dx /= push;
     dz /= push;
   }
-  if (knob.value) knob.value.style.transform = `translate(${dx * JOY_TRAVEL}px, ${dz * JOY_TRAVEL}px)`;
+  if (knob.value)
+    knob.value.style.transform = `translate(${dx * JOY_TRAVEL}px, ${dz * JOY_TRAVEL}px)`;
   joy.x = push < JOY_DEADZONE ? 0 : dx;
   joy.z = push < JOY_DEADZONE ? 0 : dz;
 }
@@ -339,7 +429,7 @@ function releaseJoystick() {
   joy.pointerId = null;
   joy.x = 0;
   joy.z = 0;
-  if (knob.value) knob.value.style.transform = '';
+  if (knob.value) knob.value.style.transform = "";
 }
 
 const raycaster = new THREE.Raycaster();
@@ -348,10 +438,19 @@ const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 function pick(e) {
   const rect = renderer.domElement.getBoundingClientRect();
-  pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+  pointer.set(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1,
+  );
   raycaster.setFromCamera(pointer, camera);
-  const stationHit = raycaster.intersectObjects(camp.stations.map((s) => s.group), true)[0];
-  return { stationId: stationHit?.object.userData.station || null, ray: raycaster.ray };
+  const stationHit = raycaster.intersectObjects(
+    camp.stations.map((s) => s.group),
+    true,
+  )[0];
+  return {
+    stationId: stationHit?.object.userData.station || null,
+    ray: raycaster.ray,
+  };
 }
 
 // A press is a tap (walk / go in) unless it moves more than a few px: then it's a drag that slides the view.
@@ -371,13 +470,20 @@ function onPointerMove(e) {
     }
     return;
   }
-  if (entering.value || e.pointerType === 'touch') return;
+  if (entering.value || e.pointerType === "touch") return;
   hovered.value = pick(e).stationId;
 }
 
 function onPointerDown(e) {
   if (entering.value || e.button > 0) return;
-  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y, moved: false };
+  drag = {
+    id: e.pointerId,
+    x: e.clientX,
+    y: e.clientY,
+    panX: pan.x,
+    panY: pan.y,
+    moved: false,
+  };
   e.currentTarget.setPointerCapture?.(e.pointerId);
 }
 
@@ -406,7 +512,7 @@ async function enter(stationId) {
   const station = camp.stations.find((s) => s.id === stationId);
   if (!station) return;
   if (props.locked.includes(stationId)) {
-    emit('locked', station);
+    emit("locked", station);
     return;
   }
   entering.value = stationId;
@@ -425,26 +531,33 @@ async function enter(stationId) {
 
   tweenDoor(stationId, 1, 0.8, 0.35);
   const swooped = tweenCamera(closeUp(station), 1.25);
-  setTimeout(() => (wipe.value = 'in'), reduceMotion ? 0 : 800);
+  setTimeout(() => (wipe.value = "in"), reduceMotion ? 0 : 800);
   await swooped;
   await new Promise((r) => setTimeout(r, reduceMotion ? 0 : 420)); // let the iris finish closing
-  emit('enter', station);
+  emit("enter", station);
 }
 
 // ---------- environment ----------
 
-let lastEnvKey = '';
+let lastEnvKey = "";
 function applyEnvironment(force = false) {
   if (!camp) return;
   const hours = sgHours();
   const key = `${props.mode}|${props.condition}|${Math.floor(hours * 12)}`; // re-tint every 5 minutes
   if (!force && key === lastEnvKey) return;
   lastEnvKey = key;
-  const env = environmentFor({ hours, condition: props.condition, mode: props.mode });
+  const env = environmentFor({
+    hours,
+    condition: props.condition,
+    mode: props.mode,
+  });
   camp.setEnvironment(env);
   renderer.toneMappingExposure = 1;
-  host.value?.style.setProperty('--camp-ink', env.night ? '#0f1b2d' : '#1f2a24');
-  host.value?.classList.toggle('is-night', env.night);
+  host.value?.style.setProperty(
+    "--camp-ink",
+    env.night ? "#0f1b2d" : "#1f2a24",
+  );
+  host.value?.classList.toggle("is-night", env.night);
 }
 
 // ---------- the loop ----------
@@ -455,8 +568,11 @@ function placeOverlay(el, worldPos, yOffset = 0) {
   projected.copy(worldPos);
   projected.y += yOffset;
   projected.project(camera);
-  const hidden = projected.z > 1 || Math.abs(projected.x) > 1.2 || Math.abs(projected.y) > 1.2;
-  el.style.visibility = hidden ? 'hidden' : 'visible';
+  const hidden =
+    projected.z > 1 ||
+    Math.abs(projected.x) > 1.2 ||
+    Math.abs(projected.y) > 1.2;
+  el.style.visibility = hidden ? "hidden" : "visible";
   const w = renderer.domElement.clientWidth;
   const h = renderer.domElement.clientHeight;
   el.style.transform = `translate(-50%, -100%) translate(${((projected.x + 1) / 2) * w}px, ${((1 - projected.y) / 2) * h}px)`;
@@ -487,7 +603,10 @@ function frame() {
       fwd.y = 0;
       fwd.normalize();
       right.crossVectors(fwd, camera.up).normalize();
-      const dir = new THREE.Vector3().addScaledVector(right, ix).addScaledVector(fwd, -iz).normalize();
+      const dir = new THREE.Vector3()
+        .addScaledVector(right, ix)
+        .addScaledVector(fwd, -iz)
+        .normalize();
       player.pos.addScaledVector(dir, 5.5 * pace * dt);
       player.ry = turn(player.ry, Math.atan2(dir.x, dir.z), dt);
       moving = true;
@@ -502,7 +621,9 @@ function frame() {
     }
     if (moving) collide(player.pos);
     if (moving && !drag) pan.multiplyScalar(1 - Math.min(1, dt * 2.5));
-    player.speed += ((moving ? (ix || iz ? pace : 1) : 0) - player.speed) * Math.min(1, dt * 10);
+    player.speed +=
+      ((moving ? (ix || iz ? pace : 1) : 0) - player.speed) *
+      Math.min(1, dt * 10);
     placeAvatar(player.avatar, player.pos, player.ry);
     player.avatar.animate(dt, player.speed);
     if (player.waveT >= 0) {
@@ -515,7 +636,7 @@ function frame() {
     }
     if (moving && t - lastEmit > 0.1) {
       lastEmit = t;
-      emit('move', { x: player.pos.x, z: player.pos.z, ry: player.ry });
+      emit("move", { x: player.pos.x, z: player.pos.z, ry: player.ry });
     }
 
     // which station are you next to?
@@ -539,9 +660,11 @@ function frame() {
     if (mate.live) {
       if (mate.target) {
         const far = mate.pos.distanceTo(mate.target);
-        if (far > 8) mate.pos.copy(mate.target); // they teleported (just joined, or a long gap)
+        if (far > 8)
+          mate.pos.copy(mate.target); // they teleported (just joined, or a long gap)
         else if (!stepToward(mate, mate.target, 6.5, dt)) speed = 1;
-        else if (mate.liveRy !== undefined) mate.ry = turn(mate.ry, mate.liveRy, dt);
+        else if (mate.liveRy !== undefined)
+          mate.ry = turn(mate.ry, mate.liveRy, dt);
       }
     } else {
       // offline: amble between doorsteps
@@ -553,7 +676,8 @@ function frame() {
         collide(mate.pos);
       } else if ((mate.wait -= dt) <= 0) mate.target = randomSpot();
     }
-    mate.speed = (mate.speed || 0) + (speed - (mate.speed || 0)) * Math.min(1, dt * 10);
+    mate.speed =
+      (mate.speed || 0) + (speed - (mate.speed || 0)) * Math.min(1, dt * 10);
     placeAvatar(mate.avatar, mate.pos, mate.ry);
     mate.avatar.animate(dt, mate.speed);
     if (mate.waveT >= 0) {
@@ -591,7 +715,10 @@ function frame() {
     doorTween.t += dt / doorTween.dur;
     if (doorTween.t > 0) {
       const k = ease(Math.min(1, doorTween.t));
-      setDoor(doorTween.stationId, doorTween.from + (doorTween.to - doorTween.from) * k);
+      setDoor(
+        doorTween.stationId,
+        doorTween.from + (doorTween.to - doorTween.from) * k,
+      );
       if (doorTween.t >= 1) doorTween = null;
     }
   }
@@ -611,35 +738,39 @@ function resize() {
   const w = el.clientWidth;
   const h = el.clientHeight;
   renderer.setSize(w, h, false);
-   camera.aspect = w / h;
+  camera.aspect = w / h;
   // slide the picture (not the camera) so the camp sits in the space beside or above a panel
   const sx = props.viewShift?.x || 0;
   const sy = props.viewShift?.y || 0;
   if (sx || sy) camera.setViewOffset(w, h, sx, sy, w, h);
   else camera.clearViewOffset();
-   camera.updateProjectionMatrix();}
+  camera.updateProjectionMatrix();
+}
 
 function wave() {
   if (!player.avatar) return;
   player.waveT = 0;
-  emit('wave');
+  emit("wave");
 }
 
 // ---------- lifecycle ----------
 
 onMounted(() => {
-  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: "high-performance",
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.domElement.setAttribute('aria-hidden', 'true');
+  renderer.domElement.setAttribute("aria-hidden", "true");
   canvasWrap.value.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(40, 1.6, 0.5, 400);
   camp = buildCamp(scene);
   camp.stations.forEach((s) => (doors[s.id] = 0));
-  camp.setTraffic(props.traffic)
+  camp.setTraffic(props.traffic);
 
   rebuildPlayer();
   syncMates();
@@ -650,7 +781,8 @@ onMounted(() => {
   resizeObs = new ResizeObserver(resize);
   resizeObs.observe(canvasWrap.value);
 
-  const station = props.returnFrom && camp.stations.find((s) => s.id === props.returnFrom);
+  const station =
+    props.returnFrom && camp.stations.find((s) => s.id === props.returnFrom);
   if (station) {
     // you just walked out of it: stand on the doorstep, door open, camera close, then pull back
     player.pos.copy(station.approachPoint);
@@ -668,11 +800,11 @@ onMounted(() => {
   }
   placeAvatar(player.avatar, player.pos, player.ry);
 
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('blur', onBlur);
-  compactMedia?.addEventListener?.('change', onCompactChange);
-  touchMedia?.addEventListener?.('change', onTouchChange);
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", onBlur);
+  compactMedia?.addEventListener?.("change", onCompactChange);
+  touchMedia?.addEventListener?.("change", onTouchChange);
   frame();
   ready.value = true;
 });
@@ -681,34 +813,50 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(raf);
   clearInterval(envTimer);
   resizeObs?.disconnect();
-  window.removeEventListener('keydown', onKeyDown);
-  window.removeEventListener('keyup', onKeyUp);
-  window.removeEventListener('blur', onBlur);
-  compactMedia?.removeEventListener?.('change', onCompactChange);
-  touchMedia?.removeEventListener?.('change', onTouchChange);
-  player.avatar?.dispose();  mates.forEach((m) => m.avatar.dispose());
+  window.removeEventListener("keydown", onKeyDown);
+  window.removeEventListener("keyup", onKeyUp);
+  window.removeEventListener("blur", onBlur);
+  compactMedia?.removeEventListener?.("change", onCompactChange);
+  touchMedia?.removeEventListener?.("change", onTouchChange);
+  player.avatar?.dispose();
+  mates.forEach((m) => m.avatar.dispose());
   camp?.dispose();
   renderer?.dispose();
   renderer?.forceContextLoss();
   renderer?.domElement.remove();
 });
 
-watch(() => props.me?.look, () => scene && rebuildPlayer(), { deep: true });
+watch(
+  () => props.me?.look,
+  () => scene && rebuildPlayer(),
+  { deep: true },
+);
 watch(() => [props.crew, props.live], syncMates, { deep: true });
-watch(() => [props.mode, props.condition], () => applyEnvironment(true));
-watch(() => props.traffic, (t) => camp?.setTraffic(t), { deep: true })
-watch(() => [props.viewShift?.x, props.viewShift?.y], () => resize())
+watch(
+  () => [props.mode, props.condition],
+  () => applyEnvironment(true),
+);
+watch(
+  () => props.traffic,
+  (t) => camp?.setTraffic(t),
+  { deep: true },
+);
+watch(
+  () => [props.viewShift?.x, props.viewShift?.y],
+  () => resize(),
+);
 
 defineExpose({ enter, wave });
 
-const highlighted = (id) => nearby.value === id || hovered.value === id || entering.value === id;
+const highlighted = (id) =>
+  nearby.value === id || hovered.value === id || entering.value === id;
 const stationList = [
-  { id: 'watcher', name: 'Watcher' },
-  { id: 'explorer', name: 'Explorer' },
-  { id: 'trips', name: 'Planner' },
-  { id: 'tales', name: 'Tales' },
-  { id: 'archives', name: 'Archives' },
-  { id: 'ledger', name: 'Ledger' },
+  { id: "watcher", name: "Watcher" },
+  { id: "explorer", name: "Explorer" },
+  { id: "trips", name: "Planner" },
+  { id: "tales", name: "Tales" },
+  { id: "archives", name: "Archives" },
+  { id: "ledger", name: "Ledger" },
 ];
 const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
 </script>
@@ -722,31 +870,59 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
     @pointermove="onPointerMove"
     @pointerleave="hovered = null"
   >
-    <div ref="canvasWrap" class="canvas" :style="{ cursor: hovered ? 'pointer' : 'default' }" @pointerdown="onPointerDown" @pointerup="onPointerUp" @pointercancel="onPointerCancel" />
+    <div
+      ref="canvasWrap"
+      class="canvas"
+      :style="{ cursor: hovered ? 'pointer' : 'default' }"
+      @pointerdown="onPointerDown"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerCancel"
+    />
 
-    <div class="overlays" :class="{ ready, 'labels-hidden' : !showLabels }">
-        <button
-          v-for="s in stationList"
-          :key="s.id"
-          :ref="(el) => (labelEls[s.id] = el)"
-          type="button"
-          class="bubble"
-          :class="{ hot: highlighted(s.id) }"
-          :aria-label="`Go to ${s.name}${subtitles[s.id] ? ': ' + subtitles[s.id] : ''}`"
-          @click="enter(s.id)"
-        >
-          <strong>{{ s.name }}</strong>
-          <span v-if="subtitles[s.id]">{{ subtitles[s.id] }}</span>
-        </button>
+    <div class="overlays" :class="{ ready, 'labels-hidden': !showLabels }">
+      <button
+        v-for="s in stationList"
+        :key="s.id"
+        :ref="(el) => (labelEls[s.id] = el)"
+        type="button"
+        class="bubble"
+        :class="{ hot: highlighted(s.id) }"
+        :aria-label="`Go to ${s.name}${subtitles[s.id] ? ': ' + subtitles[s.id] : ''}`"
+        @click="enter(s.id)"
+      >
+        <strong>{{ s.name }}</strong>
+        <span v-if="subtitles[s.id]">{{ subtitles[s.id] }}</span>
+      </button>
 
-      <span v-if="me" :ref="(el) => (tagEls.me = el)" class="tag me" aria-hidden="true">{{ me.id === 'guest' ? 'You' : `${(me.name || 'You').split(' ')[0]} (you)` }}</span>
-      <span v-for="p in people" :key="p.id" :ref="(el) => (tagEls[p.id] = el)" class="tag" aria-hidden="true">
+      <span
+        v-if="me"
+        :ref="(el) => (tagEls.me = el)"
+        class="tag me"
+        aria-hidden="true"
+        >{{
+          me.id === "guest"
+            ? "You"
+            : `${(me.name || "You").split(" ")[0]} (you)`
+        }}</span
+      >
+      <span
+        v-for="p in people"
+        :key="p.id"
+        :ref="(el) => (tagEls[p.id] = el)"
+        class="tag"
+        aria-hidden="true"
+      >
         <i v-if="p.live" class="dot" />{{ p.name }}
       </span>
     </div>
 
     <div aria-live="polite">
-      <button v-if="nearby && !entering" type="button" class="prompt" @click="enter(nearby)">
+      <button
+        v-if="nearby && !entering"
+        type="button"
+        class="prompt"
+        @click="enter(nearby)"
+      >
         <kbd v-if="!touch">E</kbd> Enter {{ nearbyName(nearby) }}
       </button>
     </div>
@@ -765,7 +941,13 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
     >
       <i ref="knob" class="knob" />
     </div>
-    <div v-if="wipe" class="wipe" :class="wipe" aria-hidden="true" @animationend="wipe === 'out' && (wipe = null)" />
+    <div
+      v-if="wipe"
+      class="wipe"
+      :class="wipe"
+      aria-hidden="true"
+      @animationend="wipe === 'out' && (wipe = null)"
+    />
   </div>
 </template>
 
@@ -824,11 +1006,13 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.18);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, opacity 0.2s;
+  transition:
+    background 0.15s,
+    opacity 0.2s;
   font: inherit;
 }
 .bubble::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: -9px;
   left: 50%;
@@ -869,11 +1053,19 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   animation: label-pop 0.22s ease-out;
 }
 @keyframes label-pop {
-  from { opacity: 0; margin-top: -4px; }
-  to { opacity: 1; margin-top: -12px; }
+  from {
+    opacity: 0;
+    margin-top: -4px;
+  }
+  to {
+    opacity: 1;
+    margin-top: -12px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .labels-hidden .bubble.hot { animation: none; }
+  .labels-hidden .bubble.hot {
+    animation: none;
+  }
 }
 
 /* night: warm paper lanterns instead of bright white cards */
@@ -881,7 +1073,9 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
   border-color: #3a2618;
   background: #f3e2bd;
   color: #3a2618;
-  box-shadow: 0 0 0 4px rgba(255, 190, 90, 0.18), 0 0 18px rgba(255, 180, 80, 0.55);
+  box-shadow:
+    0 0 0 4px rgba(255, 190, 90, 0.18),
+    0 0 18px rgba(255, 180, 80, 0.55);
 }
 .is-night .bubble::after {
   border-color: #3a2618;
@@ -895,7 +1089,9 @@ const nearbyName = (id) => stationList.find((s) => s.id === id)?.name;
 .is-night .bubble:focus-visible {
   /* the one you're next to burns a little brighter */
   background: #f5bf4f;
-  box-shadow: 0 0 0 5px rgba(255, 190, 90, 0.3), 0 0 26px rgba(255, 180, 80, 0.8);
+  box-shadow:
+    0 0 0 5px rgba(255, 190, 90, 0.3),
+    0 0 26px rgba(255, 180, 80, 0.8);
 }
 @media (max-width: 640px) {
   /* phones: smaller labels, names only */
