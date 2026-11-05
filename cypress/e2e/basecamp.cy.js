@@ -12,7 +12,6 @@ function login(email, password) {
   cy.url().should('eq', Cypress.config().baseUrl + '/');
 }
 
-/** Station labels are hidden-until-hover by default (fresh localStorage); this toggle shows them all. */
 function showAllLabels() {
   cy.get('[aria-label="Show all place labels"]', { timeout: 10000 }).click();
 }
