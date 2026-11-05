@@ -27,7 +27,7 @@ describe('Trips and crew', () => {
 
   it('creates a trip and it appears in the trip list', () => {
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
-    const name = `Cypress trip ${Date.now()}`;
+    const name = 'JB Weekend Trip';
     cy.visit('/planner');
     cy.get('[data-cy="new-trip"]').click();
     cy.get('[data-cy="trip-name"]').type(name);
@@ -38,7 +38,7 @@ describe('Trips and crew', () => {
 
   it('invites a member by username, who appears as Pending', () => {
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
-    const name = `Cypress invite ${Date.now()}`;
+    const name = `Johor Food Crawl ${Math.random().toString(36).slice(2, 6)}`;
     cy.visit('/planner');
     cy.get('[data-cy="new-trip"]').click();
     cy.get('[data-cy="trip-name"]').type(name);
@@ -52,7 +52,7 @@ describe('Trips and crew', () => {
 
   it('full invite accept/decline, pending-access-block, and remove/leave flow', () => {
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
-    const name = `Cypress crew ${Date.now()}`;
+    const name = `Causeway Weekend ${Math.random().toString(36).slice(2, 6)}`;
     cy.visit('/planner');
     cy.get('[data-cy="new-trip"]').click();
     cy.get('[data-cy="trip-name"]').type(name);

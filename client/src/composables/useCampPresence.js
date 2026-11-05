@@ -17,8 +17,8 @@ export function useCampPresence() {
   let pending = null;
   let timer = null;
 
-  function stop() {
-    channels.forEach((ch) => supabase?.removeChannel(ch));
+  async function stop() {
+    await Promise.all(channels.map((ch) => supabase?.removeChannel(ch)));
     channels = [];
     clearTimeout(timer);
     timer = null;
@@ -27,8 +27,8 @@ export function useCampPresence() {
   }
 
   /** profile: { id, name, look }; tripIds: trips whose crews should see you */
-  function start(profile, tripIds) {
-    stop();
+  async function start(profile, tripIds) {
+    await stop();
     me = profile;
     if (!supabase || !me?.id || !tripIds.length) return;
 

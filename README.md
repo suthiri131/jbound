@@ -2,6 +2,18 @@
 
 JBound is a Singapore–Johor Bahru travel companion. Friends use it to plan trips together, check how busy the border is, split costs in S$ and RM, discover places, share tales about them, and keep a scrapbook of past trips.
 
+## Try it yourself
+
+Live app: [https://jbound-web.vercel.app](https://jbound-web.vercel.app)
+
+Use this account to sign in :
+
+- **Email:** `demonstration@yahoo.com`
+- **Password:** `password`
+
+It already has a sample trip titled ("JB Weekend Getaway") with stops, a couple of Ledger
+expenses in both SGD and MYR, and a posted Tale.
+
 ## Tech stack
 
 - **Client:** Vue 3, Vite, Vue Router, Pinia, axios, Three.js, and the Google Maps JavaScript API
@@ -93,26 +105,30 @@ pnpm --filter jbound-client test:unit
 
 One-time setup:
 
-1. `pnpm install` from the repo root (already covers Cypress as it's a pinned `devDependency` 
-   in `client/package.json`. So no separate install step needed).
-2. Copy `.env.example` to `.env` in both `server/` and `client/` and fill it. For more information, contact Coen.
-   
-3. Copy `cypress.env.json.example` to `cypress.env.json` (repo root, gitignored) and fill
-   in test account credentials. These are self-service: sign up your own throwaway
-   account(s) through the running app itself, no one needs to hand them to you.
+1. `pnpm install` from the repo root — this already installs Cypress too, it's a pinned
+   `devDependency` in `client/package.json`. No separate install step needed.
+2. Set up `server/.env` and `client/.env.local` as described under **Environment
+   variables** above, if you haven't already.
+3. Copy `cypress.env.json.example` to `cypress.env.json` and fill in a test account's
+   login. Alternatively, you can use `testing@gmail.com`  and `password` which exists.
+Running:
 
-Running the suite:
-
-1. Start the backend: Run `pnpm dev` in `server/`.
-2. Start the frontend: Run `pnpm dev` in `client/`.
+1. Start the backend (server folder): `pnpm --filter jbound-server dev`.
+2. Start the frontend (separate terminal in the client folder): `pnpm dev`.
 3. Run the tests headless: `pnpm --filter jbound-client test:e2e:cypress`.
-   To watch it run in a real browser instead: Open another terminal and run `npx cypress open --project ..` in `client/`.
+   To watch it run in a real browser instead, open a third terminal:
+   `npx cypress open --project ..` in the client folder .
 
-Troubleshooting Tips :
+Troubleshooting:
+- **Blank/white screen in the Cypress browser:** usually means the frontend isn't actually
+  on port 5173. Vite silently picks a different port (5174, 5175...) if 5173 is already
+  taken, but Cypress is hardcoded to expect 5173. Run `lsof -ti:5173` to check if something's
+  already there; if so, `lsof -ti:5173 | xargs kill -9` and restart the frontend.
 - Always run Cypress from `client/`, as running it from the root picks up
   a different, unpinned Cypress version and everything breaks with unrelated errors.
 - If sign-ins start failing after many repeated test runs, the backend's auth rate limiter
-  is kicking in and you need to restart the backend with `AUTH_RATE_LIMIT=off pnpm dev` to lift it.
+  is kicking in — restart the backend with `AUTH_RATE_LIMIT=off pnpm --filter jbound-server dev`
+  to lift it.
 - `cypress/e2e/map.cy.js` is out of date (targets Planner markup and demo data that no
   longer exist) and is superseded by `cypress/e2e/route-map.cy.js`.
 
