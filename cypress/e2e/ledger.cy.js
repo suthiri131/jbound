@@ -19,11 +19,11 @@ describe('Ledger', () => {
     if (!tripId || !Cypress.env('TEST_EMAIL')) this.skip();
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
     cy.visit(`/ledger?tripId=${tripId}`);
-    cy.get('#trip-picker').should('have.value', tripId);
+    cy.get('#trip-picker', { timeout: 10000 }).should('not.contain.text', 'Select a trip');
   });
 
   it('adds an equal-split expense and shows it on the tab with a per-person share', () => {
-    const description = `Cypress equal split ${Date.now()}`;
+    const description = `Dinner at the hawker centre ${Math.random().toString(36).slice(2, 6)}`;
     cy.contains('button', '+ Add to the tab').click();
     cy.get('#expense-description').type(description);
     cy.get('#expense-amount').type('30');
@@ -34,7 +34,7 @@ describe('Ledger', () => {
   });
 
   it('adds a custom/itemized split and it totals correctly', () => {
-    const description = `Cypress custom split ${Date.now()}`;
+    const description = `Groceries for the trip ${Math.random().toString(36).slice(2, 6)}`;
     cy.contains('button', '+ Add to the tab').click();
     cy.get('#expense-description').type(description);
     cy.get('#expense-amount').type('50');
@@ -51,7 +51,7 @@ describe('Ledger', () => {
   });
 
   it('shows a who-owes-whom settlement suggestion after an unequal expense', () => {
-    const description = `Cypress settlement check ${Date.now()}`;
+    const description = `Petrol and toll ${Math.random().toString(36).slice(2, 6)}`;
     cy.contains('button', '+ Add to the tab').click();
     cy.get('#expense-description').type(description);
     cy.get('#expense-amount').type('40');

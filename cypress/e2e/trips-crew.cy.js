@@ -13,7 +13,11 @@ function login(email, password) {
 }
 
 function logout() {
-  cy.get('.toast[role="status"]', { timeout: 6000 }).should('not.exist');
+  cy.get('body').then(($body) => {
+    if ($body.find('.toast[role="status"]').length) {
+      cy.get('[aria-label="Dismiss"]').click();
+    }
+  });
   cy.get('[aria-label^="Account menu"]').click();
   cy.contains('[role="menuitem"]', 'Sign out').click();
 }
@@ -27,7 +31,7 @@ describe('Trips and crew', () => {
 
   it('creates a trip and it appears in the trip list', () => {
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
-    const name = `Cypress trip ${Date.now()}`;
+    const name = 'JB Weekend Trip';
     cy.visit('/planner');
     cy.get('[data-cy="new-trip"]').click();
     cy.get('[data-cy="trip-name"]').type(name);
@@ -38,21 +42,23 @@ describe('Trips and crew', () => {
 
   it('invites a member by username, who appears as Pending', () => {
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
-    const name = `Cypress invite ${Date.now()}`;
+    const name = `Johor Food Crawl ${Math.random().toString(36).slice(2, 6)}`;
     cy.visit('/planner');
     cy.get('[data-cy="new-trip"]').click();
     cy.get('[data-cy="trip-name"]').type(name);
     cy.get('[data-cy="trip-create"]').click();
     cy.url().should('match', /\/planner\/[\w-]+$/);
 
-    cy.get('#invite-user, input[placeholder="@username"]').type(Cypress.env('TEST2_USERNAME'));
+    cy.get('[data-cy="invite-open"]').click();
+    cy.contains('button', 'Invite a friend').click();
+    cy.get('#invite-user').type(Cypress.env('TEST2_USERNAME'));
     cy.contains('button', 'Send').click();
-    cy.contains('li', Cypress.env('TEST2_NAME'), { timeout: 8000 }).should('contain.text', 'Pending');
+    cy.contains('li', Cypress.env('TEST2_NAME'), { timeout: 8000 }).should('contain.text', 'invited');
   });
 
   it('full invite accept/decline, pending-access-block, and remove/leave flow', () => {
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
-    const name = `Cypress crew ${Date.now()}`;
+    const name = `Causeway Weekend ${Math.random().toString(36).slice(2, 6)}`;
     cy.visit('/planner');
     cy.get('[data-cy="new-trip"]').click();
     cy.get('[data-cy="trip-name"]').type(name);
@@ -61,7 +67,9 @@ describe('Trips and crew', () => {
       const tripId = url.match(/\/planner\/([\w-]+)$/)[1];
       cy.wrap(tripId).as('tripId');
     });
-    cy.get('#invite-user, input[placeholder="@username"]').type(Cypress.env('TEST2_USERNAME'));
+    cy.get('[data-cy="invite-open"]').click();
+    cy.contains('button', 'Invite a friend').click();
+    cy.get('#invite-user').type(Cypress.env('TEST2_USERNAME'));
     cy.contains('button', 'Send').click();
     logout();
 

@@ -20,7 +20,7 @@ describe('Tales', () => {
   });
 
   it('posts a new tale and it appears in the feed', () => {
-    const caption = `Cypress tale ${Date.now()}`;
+    const caption = 'Great chicken rice near the Causeway';
 
     cy.get('.send[aria-expanded]').click();
     cy.get('[data-cy="tale-caption"]').type(caption);

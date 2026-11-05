@@ -12,6 +12,16 @@ function login(email, password) {
   cy.url().should('eq', Cypress.config().baseUrl + '/');
 }
 
+function logout() {
+  cy.get('body').then(($body) => {
+    if ($body.find('.toast[role="status"]').length) {
+      cy.get('[aria-label="Dismiss"]').click();
+    }
+  });
+  cy.get('[aria-label^="Account menu"]').click();
+  cy.contains('[role="menuitem"]', 'Sign out').click();
+}
+
 describe('Notifications', () => {
   beforeEach(function () {
     if (!Cypress.env('TEST_EMAIL')) this.skip();
@@ -33,8 +43,21 @@ describe('Notifications', () => {
     cy.url().should('include', '/notifications');
   });
 
-  it('shows system messages in the activity feed', () => {
+  it('shows items in the notifications list', function () {
+    if (!Cypress.env('TEST2_EMAIL')) this.skip();
+    const name = `Pulai Springs Day Trip ${Math.random().toString(36).slice(2, 6)}`;
+    cy.visit('/planner');
+    cy.get('[data-cy="new-trip"]').click();
+    cy.get('[data-cy="trip-name"]').type(name);
+    cy.get('[data-cy="trip-create"]').click();
+    cy.get('[data-cy="invite-open"]').click();
+    cy.contains('button', 'Invite a friend').click();
+    cy.get('#invite-user').type(Cypress.env('TEST2_USERNAME'));
+    cy.contains('button', 'Send').click();
+    logout();
+
+    login(Cypress.env('TEST2_EMAIL'), Cypress.env('TEST2_PASSWORD'));
     cy.visit('/notifications');
-    cy.get('.feed li, ul.feed li', { timeout: 10000 }).should('have.length.greaterThan', 0);
+    cy.get('.pile-list li', { timeout: 10000 }).should('have.length.greaterThan', 0);
   });
 });
