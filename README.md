@@ -9,6 +9,15 @@ JBound is a Singapore–Johor Bahru travel companion. Friends use it to plan tri
 - **Database & auth:** Supabase (Postgres, Auth, Storage, and Realtime)
 - **External APIs:** Google Places API (New), LTA DataMall (traffic cameras), Frankfurter (exchange rates), OpenRouteService (driving routes), and data.gov.sg (weather forecasts)
 
+## Live app
+
+Frontend: https://jbound-web.vercel.app
+Backend: https://jbound-api.vercel.app
+
+Demo accounts:
+- Account 1: `samuel@example.com` / `password`
+- Account 2: `alexi@example.com` / `password`
+
 ## Run locally
 
 Install [Node.js](https://nodejs.org) 20.19+ or 22.12+ and [pnpm](https://pnpm.io/installation) if they are not already installed, then install dependencies from the repository root:
