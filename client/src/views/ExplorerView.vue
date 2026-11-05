@@ -1275,9 +1275,9 @@ function pinFromBackpack(item) {
   .feed-scroll {
     container-type: size;
   }
-  /* no taller than the visible cork below its sticky offset (cqh leaves out the same 20px as top padding), so it stays in reach while the flyers scroll */
+  /* short enough that its bottom edge clears the frame below the search header, and the sheet reads as a notepad pinned to the cork */
   .backpack {
-    max-height: 100cqh;
+    max-height: max(240px, calc(100cqh - 225px));
   }
 }
 .bp-empty {

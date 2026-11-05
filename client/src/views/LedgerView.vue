@@ -21,6 +21,9 @@ const trips = ref([]);
 const tripId = ref(typeof route.query.tripId === 'string' ? route.query.tripId : '');
 const expenses = ref([]);
 const members = ref([]);
+const formerMembers = ref([]); // on the ledger but not in the crew now: they keep their names and can still be settled with
+const formerOnExpense = ref([]); // the ones on the expense being edited, so they can be seen and taken off it
+const formPeople = computed(() => [...members.value, ...formerOnExpense.value]);
 const balances = ref([]);
 const suggestedSettlements = ref([]);
 const transactions = ref([]);
@@ -68,9 +71,11 @@ function formatCompassMoney(amount) {
 function initials(memberId) {
   return memberName(memberId).split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 }
-function memberName(memberId) { return members.value.find(({ id }) => id === memberId)?.name ?? memberId; }
+function memberName(memberId) { return [...members.value, ...formerMembers.value].find(({ id }) => id === memberId)?.name ?? 'Former member'; }
+const inCrew = (memberId) => members.value.some(({ id }) => id === memberId);
+const notInCrewTag = (member) => (inCrew(member.id) ? '' : ' (not in the crew)');
 function clearLedger() {
-  expenses.value = []; members.value = []; balances.value = []; suggestedSettlements.value = []; transactions.value = [];
+  expenses.value = []; members.value = []; formerMembers.value = []; formerOnExpense.value = []; balances.value = []; suggestedSettlements.value = []; transactions.value = [];
 }
 async function apiRequest(path, options = {}) {
   try { return (await api.request({ url: path, ...options })).data; }
@@ -107,10 +112,11 @@ async function loadLedger() {
     if (tripId.value !== currentTrip) return;
     expenses.value = ledger.expenses ?? [];
     members.value = ledger.members ?? [];
+    formerMembers.value = ledger.formerMembers ?? [];
     balances.value = balanceData.balances ?? [];
     suggestedSettlements.value = balanceData.settlements ?? [];
     transactions.value = balanceData.transactions ?? [];
-    if (!form.paidBy || !members.value.some(({ id }) => id === form.paidBy)) form.paidBy = auth.user?.id || members.value[0]?.id || '';
+    if (!form.paidBy || !formPeople.value.some(({ id }) => id === form.paidBy)) form.paidBy = auth.user?.id || members.value[0]?.id || '';
     if (!form.splitAmong.length) form.splitAmong = members.value.map(({ id }) => id);
   } catch (error) { errorMessage.value = error.message; }
   finally { loading.value = false; }
@@ -124,12 +130,14 @@ function chooseTrip() {
 }
 function resetForm() {
   editingId.value = null;
+  formerOnExpense.value = [];
   customSplit.value = false;
   for (const key of Object.keys(customAmounts)) delete customAmounts[key];
   Object.assign(form, emptyForm(), { paidBy: auth.user?.id || members.value[0]?.id || '', splitAmong: members.value.map(({ id }) => id) });
 }
 function editExpense(expense) {
   editingId.value = expense.id;
+  formerOnExpense.value = formerMembers.value.filter(({ id }) => id === expense.paid_by || expense.splitAmong.includes(id));
   Object.assign(form, { description: expense.description, amount: expense.amount, currency: expense.currency, paidBy: expense.paid_by, splitAmong: [...expense.splitAmong] });
   for (const key of Object.keys(customAmounts)) delete customAmounts[key];
   const amounts = customAmountsFor(expense);
@@ -237,6 +245,29 @@ const receiptDate = computed(() => {
 });
 const first = (memberId) => memberName(memberId).split(' ')[0];
 const canEdit = (expense) => expense.created_by === auth.user?.id || selectedTrip.value?.myRole === 'owner';
+// Whoever receives the money ticks it off. If they've left they can't, so the payer or the trip owner does it for them.
+const canConfirm = (st) => st.to === auth.user?.id
+  || (!inCrew(st.to) && (st.from === auth.user?.id || selectedTrip.value?.myRole === 'owner'));
+const whoOwes = (st) => {
+  if (st.to === auth.user?.id) return `${first(st.from)} owes you`;
+  if (st.from === auth.user?.id) return `You owe ${first(st.to)}`;
+  return `${first(st.from)} owes ${first(st.to)}`;
+};
+function settlementNote(st) {
+  if (st.to === auth.user?.id) return inCrew(st.from) ? '' : `${first(st.from)} isn't in the crew, but you can still tick this off.`;
+  if (canConfirm(st)) return `${first(st.to)} isn't in the crew, so tick this off once it's sorted.`;
+  return st.from === auth.user?.id ? `Paid? ${first(st.to)} ticks it off once it lands.` : '';
+}
+function paidSentence(st) {
+  if (st.to === auth.user?.id) return `${first(st.from)} has paid you`;
+  if (st.from === auth.user?.id) return `you have paid ${first(st.to)}`;
+  return `${first(st.from)} has paid ${first(st.to)}`;
+}
+function squareSentence(st) {
+  if (st.to === auth.user?.id) return `${first(st.from)} is square with you`;
+  if (st.from === auth.user?.id) return `you're square with ${first(st.to)}`;
+  return `${first(st.from)} is square with ${first(st.to)}`;
+}
 function startEdit(expense) {
   editExpense(expense);
   formOpen.value = true;
@@ -259,7 +290,7 @@ async function tickOff(settlement) {
   settling.value = false;
   if (!errorMessage.value) {
     ticked.value = null;
-    lastSettled.value = `Ticked off: ${first(settlement.from)} is square with you.`;
+    lastSettled.value = `Ticked off: ${squareSentence(settlement)}.`;
   }
 }
 
@@ -337,22 +368,22 @@ onMounted(loadConversionRate);
           <h2 class="r-sub">Who owes who</h2>
           <ul v-if="suggestedSettlements.length" class="owes">
             <li v-for="(st, index) in suggestedSettlements" :key="`${st.from}-${st.to}-${index}`">
-              <label v-if="st.to === auth.user?.id" class="tick">
+              <label v-if="canConfirm(st)" class="tick">
                 <input type="checkbox" :checked="ticked === settlementKey(st)" :disabled="settling" @change="toggleTick(st, $event.target.checked)" />
-                <span>{{ first(st.from) }} owes you</span>
+                <span>{{ whoOwes(st) }}</span>
               </label>
               <span v-else class="tick" :class="{ mine: st.from === auth.user?.id }">
                 <i class="box" aria-hidden="true" />
-                <span>{{ st.from === auth.user?.id ? `You owe ${first(st.to)}` : `${first(st.from)} owes ${first(st.to)}` }}</span>
+                <span>{{ whoOwes(st) }}</span>
               </span>
               <strong>{{ formatLedgerMoney(st.amountSgd) }}</strong>
-              <small v-if="st.from === auth.user?.id" class="wait">Paid? {{ first(st.to) }} ticks it off once it lands.</small>
+              <small v-if="settlementNote(st)" class="wait">{{ settlementNote(st) }}</small>
               <button
-                v-if="st.to === auth.user?.id && ticked === settlementKey(st)"
+                v-if="canConfirm(st) && ticked === settlementKey(st)"
                 type="button"
                 class="btn btn-primary btn-sm confirm-paid"
                 :disabled="settling"
-                :aria-label="`Confirm ${first(st.from)} has paid you ${formatLedgerMoney(st.amountSgd)}`"
+                :aria-label="`Confirm ${paidSentence(st)} ${formatLedgerMoney(st.amountSgd)}`"
                 @click="tickOff(st)"
               >
                 {{ settling ? 'Confirming…' : 'Confirm' }}
@@ -389,13 +420,13 @@ onMounted(loadConversionRate);
             </div>
             <label class="field" for="expense-payer">Paid by
               <LedgerSelect id="expense-payer" v-model="form.paidBy" label="Paid by"
-                :options="members.map(member => ({ value: member.id, label: member.id === auth.user?.id ? `${member.name} (you)` : member.name }))" />
+                :options="formPeople.map(member => ({ value: member.id, label: member.id === auth.user?.id ? `${member.name} (you)` : `${member.name}${notInCrewTag(member)}` }))" />
             </label>
             <fieldset class="split">
               <legend>Split among <button class="link" type="button" @click="toggleCustom">{{ customSplit ? 'Split equally' : 'Custom amounts' }}</button></legend>
-              <label v-for="member in members" :key="member.id" class="split-row">
+              <label v-for="member in formPeople" :key="member.id" class="split-row">
                 <input v-model="form.splitAmong" type="checkbox" :value="member.id" />
-                <span>{{ member.name }}{{ member.id === auth.user?.id ? ' (you)' : '' }}</span>
+                <span>{{ member.name }}{{ member.id === auth.user?.id ? ' (you)' : notInCrewTag(member) }}</span>
                 <input v-if="customSplit && form.splitAmong.includes(member.id)" v-model.number="customAmounts[member.id]" class="input custom" type="number" min="0" step="0.01" :aria-label="`${member.name} amount`" />
               </label>
               <small v-if="customSplit" class="split-status" :class="{ complete: customSplitReady, over: customRemaining < 0 }" aria-live="polite">{{ customSplitStatus() }}</small>
