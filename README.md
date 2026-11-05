@@ -93,8 +93,8 @@ pnpm --filter jbound-client test:unit
 
 One-time setup:
 
-1. `pnpm install` from the repo root (already covers Cypress — it's a pinned `devDependency`
-   in `client/package.json`, no separate install step needed).
+1. `pnpm install` from the repo root (already covers Cypress as it's a pinned `devDependency` 
+   in `client/package.json`. So no separate install step needed).
 2. Copy `.env.example` to `.env` in both `server/` and `client/` and fill it. For more information, contact Coen.
    
 3. Copy `cypress.env.json.example` to `cypress.env.json` (repo root, gitignored) and fill

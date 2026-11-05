@@ -1,3 +1,7 @@
+
+//stale and deprecated  
+
+
 describe('Planner route map', () => {
   beforeEach(() => {
     cy.intercept('POST', '**/api/routes', (request) => {
