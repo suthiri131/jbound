@@ -33,8 +33,11 @@ describe('Notifications', () => {
     cy.url().should('include', '/notifications');
   });
 
-  it('shows system messages in the activity feed', () => {
+  it('shows items in the notifications list', () => {
+    // The old generic "system messages" feed was replaced by NotificationsList.vue,
+    // which shows two kinds of items: pending invites and photo reminders
+    // (data-cy="memory-reminder" on each reminder row). Either counts as "has content".
     cy.visit('/notifications');
-    cy.get('.feed li, ul.feed li', { timeout: 10000 }).should('have.length.greaterThan', 0);
+    cy.get('.pile-list li', { timeout: 10000 }).should('have.length.greaterThan', 0);
   });
 });

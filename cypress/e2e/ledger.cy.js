@@ -19,7 +19,9 @@ describe('Ledger', () => {
     if (!tripId || !Cypress.env('TEST_EMAIL')) this.skip();
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
     cy.visit(`/ledger?tripId=${tripId}`);
-    cy.get('#trip-picker').should('have.value', tripId);
+    // #trip-picker is now a custom combobox button (LedgerSelect.vue), not a native <select> —
+    // it has no .value; confirm a real trip got selected by checking it's not the placeholder.
+    cy.get('#trip-picker', { timeout: 10000 }).should('not.contain.text', 'Select a trip');
   });
 
   it('adds an equal-split expense and shows it on the tab with a per-person share', () => {
