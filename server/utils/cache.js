@@ -1,8 +1,3 @@
-/**
- * Tiny in-memory TTL cache. Protects the free external APIs
- * (LTA, Frankfurter, Open Service Routing) from being hammered by auto-refreshing widgets.
- * Resets on server restart, which is fine for this project.
- */
 const store = new Map();
 
 export async function cached(key, ttlMs, loader) {

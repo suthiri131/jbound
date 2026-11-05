@@ -1,4 +1,6 @@
 <script setup>
+import LedgerSelect from "@/components/common/LedgerSelect.vue";
+import BackLabel from "@/components/common/BackLabel.vue";
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage as getErrorMessage } from '@/lib/api';
@@ -8,6 +10,9 @@ import { lookFromId } from '@/lib/camp/look';
 import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
 import MarketStall from '@/components/scene/MarketStall.vue';
 import AvatarFlat from '@/components/scene/AvatarFlat.vue';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
+import { askConfirm } from '@/lib/dialog';
+import { customAmountsFor } from '@/utils/expenseForm';
 
 const route = useRoute();
 const router = useRouter();
@@ -16,6 +21,9 @@ const trips = ref([]);
 const tripId = ref(typeof route.query.tripId === 'string' ? route.query.tripId : '');
 const expenses = ref([]);
 const members = ref([]);
+const formerMembers = ref([]); // on the ledger but not in the crew now: they keep their names and can still be settled with
+const formerOnExpense = ref([]); // the ones on the expense being edited, so they can be seen and taken off it
+const formPeople = computed(() => [...members.value, ...formerOnExpense.value]);
 const balances = ref([]);
 const suggestedSettlements = ref([]);
 const transactions = ref([]);
@@ -63,9 +71,11 @@ function formatCompassMoney(amount) {
 function initials(memberId) {
   return memberName(memberId).split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 }
-function memberName(memberId) { return members.value.find(({ id }) => id === memberId)?.name ?? memberId; }
+function memberName(memberId) { return [...members.value, ...formerMembers.value].find(({ id }) => id === memberId)?.name ?? 'Former member'; }
+const inCrew = (memberId) => members.value.some(({ id }) => id === memberId);
+const notInCrewTag = (member) => (inCrew(member.id) ? '' : ' (not in the crew)');
 function clearLedger() {
-  expenses.value = []; members.value = []; balances.value = []; suggestedSettlements.value = []; transactions.value = [];
+  expenses.value = []; members.value = []; formerMembers.value = []; formerOnExpense.value = []; balances.value = []; suggestedSettlements.value = []; transactions.value = [];
 }
 async function apiRequest(path, options = {}) {
   try { return (await api.request({ url: path, ...options })).data; }
@@ -102,10 +112,11 @@ async function loadLedger() {
     if (tripId.value !== currentTrip) return;
     expenses.value = ledger.expenses ?? [];
     members.value = ledger.members ?? [];
+    formerMembers.value = ledger.formerMembers ?? [];
     balances.value = balanceData.balances ?? [];
     suggestedSettlements.value = balanceData.settlements ?? [];
     transactions.value = balanceData.transactions ?? [];
-    if (!form.paidBy || !members.value.some(({ id }) => id === form.paidBy)) form.paidBy = auth.user?.id || members.value[0]?.id || '';
+    if (!form.paidBy || !formPeople.value.some(({ id }) => id === form.paidBy)) form.paidBy = auth.user?.id || members.value[0]?.id || '';
     if (!form.splitAmong.length) form.splitAmong = members.value.map(({ id }) => id);
   } catch (error) { errorMessage.value = error.message; }
   finally { loading.value = false; }
@@ -119,13 +130,19 @@ function chooseTrip() {
 }
 function resetForm() {
   editingId.value = null;
+  formerOnExpense.value = [];
   customSplit.value = false;
   for (const key of Object.keys(customAmounts)) delete customAmounts[key];
   Object.assign(form, emptyForm(), { paidBy: auth.user?.id || members.value[0]?.id || '', splitAmong: members.value.map(({ id }) => id) });
 }
 function editExpense(expense) {
-  editingId.value = expense.id; customSplit.value = false;
+  editingId.value = expense.id;
+  formerOnExpense.value = formerMembers.value.filter(({ id }) => id === expense.paid_by || expense.splitAmong.includes(id));
   Object.assign(form, { description: expense.description, amount: expense.amount, currency: expense.currency, paidBy: expense.paid_by, splitAmong: [...expense.splitAmong] });
+  for (const key of Object.keys(customAmounts)) delete customAmounts[key];
+  const amounts = customAmountsFor(expense);
+  customSplit.value = Boolean(amounts);
+  if (amounts) Object.assign(customAmounts, amounts);
 }
 function setEqualSplit() { form.splitAmong = members.value.map(({ id }) => id); customSplit.value = false; }
 function toggleCustom() { customSplit.value = !customSplit.value; if (!customSplit.value) setEqualSplit(); }
@@ -156,12 +173,32 @@ async function saveExpense() {
   } catch (error) { errorMessage.value = error.message; }
   finally { saving.value = false; }
 }
+async function deleteExpense() {
+  const description = form.description;
+  if (!(await askConfirm({ title: `Delete "${description}"?`, message: 'Everyone\'s balances will be worked out again without it.', confirmLabel: 'Delete expense', danger: true }))) return;
+  saving.value = true; errorMessage.value = '';
+  try {
+    await apiRequest(`/trips/${encodeURIComponent(tripId.value)}/expenses/${encodeURIComponent(editingId.value)}`, { method: 'DELETE' });
+    resetForm(); formOpen.value = false;
+    await loadLedger();
+  } catch (error) { errorMessage.value = error.message; }
+  finally { saving.value = false; }
+}
 async function confirmSettlement(settlement) {
   errorMessage.value = '';
   try {
-    await apiRequest(`/trips/${encodeURIComponent(tripId.value)}/expenses/settlements`, { method: 'POST', data: { from: settlement.from, to: settlement.to, amountSgd: settlement.amountSgd } });
-    await loadLedger();
-  } catch (error) { errorMessage.value = error.message; }
+    await apiRequest(`/trips/${encodeURIComponent(tripId.value)}/expenses/settlements`, {
+      method: 'POST',
+      data: {
+        from: settlement.from,
+        to: settlement.to,
+        amountSgd: settlement.amountSgd
+      }
+    });
+    await loadTrips();
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
 }
 // ---------- the stall scene beside the receipt ----------
 const formOpen = ref(false);
@@ -182,6 +219,13 @@ const people = computed(() => members.value.map((member) => {
 }));
 // ---------- the crew in front of the stall ----------
 const { sky } = useCampSky();
+// Continue the backdrop's lowest grass colour through the scrollable page.
+const groundColor = computed(() => {
+  const [brightness, saturation] = sky.value.landFilter.match(/[\d.]+/g).map(Number);
+  const grass = [110, 163, 78]; // #6ea34e, the foreground in SkyBackdrop
+  const grey = grass[0] * 0.213 + grass[1] * 0.715 + grass[2] * 0.072;
+  return `rgb(${grass.map(channel => Math.round((grey + (channel - grey) * saturation) * brightness)).join(' ')})`;
+});
 const crewLooks = ref({});
 onMounted(async () => {
   try {
@@ -210,6 +254,29 @@ const receiptDate = computed(() => {
 });
 const first = (memberId) => memberName(memberId).split(' ')[0];
 const canEdit = (expense) => expense.created_by === auth.user?.id || selectedTrip.value?.myRole === 'owner';
+// Whoever receives the money ticks it off. If they've left they can't, so the payer or the trip owner does it for them.
+const canConfirm = (st) => st.to === auth.user?.id
+  || (!inCrew(st.to) && (st.from === auth.user?.id || selectedTrip.value?.myRole === 'owner'));
+const whoOwes = (st) => {
+  if (st.to === auth.user?.id) return `${first(st.from)} owes you`;
+  if (st.from === auth.user?.id) return `You owe ${first(st.to)}`;
+  return `${first(st.from)} owes ${first(st.to)}`;
+};
+function settlementNote(st) {
+  if (st.to === auth.user?.id) return inCrew(st.from) ? '' : `${first(st.from)} isn't in the crew, but you can still tick this off.`;
+  if (canConfirm(st)) return `${first(st.to)} isn't in the crew, so tick this off once it's sorted.`;
+  return st.from === auth.user?.id ? `Paid? ${first(st.to)} ticks it off once it lands.` : '';
+}
+function paidSentence(st) {
+  if (st.to === auth.user?.id) return `${first(st.from)} has paid you`;
+  if (st.from === auth.user?.id) return `you have paid ${first(st.to)}`;
+  return `${first(st.from)} has paid ${first(st.to)}`;
+}
+function squareSentence(st) {
+  if (st.to === auth.user?.id) return `${first(st.from)} is square with you`;
+  if (st.from === auth.user?.id) return `you're square with ${first(st.to)}`;
+  return `${first(st.from)} is square with ${first(st.to)}`;
+}
 function startEdit(expense) {
   editExpense(expense);
   formOpen.value = true;
@@ -232,7 +299,7 @@ async function tickOff(settlement) {
   settling.value = false;
   if (!errorMessage.value) {
     ticked.value = null;
-    lastSettled.value = `Ticked off: ${first(settlement.from)} is square with you.`;
+    lastSettled.value = `Ticked off: ${squareSentence(settlement)}.`;
   }
 }
 
@@ -244,9 +311,9 @@ onMounted(loadConversionRate);
 </script>
 
 <template>
-  <main class="ledger-camp">
+  <main class="ledger-camp" :style="{ backgroundColor: groundColor }">
     <SkyBackdrop />
-    <RouterLink to="/" class="camp-back back">← Walk back to camp</RouterLink>
+    <RouterLink to="/" class="camp-back back" aria-label="Back to Basecamp"><BackLabel /></RouterLink>
 
     <section class="stall-scene" aria-label="The market stall: who has paid what">
       <div class="stall-wrap">
@@ -263,12 +330,9 @@ onMounted(loadConversionRate);
     <div class="receipt-wrap">
       <article class="receipt" aria-labelledby="receipt-title">
         <header class="r-head">
-          <label class="sr-only" for="trip-picker">Trip</label>
-          <select id="trip-picker" v-model="tripId" class="trip-select" @change="chooseTrip">
-            <option value="" disabled>Select a trip</option>
-            <option v-for="trip in trips" :key="trip.id" :value="trip.id">{{ trip.name }}</option>
-          </select>
-          <h1 id="receipt-title" class="r-title">{{ selectedTrip?.name || 'The Ledger' }}</h1>
+          <LedgerSelect id="trip-picker" v-model="tripId" label="Trip" placeholder="Select a trip"
+            :options="trips.map(trip => ({ value: trip.id, label: trip.name }))" @change="chooseTrip" />
+          <h1 id="receipt-title" class="r-title" :title="selectedTrip?.name">{{ selectedTrip?.name || 'The Ledger' }}</h1>
           <p class="r-meta">
             <span v-if="receiptDate">{{ receiptDate }} · </span>{{ members.length }} crew<span v-if="conversionRate"> · S$1 = RM{{ conversionRate.toFixed(2) }}</span>
           </p>
@@ -280,8 +344,7 @@ onMounted(loadConversionRate);
 
         <p v-if="!trips.length && !loading" class="r-empty">Join or create a trip to open a tab.</p>
         <p v-if="errorMessage" class="error-text" role="alert">{{ errorMessage }}</p>
-        <p v-if="loading" class="r-empty" role="status">Totting up the tab…</p>
-
+        <WanderingEyes v-if="loading" center text="Totting up the tab…" />
         <template v-if="tripId && !loading">
           <hr class="dash" />
           <p v-if="!expenses.length" class="r-empty">Nothing on the tab yet. Add the first shared cost below.</p>
@@ -314,22 +377,22 @@ onMounted(loadConversionRate);
           <h2 class="r-sub">Who owes who</h2>
           <ul v-if="suggestedSettlements.length" class="owes">
             <li v-for="(st, index) in suggestedSettlements" :key="`${st.from}-${st.to}-${index}`">
-              <label v-if="st.to === auth.user?.id" class="tick">
+              <label v-if="canConfirm(st)" class="tick">
                 <input type="checkbox" :checked="ticked === settlementKey(st)" :disabled="settling" @change="toggleTick(st, $event.target.checked)" />
-                <span>{{ first(st.from) }} owes you</span>
+                <span>{{ whoOwes(st) }}</span>
               </label>
               <span v-else class="tick" :class="{ mine: st.from === auth.user?.id }">
                 <i class="box" aria-hidden="true" />
-                <span>{{ st.from === auth.user?.id ? `You owe ${first(st.to)}` : `${first(st.from)} owes ${first(st.to)}` }}</span>
+                <span>{{ whoOwes(st) }}</span>
               </span>
               <strong>{{ formatLedgerMoney(st.amountSgd) }}</strong>
-              <small v-if="st.from === auth.user?.id" class="wait">Paid? {{ first(st.to) }} ticks it off once it lands.</small>
+              <small v-if="settlementNote(st)" class="wait">{{ settlementNote(st) }}</small>
               <button
-                v-if="st.to === auth.user?.id && ticked === settlementKey(st)"
+                v-if="canConfirm(st) && ticked === settlementKey(st)"
                 type="button"
                 class="btn btn-primary btn-sm confirm-paid"
                 :disabled="settling"
-                :aria-label="`Confirm ${first(st.from)} has paid you ${formatLedgerMoney(st.amountSgd)}`"
+                :aria-label="`Confirm ${paidSentence(st)} ${formatLedgerMoney(st.amountSgd)}`"
                 @click="tickOff(st)"
               >
                 {{ settling ? 'Confirming…' : 'Confirm' }}
@@ -360,19 +423,19 @@ onMounted(loadConversionRate);
                 <input id="expense-amount" v-model.number="form.amount" class="input" type="number" min="0.01" step="0.01" placeholder="0.00" required />
               </label>
               <label class="field" for="expense-currency">Currency
-                <select id="expense-currency" v-model="form.currency" class="select"><option value="SGD">S$ SGD</option><option value="MYR">RM MYR</option></select>
+                <LedgerSelect id="expense-currency" v-model="form.currency" label="Currency"
+                  :options="[{ value: 'SGD', label: 'S$ SGD' }, { value: 'MYR', label: 'RM MYR' }]" />
               </label>
             </div>
             <label class="field" for="expense-payer">Paid by
-              <select id="expense-payer" v-model="form.paidBy" class="select">
-                <option v-for="member in members" :key="member.id" :value="member.id">{{ member.id === auth.user?.id ? `${member.name} (you)` : member.name }}</option>
-              </select>
+              <LedgerSelect id="expense-payer" v-model="form.paidBy" label="Paid by"
+                :options="formPeople.map(member => ({ value: member.id, label: member.id === auth.user?.id ? `${member.name} (you)` : `${member.name}${notInCrewTag(member)}` }))" />
             </label>
             <fieldset class="split">
               <legend>Split among <button class="link" type="button" @click="toggleCustom">{{ customSplit ? 'Split equally' : 'Custom amounts' }}</button></legend>
-              <label v-for="member in members" :key="member.id" class="split-row">
+              <label v-for="member in formPeople" :key="member.id" class="split-row">
                 <input v-model="form.splitAmong" type="checkbox" :value="member.id" />
-                <span>{{ member.name }}{{ member.id === auth.user?.id ? ' (you)' : '' }}</span>
+                <span>{{ member.name }}{{ member.id === auth.user?.id ? ' (you)' : notInCrewTag(member) }}</span>
                 <input v-if="customSplit && form.splitAmong.includes(member.id)" v-model.number="customAmounts[member.id]" class="input custom" type="number" min="0" step="0.01" :aria-label="`${member.name} amount`" />
               </label>
               <small v-if="customSplit" class="split-status" :class="{ complete: customSplitReady, over: customRemaining < 0 }" aria-live="polite">{{ customSplitStatus() }}</small>
@@ -382,6 +445,7 @@ onMounted(loadConversionRate);
                 {{ saving ? 'Saving…' : isEditing ? 'Save changes' : 'Add it' }}
               </button>
               <button class="btn btn-ghost" type="button" @click="cancelForm">Cancel</button>
+              <button v-if="isEditing" class="link delete-expense" type="button" :disabled="saving" @click="deleteExpense">Delete</button>
             </div>
           </form>
 
@@ -405,7 +469,7 @@ onMounted(loadConversionRate);
 .ledger-camp {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(370px, 450px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 450px);
   font-family: var(--font-round);
   color: #1f2a24;
   overflow: hidden !important; /* the receipt scrolls on its own, the scene stays put */
@@ -458,7 +522,10 @@ onMounted(loadConversionRate);
   text-align: center;
 }
 .say b {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-weight: 700;
 }
 .up .say {
@@ -467,13 +534,21 @@ onMounted(loadConversionRate);
 .down .say {
   background: #f8d4cb;
 }
+.delete-expense {
+  margin-left: auto;
+  color: var(--brick);
+}
 .receipt-wrap {
   position: relative;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 22px 30px 48px 8px;
 }
 .receipt {
+  min-width: 0;
+  overflow-wrap: anywhere;
   position: relative;
   padding: 22px 22px 34px;
   background: #fffdf7;
@@ -512,17 +587,14 @@ onMounted(loadConversionRate);
   justify-items: center;
   gap: 4px;
 }
-.trip-select {
-  font: inherit;
-  font-family: var(--font-round);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border: 1.5px solid #1f2a24;
-  border-radius: 999px;
-  background: #fffdf7;
-}
 .r-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   margin: 4px 0 0;
   font-family: var(--font-story);
   font-weight: 800;
@@ -573,7 +645,7 @@ onMounted(loadConversionRate);
 }
 .items li {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   grid-template-rows: auto auto;
   gap: 0 10px;
 }
@@ -590,7 +662,7 @@ onMounted(loadConversionRate);
 }
 .amt {
   font-weight: 700;
-  white-space: nowrap;
+  text-align: right;
 }
 .edit {
   grid-column: 2;
@@ -648,7 +720,7 @@ onMounted(loadConversionRate);
 }
 .owes li {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
   align-items: center;
   gap: 2px 10px;
   padding: 10px 12px;
@@ -742,7 +814,7 @@ label.tick {
 }
 .two {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .split {
@@ -822,9 +894,74 @@ label.tick {
 }
 
 
-@media (max-width: 900px) {
+/* Let content shrink inside the receipt instead of widening the page. */
+.r-head > *,
+.items li > div,
+.tiles li,
+.tick,
+.tick > span,
+.field,
+.split,
+.split-row > span {
+  min-width: 0;
+}
+.total,
+.history p {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.total strong,
+.history p > span {
+  margin-left: auto;
+  text-align: right;
+}
+.add-form .input,
+.add-form .select {
+  min-width: 0;
+  max-width: 100%;
+}
+.split legend {
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.split-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 110px);
+}
+.split-row > input[type='checkbox'] {
+  margin: 0;
+}
+.custom {
+  width: 100%;
+}
+.convert {
+  flex-wrap: wrap;
+}
+.convert label {
+  min-width: 0;
+}
+.convert output {
+  min-width: 0;
+}
+.crew-line li {
+  min-width: 0;
+  flex: 1 1 0;
+}
+.say {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.crew-line :deep(.avatar-flat) {
+  max-width: 100%;
+  height: auto !important;
+  max-height: 138px;
+}
+
+
+@media (max-width: 991.98px) {
   .ledger-camp {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
     align-content: start;
     overflow-y: auto !important;
   }
@@ -832,14 +969,80 @@ label.tick {
     padding: 66px 12px 16px;
   }
   .stall-wrap {
-    width: min(100%, 560px);
+    width: min(100%, 440px);
   }
   .receipt-wrap {
+    width: 100%;
+    max-width: 640px;
+    justify-self: center;
     overflow: visible;
-    padding: 0 14px 44px;
+    padding: 12px 20px 44px;
   }
   .receipt {
     rotate: 0deg;
+  }
+}
+@media (max-width: 575.98px) {
+  .back {
+    top: 14px;
+    left: 14px;
+  }
+  .stall-scene {
+    padding: 68px 12px 8px;
+  }
+  .receipt-wrap {
+    padding: 12px 12px 36px;
+  }
+  .receipt {
+    padding: 20px 16px 28px;
+  }
+  .r-title {
+    font-size: 28px;
+  }
+  .say {
+    padding: 3px 4px;
+    font-size: 10px;
+  }
+  .items li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+  .items li > div {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .amt {
+    text-align: left;
+  }
+  .edit {
+    grid-row: auto;
+  }
+  .owes li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .owes li > strong {
+    padding-left: 32px;
+  }
+  .two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .split-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .custom {
+    grid-column: 2;
+  }
+  .convert output {
+    flex-basis: 100%;
+  }
+  .add-form .row > .btn {
+    flex: 1 1 auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .receipt {
+    animation: none;
   }
 }
 </style>

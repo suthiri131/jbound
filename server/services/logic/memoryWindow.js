@@ -37,6 +37,39 @@ export function tripPhase(trip, today = sgToday()) {
   return { phase: 'archived', autoArchive: true, archivesOn };
 }
 
+const REMINDER_DAYS_LEFT = 2;
+const daysText = (n) => `${n} day${n === 1 ? '' : 's'}`;
+
+/**
+ * One member's notifications about a trip's memory window, newest first: told when the trip ends,
+ * then reminded near the close if they still haven't added a photo.
+ * @param {{id:string, name:string, start_date?:string|null, end_date?:string|null, archived_at?:string|null}} trip
+ * @param {boolean} hasPhotos whether this member has added any
+ * @param {string} [today] YYYY-MM-DD
+ */
+export function memoryReminders(trip, hasPhotos, today = sgToday()) {
+  const info = tripPhase(trip, today);
+  if (info.phase !== 'memory_box') return [];
+  const base = { tripId: trip.id, needsPhotos: !hasPhotos };
+  const list = [{
+    ...base,
+    id: `${trip.id}-opened`,
+    date: info.opensOn,
+    daysLeft: info.daysLeft,
+    text: `"${trip.name}" has ended. You have ${daysText(info.daysLeft)} left to add your photos to the archive.`,
+  }];
+  if (!hasPhotos && info.daysLeft <= REMINDER_DAYS_LEFT) {
+    list.unshift({
+      ...base,
+      id: `${trip.id}-reminder`,
+      date: addDays(info.closesOn, 1 - REMINDER_DAYS_LEFT),
+      daysLeft: info.daysLeft,
+      text: `You haven't added any photos to "${trip.name}" yet. You have ${daysText(info.daysLeft)} left.`,
+    });
+  }
+  return list;
+}
+
 /** Uploads are allowed while the trip is happening and during the memory window. */
 export function canAddMemories(phase) {
   return phase === 'on_the_road' || phase === 'memory_box';

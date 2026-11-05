@@ -9,7 +9,7 @@ import { useCampMusic } from '@/composables/useCampMusic';
  
 const { on: musicOn, toggle: toggleMusic } = useCampMusic();
 const notifications = useNotificationsStore();
-const emit = defineEmits(["open-satchel", "open-notifications"]);
+const emit = defineEmits(["open-notifications"]);
 const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
@@ -17,10 +17,10 @@ const route = useRoute();
 // Account menu (avatar -> name, email, Profile, Sign out)
 const menuOpen = ref(false);
 const menuRoot = ref(null);
-// Below 860px the page links fold into a hamburger. navOpen = the dropdown is showing.
+// Below Bootstrap lg (992px), page links fold into a hamburger.
 const navOpen = ref(false);
 const navRoot = ref(null);
-const MOBILE_QUERY = "(max-width: 860px)";
+const MOBILE_QUERY = "(max-width: 991.98px)";
 let mobileMedia;
 const closeNavOnDesktop = (e) => {
   if (!e.matches) navOpen.value = false; // grew back to desktop width
@@ -38,7 +38,7 @@ const closeOnEscape = (e) => {
   }
 };
 onMounted(() => {
-  if (auth.isLoggedIn) notifications.fetchInviteCount();
+  if (auth.isLoggedIn) notifications.fetchBadgeCount();
   document.addEventListener("click", closeOnOutsideClick);
   document.addEventListener("keydown", closeOnEscape);
   mobileMedia = window.matchMedia(MOBILE_QUERY);
@@ -68,7 +68,7 @@ const links = [
   { to: "/explorer", label: "Explorer" },
 ];
 function openNotifications() {
-  if (mobileMedia?.matches) {
+  if (window.matchMedia("(max-width: 860px)").matches) {
     router.push('/notifications');
   } else {
     emit('open-notifications');
@@ -151,26 +151,8 @@ async function logout() {
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
-          <span v-if="notifications.inviteCount" class="badge-dot">{{ notifications.inviteCount }}</span>
+          <span v-if="notifications.badgeCount" class="badge-dot">{{ notifications.badgeCount }}</span>
           </button>
-        <button v-if="auth.isLoggedIn" type="button" class="satchel" @click="$emit('open-satchel')">
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M5 8h14l-1 12H6Z" />
-            <path d="M9 8V6a3 3 0 0 1 6 0v2" />
-            <path d="M5 12h14" />
-          </svg>
-          <span class="satchel-label">Your trips</span>
-        </button>
         <div v-if="auth.isLoggedIn" ref="menuRoot" class="account">
           <button
             type="button"
@@ -220,13 +202,14 @@ async function logout() {
 }
 .nav {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px 22px;
   padding-top: 12px;
   padding-bottom: 12px;
 }
 .logo {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -238,10 +221,10 @@ async function logout() {
 }
 .links {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   gap: 2px;
-  flex: 1 1 520px;
+  flex: 1 1 auto;
 }
 .link {
   padding: 12px 10px;
@@ -260,6 +243,7 @@ async function logout() {
   text-underline-offset: 6px;
 }
 .actions {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -339,7 +323,7 @@ async function logout() {
 .mobile-auth {
   display: none;
 }
-@media (max-width: 860px) {
+@media (max-width: 991.98px) {
   .nav {
     flex-wrap: nowrap;
     justify-content: space-between;
@@ -402,20 +386,12 @@ async function logout() {
     display: none;
   }
  
-  /* "Your trips" shrinks to just the satchel icon */
   .satchel {
     width: 46px;
     padding: 0;
     justify-content: center;
   }
-  .satchel-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
+
 
   .badge-dot { 
     position: absolute;

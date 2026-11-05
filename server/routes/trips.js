@@ -39,6 +39,7 @@ r.post("/join", validate({ body: s.joinBody }), trips.joinByCode);
 const member = [validate({ params: s.tripParam }), requireTripMember];
 const memberWith = (params) => [validate({ params }), requireTripMember];
 r.get("/invites", trips.listMyInvites);
+r.get("/memory-reminders", trips.listMemoryReminders);
 r.post("/:tripId/invites/accept", trips.acceptInvite);
 r.post("/:tripId/invites/decline", trips.declineInvite);
 r.get("/:tripId", member, trips.getTrip);
@@ -47,6 +48,7 @@ r.get("/:tripId", member, trips.getTrip);
 r.get('/:tripId/expenses', member, expenses.getExpenses);
 r.post('/:tripId/expenses', member, validate({ body: s.createExpenseBody }), expenses.createExpense);
 r.put('/:tripId/expenses/:expenseId', memberWith(s.tripExpenseParam), validate({ body: s.createExpenseBody }), expenses.updateExpense);
+r.delete('/:tripId/expenses/:expenseId', memberWith(s.tripExpenseParam), expenses.deleteExpense);
 r.get('/:tripId/expenses/balances', member, validate({ query: s.balancesQuery }), expenses.getBalances);
 r.post('/:tripId/expenses/settlements', member, validate({ body: s.settlementBody }), expenses.createSettlement);
 r.patch(

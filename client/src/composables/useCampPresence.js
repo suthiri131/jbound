@@ -16,10 +16,19 @@ export function useCampPresence() {
   let lastSent = 0;
   let pending = null;
   let timer = null;
+  let version = 0; // bumps on every start/stop so a slower, older start gives up
 
-  async function stop() {
-    await Promise.all(channels.map((ch) => supabase?.removeChannel(ch)));
+  // Leaving a channel is async: supabase keeps it listed until the server confirms,
+  // and channel(sameName) hands back that old, already-subscribed one. So wait it out.
+  function closeChannels() {
+    const closing = channels.map((ch) => supabase?.removeChannel(ch));
     channels = [];
+    return Promise.allSettled(closing);
+  }
+
+  function stop() {
+    version++;
+    closeChannels();
     clearTimeout(timer);
     timer = null;
     pending = null;
@@ -28,9 +37,15 @@ export function useCampPresence() {
 
   /** profile: { id, name, look }; tripIds: trips whose crews should see you */
   async function start(profile, tripIds) {
-    await stop();
+    stop();
+    const mine = version;
     me = profile;
     if (!supabase || !me?.id || !tripIds.length) return;
+
+    // also close camp channels left open by a hot reload or an earlier visit
+    const leftovers = supabase.getChannels().filter((c) => c.topic.startsWith('realtime:camp-'));
+    await Promise.allSettled(leftovers.map((c) => supabase.removeChannel(c)));
+    if (mine !== version) return; // stopped or restarted while waiting
 
     for (const tripId of tripIds.slice(0, MAX_CHANNELS)) {
       const ch = supabase.channel(`camp-${tripId}`, {

@@ -1,20 +1,9 @@
-/**
- * Google Places API (New) — https://developers.google.com/maps/documentation/places/web-service/op-overview
- *
- * Used by the Explorer to search real JB places, and to import a Google place into our
- * `places` table when someone pins it to a trip (so itinerary items can reference it).
- *
- * - The key stays on the server (GOOGLE_PLACES_API_KEY). The browser never sees it.
- * - Every call sends a field mask, because Google bills by the fields you ask for.
- * - Results are cached in memory to keep usage inside the free monthly allowance.
- * - Photos are served through /api/places/google/photo, which asks Google for a short-lived
- *   image URL and redirects to it (photo URLs must not be stored long-term).
- */
 import { config } from '../config.js';
 import { cached } from '../utils/cache.js';
 import { fetchJson } from '../utils/fetchJson.js';
 import { HttpError } from '../utils/httpError.js';
 import { CHECKPOINTS } from './logic/geo.js';
+import { supabase } from '../db/supabase.js'
 
 const SEARCH_CACHE_MS = 24 * 60 * 60 * 1000; // 1 day
 const PHOTO_CACHE_MS = 50 * 60 * 1000; // Google photo URIs are short-lived
@@ -147,13 +136,58 @@ export async function getPhotoUri(photoName, width = 600) {
   if (!config.google.placesKey) throw new HttpError(503, 'GOOGLE_PLACES_API_KEY not set');
   const w = Math.min(Math.max(Number(width) || 600, 100), 1600);
   return cached(`gplaces:photo:${photoName}:${w}`, PHOTO_CACHE_MS, async () => {
-    const url = `${config.google.placesBaseUrl}/${photoName}/media?maxWidthPx=${w}&skipHttpRedirect=true`;
-    const data = await fetchJson(url, { headers: { 'X-Goog-Api-Key': config.google.placesKey } });
-    if (!data.photoUri) throw new HttpError(502, 'Google did not return a photo');
-    return data.photoUri;
+    try {
+      return await fetchPhotoUri(photoName, w);
+    } catch (err) {
+      // Google photo names expire. A name saved in places.photos weeks ago now comes back
+      // "400 photo resource is invalid": look up the place's photos as they are today instead.
+      if (!isExpiredPhoto(err)) throw err;
+      const placeId = photoName.split('/')[1];
+      const fresh = await currentPhotoNames(placeId);
+      if (!fresh.length) throw new HttpError(404, 'This place has no photos any more');
+      // keep its place in the gallery: the 2nd saved photo becomes the 2nd photo today
+      const oldNames = await savedPhotoNames(placeId);
+      const i = Math.max(0, oldNames.indexOf(photoName));
+      refreshSavedPhotos(placeId, fresh); // so the next visit asks for the new names straight away
+      return fetchPhotoUri(fresh[i % fresh.length], w);
+    }
   });
 }
 
+async function fetchPhotoUri(photoName, w) {
+  const url = `${config.google.placesBaseUrl}/${photoName}/media?maxWidthPx=${w}&skipHttpRedirect=true`;
+  const data = await fetchJson(url, { headers: { 'X-Goog-Api-Key': config.google.placesKey } });
+  if (!data.photoUri) throw new HttpError(502, 'Google did not return a photo');
+  return data.photoUri;
+}
+
+// fetchJson turns Google's 400/404 into a 502 "Upstream … responded 400"
+const isExpiredPhoto = (err) => err instanceof HttpError && /^Upstream \S+ responded (400|404)$/.test(err.message);
+
+/** The place's photo names as Google has them right now (photos field only: the cheapest Details call). */
+function currentPhotoNames(placeId) {
+  return cached(`gplaces:photonames:${placeId}`, PHOTO_CACHE_MS, async () => {
+    const data = await fetchJson(`${config.google.placesBaseUrl}/places/${encodeURIComponent(placeId)}`, {
+      headers: { 'X-Goog-Api-Key': config.google.placesKey, 'X-Goog-FieldMask': 'photos' },
+    });
+    return (data.photos || []).slice(0, 3).map((ph) => ph.name);
+  });
+}
+
+/** Photo names stored on our copy of the place, in order (proxy paths → names). */
+async function savedPhotoNames(placeId) {
+  const { data } = await supabase.from('places').select('photos').eq('google_place_id', placeId).maybeSingle();
+  return (data?.photos || []).map((path) => new URLSearchParams(path.split('?')[1] || '').get('name'));
+}
+
+/** Best-effort: swap the stored proxy paths for fresh ones. A failure here must not break the photo. */
+function refreshSavedPhotos(placeId, names) {
+  supabase
+    .from('places')
+    .update({ photos: names.map((n) => photoProxyPath(n)) })
+    .eq('google_place_id', placeId)
+    .then(({ error }) => error && console.warn('[places] could not refresh photos for', placeId, error.message));
+}
 /**
  * Extra fields for the place page. Asking for `reviews` puts this call in Google's most expensive
  * Place Details tier, so it only runs when someone opens a place, and it's cached for a day.

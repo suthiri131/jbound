@@ -4,6 +4,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue"
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, assetUrl } from "@/lib/api";
 import { loadGoogleMaps, hasGoogleMaps, MAP_ID } from "@/lib/googleMaps";
+import PlaceTalesFeed from "@/components/tales/PlaceTalesFeed.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -75,12 +76,6 @@ const directionsUrl = computed(() => {
   return `https://www.google.com/maps/dir/?${params}`;
 });
 
-function goBack() {
-  // came from the board → keep its filters; opened from a shared link or another page → go to the board
-  if (window.history.state?.back?.startsWith("/explorer")) router.back();
-  else router.push("/explorer");
-}
-
 async function share() {
   const url = window.location.href;
   try {
@@ -100,7 +95,8 @@ async function share() {
 function pinToTrip() {
   router.replace({ query: { ...route.query, pin: place.value.googlePlaceId } }); // the Explorer around this page opens the dialog
 }
-const talesLink = computed(() => ({ path: `/explorer/tales/place/${place.value?.id}`, query: route.query }));
+const talesSection = ref(null);
+const scrollToTales = () => talesSection.value?.scrollIntoView({ behavior: "smooth" });
 
 // ---------- mini map ----------
 const mapEl = ref(null);
@@ -156,10 +152,6 @@ onBeforeUnmount(removeMarker);
 
 <template>
   <div class="place-page">
-    <button type="button" class="btn btn-sm btn-ghost back" @click="goBack">
-      ← Back to the notice board
-    </button>
-
     <!-- loading skeleton -->
     <div
       v-if="loading"
@@ -286,13 +278,14 @@ onBeforeUnmount(removeMarker);
         <button type="button" class="btn btn-ghost" @click="share">
           {{ copied ? "Link copied!" : "Share" }}
         </button>
-        <RouterLink
+        <button
           v-if="place.id"
-          :to="talesLink"
+          type="button"
           class="btn btn-ghost"
+          @click="scrollToTales"
         >
           Tales ({{ place.postCount }})
-        </RouterLink>
+        </button>
       </nav>
 
       <!-- 4. TABS -->
@@ -376,7 +369,7 @@ onBeforeUnmount(removeMarker);
         </div>
       </section>
 
-      <!-- 4b. REVIEWS: Google reviews + JBound Tales -->
+      <!-- 4b. REVIEWS: Google reviews -->
       <section
         v-else-if="tab === 'reviews'"
         class="reviews"
@@ -427,21 +420,6 @@ onBeforeUnmount(removeMarker);
         <p class="attribution">
           Reviews from Google. Google shows up to 5 per place.
         </p>
-
-        <h2 class="display display-sm section-title">From the JBound crew</h2>
-        <p class="muted">
-          <template v-if="place.id">
-            {{ place.postCount }} tale{{ place.postCount === 1 ? "" : "s" }} so
-            far.
-            <RouterLink :to="talesLink"
-              >Read them →</RouterLink
-            >
-          </template>
-          <template v-else
-            >No tales yet. Pin this place to a trip and be the first to share
-            one.</template
-          >
-        </p>
       </section>
 
       <!-- 4c. ABOUT: description + place types -->
@@ -458,14 +436,20 @@ onBeforeUnmount(removeMarker);
       </section>
 
       <p class="attribution" style="margin-top: 28px">Places data © Google</p>
+
+      <!-- 5. TALES: what the JBound crew said about this place -->
+      <section ref="talesSection" class="tales" aria-labelledby="place-tales-title">
+        <h2 id="place-tales-title" class="display display-sm section-title">From the JBound Community</h2>
+        <PlaceTalesFeed v-if="place.id" :place-id="place.id" />
+        <p v-else class="muted">
+          No tales yet. Pin this place to a trip and be the first to share one.
+        </p>
+      </section>
     </template>
   </div>
 </template>
 
 <style scoped>
-.back {
-  margin-bottom: 16px;
-}
 
 /* photos */
 .gallery {
@@ -684,6 +668,13 @@ onBeforeUnmount(removeMarker);
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--ink-mute);
+}
+
+/* tales */
+.tales {
+  margin-top: 28px;
+  padding-top: 8px;
+  border-top: 2px dashed var(--line);
 }
 
 /* loading skeleton */

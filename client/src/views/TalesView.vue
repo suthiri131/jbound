@@ -1,4 +1,5 @@
 <script setup>
+import BackLabel from "@/components/common/BackLabel.vue";
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router';
 import { api, errorMessage, uploadImage } from '@/lib/api';
@@ -9,6 +10,7 @@ import SkyBackdrop from '@/components/scene/SkyBackdrop.vue';
 import FiresideCircle from '@/components/tales/FiresideCircle.vue';
 import { useCampSky } from '@/composables/useCampSky';
 import { askConfirm, showAlert } from '@/lib/dialog';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
 
 
 const route = useRoute();
@@ -17,9 +19,10 @@ const auth = useAuthStore();
 
 const feed = reactive({ items: [], nextCursor: null, loading: false, error: '' });
 
-// Coming back from a place's tales on the notice board picks up where you left off.
+// Coming back from a place on the notice board picks up where you left off.
 const SPOT_KEY = 'jbound.talesSpot';
-const cameBack = router.options.history.state?.forward?.startsWith('/explorer/tales');
+const isPlacePage = (path) => /^\/explorer\/(place|tales)\//.test(path ?? '');
+const cameBack = isPlacePage(router.options.history.state?.forward);
 const spot = cameBack ? JSON.parse(sessionStorage.getItem(SPOT_KEY) || 'null') : null;
 sessionStorage.removeItem(SPOT_KEY);
 const scrollerEl = ref(null);
@@ -82,7 +85,7 @@ onMounted(async () => {
   if (scrollerEl.value) scrollerEl.value.scrollTop = spot.scrollTop;
 });
 onBeforeRouteLeave((to) => {
-  if (!to.path.startsWith('/explorer/tales')) return;
+  if (!isPlacePage(to.path)) return;
   sessionStorage.setItem(SPOT_KEY, JSON.stringify({
     scope: scope.value,
     vibe: vibe.value,
@@ -271,7 +274,8 @@ const newThisWeek = computed(() => {
 });
 const placeName = (p) => p.place?.name || p.custom_place_name || 'Somewhere in JB';
 const moreLink = (p) => {
-  if (p.place) return `/explorer/tales/place/${p.place.id}`;
+  if (p.place?.google_place_id) return `/explorer/place/${encodeURIComponent(p.place.google_place_id)}`;
+  if (p.place) return `/explorer/tales/place/${p.place.id}`; // our own places have no Google page
   return p.custom_place_name ? `/explorer/tales/custom/${encodeURIComponent(p.custom_place_name)}` : null;
 };
 
@@ -326,7 +330,7 @@ function handlePhotoKeydown(event) {
 <template>
   <main class="tales-page">
     <SkyBackdrop :path="false" />
-    <RouterLink to="/" class="camp-back home" aria-label="Back to Basecamp">← <span class="home-label">Basecamp</span></RouterLink>
+    <RouterLink to="/" class="camp-back home" aria-label="Back to Basecamp"><BackLabel /></RouterLink>
 
     <section class="bubble" aria-label="Postcards from JB">
       <header class="toolbar">
@@ -469,7 +473,7 @@ function handlePhotoKeydown(event) {
       </ul>
 
       <p v-if="!feed.loading && !feed.items.length" class="empty">No postcards yet. Be the first by the fire.</p>
-      <p v-if="feed.loading" class="empty" role="status">Checking the mailbox…</p>
+      <WanderingEyes v-if="feed.loading" center text="Checking the mailbox…" />
       <button v-if="feed.nextCursor" type="button" class="send older" :disabled="feed.loading" @click="load(true)">Older postcards</button>
       </div>
     </section>

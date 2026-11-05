@@ -64,13 +64,13 @@ describe('planner trip list', () => {
     expect(wrapper.findAll('[data-cy="trip-tab"]')[0].attributes('href')).toBe('/planner/12?page=2');
     await wrapper.get('input[type="search"]').setValue('KYOTO');
     await flushPromises();
-    await wrapper.get('select').setValue('planning');
+    await wrapper.get('[data-phase="planning"]').trigger('click');
     await flushPromises();
     expect(router.currentRoute.value.query.page).toBeUndefined();
     const cards = wrapper.findAll('[data-cy="trip-tab"]');
     expect(cards).toHaveLength(1);
     expect(cards[0].attributes('href')).toBe('/planner/0?search=KYOTO&phase=planning');
-    await wrapper.get('select').setValue('memory_box');
+    await wrapper.get('[data-phase="memory_box"]').trigger('click');
     await flushPromises();
     expect(wrapper.text()).toContain('No trips match');
     wrapper.unmount();

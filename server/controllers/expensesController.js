@@ -31,8 +31,9 @@ function normalizeSplitAmounts(splitAmounts, splitAmong, amount, rate) {
   return new Map(splitAmounts.map(({ memberId }, index) => [memberId, dollars(converted[index])]));
 }
 
+/** The crew: people who have accepted. Someone still invited can't be added to a new expense. */
 async function getTripMemberIds(tripId) {
-  const { data, error } = await supabase.from('trip_members').select('user_id').eq('trip_id', tripId);
+  const { data, error } = await supabase.from('trip_members').select('user_id').eq('trip_id', tripId).eq('status', 'accepted');
   return check({ data, error }).map(({ user_id }) => user_id);
 }
 
@@ -40,6 +41,19 @@ async function getTripMembers(tripId) {
   const memberIds = await getTripMemberIds(tripId);
   if (!memberIds.length) return [];
   const { data, error } = await supabase.from('profiles').select('id, name, avatar_url').in('id', memberIds);
+  check({ data, error });
+  return data;
+}
+
+/** People on this trip's ledger who aren't in the crew now. Their old expenses stand, so the ledger still needs their names. */
+async function getFormerMembers(expenses, settlements, members) {
+  const crew = new Set(members.map(({ id }) => id));
+  const ids = [...new Set([
+    ...expenses.flatMap(({ paid_by: paidBy, splitAmong }) => [paidBy, ...splitAmong]),
+    ...settlements.flatMap(({ from_user: from, to_user: to }) => [from, to]),
+  ])].filter((id) => !crew.has(id));
+  if (!ids.length) return [];
+  const { data, error } = await supabase.from('profiles').select('id, name, avatar_url').in('id', ids);
   check({ data, error });
   return data;
 }
@@ -104,7 +118,7 @@ async function loadExpenses(tripId) {
         ? splitRows.map(({ id, amount_sgd }) => ({ memberId: id, amountCents: toCents(amount_sgd) }))
         : null,
       splitMembers: splitRows.map(({ id, amount_sgd }, index) => ({
-        ...(profileById.get(id) ?? { id, name: id }),
+        ...(profileById.get(id) ?? { id, name: 'Former member' }),
         amountSgd: amount_sgd == null ? dollars(equalShare + (index < remainder ? 1 : 0)) : Number(amount_sgd),
       })),
     };
@@ -120,14 +134,35 @@ async function loadSettlements(tripId) {
   return check({ data, error });
 }
 
+/**
+ * Deleting an account takes that member's share of each expense with it, which can leave a split that no longer
+ * adds up. The payer absorbs what's missing, so nobody else's debt changes and one old expense can't stop the
+ * whole ledger from adding up.
+ */
+export function repairSplit({ paid_by: paidBy, amount_sgd: amountSgd, splitAmong, splitAmounts }) {
+  if (!splitAmong.length) return { splitAmong: [paidBy], splitAmounts: null };
+  if (!splitAmounts) return { splitAmong, splitAmounts };
+
+  const missing = toCents(amountSgd) - splitAmounts.reduce((sum, { amountCents }) => sum + amountCents, 0);
+  if (missing === 0) return { splitAmong, splitAmounts };
+  if (missing < 0) return { splitAmong, splitAmounts: null }; // the shares can't be right, so split it evenly
+
+  const payerShare = splitAmounts.find(({ memberId }) => memberId === paidBy);
+  return {
+    splitAmong: payerShare ? splitAmong : [...splitAmong, paidBy],
+    splitAmounts: payerShare
+      ? splitAmounts.map((share) => (share === payerShare ? { ...share, amountCents: share.amountCents + missing } : share))
+      : [...splitAmounts, { memberId: paidBy, amountCents: missing }],
+  };
+}
+
 function computeTripSplit(expenses, settlements, memberIds = []) {
   const split = calculateExpenseSplit(
     expenses.map((expense) => ({
       amount: expense.amount_sgd,
       currency: 'SGD',
       paidBy: expense.paid_by,
-      splitAmong: expense.splitAmong,
-      splitAmounts: expense.splitAmounts,
+      ...repairSplit(expense),
     })),
     SGD_RATES,
   );
@@ -161,12 +196,27 @@ async function resolveCurrencyMetadata(amount, currency) {
   return { amount_sgd: amountSgd, exchange_rate: metadata.rate, rate_date: metadata.date };
 }
 
+/**
+ * An edit keeps the rate from when the expense was logged, so what people owe can't move just because the rate has.
+ * Only a change of currency needs a new rate.
+ */
+async function currencyMetadataForEdit(existing, amount, currency) {
+  if (currency !== existing.currency || !existing.exchange_rate) return resolveCurrencyMetadata(amount, currency);
+  const rate = Number(existing.exchange_rate);
+  const sameAmount = toCents(amount) === toCents(existing.amount) && existing.amount_sgd != null;
+  const amountSgd = sameAmount ? Number(existing.amount_sgd) : dollars(Math.round(toCents(amount) * rate));
+  if (amountSgd <= 0) throw badRequest('Expense amount converts to less than one SGD cent');
+  return { amount_sgd: amountSgd, exchange_rate: rate, rate_date: existing.rate_date };
+}
+
 export async function getExpenses(req, res) {
-  const [expenses, members] = await Promise.all([
+  const [expenses, members, settlements] = await Promise.all([
     loadExpenses(req.params.tripId),
     getTripMembers(req.params.tripId),
+    loadSettlements(req.params.tripId),
   ]);
-  res.json({ expenses, members, baseCurrency: 'SGD' });
+  const formerMembers = await getFormerMembers(expenses, settlements, members);
+  res.json({ expenses, members, formerMembers, baseCurrency: 'SGD' });
 }
 
 export async function createExpense(req, res) {
@@ -192,30 +242,43 @@ export async function createExpense(req, res) {
   const { error: splitError } = await supabase.from('expense_splits').insert(
     splitAmong.map((userId) => ({ expense_id: expense.id, user_id: userId, amount_sgd: shares?.get(userId) ?? null })),
   );
+  if (splitError) await supabase.from('expenses').delete().eq('id', expense.id); // don't leave it behind with no split
   check({ data: null, error: splitError });
   res.status(201).json({ expense: { ...expense, splitAmong } });
 }
 
-export async function updateExpense(req, res) {
+async function assertCanChangeExpense(req) {
   const { tripId, expenseId } = req.params;
   const { data: existing, error: findError } = await supabase
     .from('expenses')
-    .select('id, created_by')
+    .select('id, created_by, paid_by, amount, currency, amount_sgd, exchange_rate, rate_date')
     .eq('id', expenseId)
     .eq('trip_id', tripId)
     .maybeSingle();
   check({ data: existing, error: findError });
   if (!existing) throw notFound('Expense not found');
   if (existing.created_by !== req.user.id && req.membership.role !== 'owner') {
-    throw forbidden('Only the expense creator or trip owner can edit this expense');
+    throw forbidden('Only the expense creator or trip owner can change this expense');
   }
+  return existing;
+}
+
+export async function updateExpense(req, res) {
+  const { tripId, expenseId } = req.params;
+  const existing = await assertCanChangeExpense(req);
 
   const { amount, currency, description, paidBy, splitAmong, splitAmounts } = req.valid.body;
-  const memberIds = await getTripMemberIds(tripId);
-  if (!memberIds.includes(paidBy) || splitAmong.some((memberId) => !memberIds.includes(memberId))) {
+  const [memberIds, currentSplit] = await Promise.all([
+    getTripMemberIds(tripId),
+    supabase.from('expense_splits').select('user_id').eq('expense_id', expenseId),
+  ]);
+  check(currentSplit);
+  // anyone already on this expense can stay on it, or an old expense could never be corrected once someone had left
+  const allowed = new Set([...memberIds, existing.paid_by, ...currentSplit.data.map(({ user_id }) => user_id)]);
+  if (!allowed.has(paidBy) || splitAmong.some((memberId) => !allowed.has(memberId))) {
     throw badRequest('Payer and split members must belong to this trip');
   }
-  const metadata = await resolveCurrencyMetadata(amount, currency);
+  const metadata = await currencyMetadataForEdit(existing, amount, currency);
   const shares = normalizeSplitAmounts(splitAmounts, splitAmong, amount, metadata.exchange_rate);
   const { data: expense, error } = await supabase
     .from('expenses')
@@ -235,6 +298,14 @@ export async function updateExpense(req, res) {
   res.json({ expense: { ...expense, splitAmong } });
 }
 
+export async function deleteExpense(req, res) {
+  const { tripId, expenseId } = req.params;
+  await assertCanChangeExpense(req);
+  const { error } = await supabase.from('expenses').delete().eq('id', expenseId).eq('trip_id', tripId);
+  check({ data: null, error });
+  res.status(204).end();
+}
+
 export async function getBalances(req, res) {
   const [expenses, settlements] = await Promise.all([
     loadExpenses(req.params.tripId),
@@ -250,12 +321,12 @@ export async function createSettlement(req, res) {
   const { tripId } = req.params;
   const { from, to, amountSgd } = req.valid.body;
   if (from === to) throw badRequest('A member cannot settle a balance with themselves');
-  if (to !== req.user.id) throw forbidden('Only the receiving member can confirm this settlement');
   const memberIds = await getTripMemberIds(tripId);
-  if (!memberIds.includes(from) || !memberIds.includes(to)) {
-    throw badRequest('Settlement members must belong to this trip');
-  }
+  // Whoever receives the money confirms it. If they've left they can't, so the payer or the trip owner does it for them.
+  const stepsIn = !memberIds.includes(to) && (from === req.user.id || req.membership.role === 'owner');
+  if (to !== req.user.id && !stepsIn) throw forbidden('Only the receiving member can confirm this settlement');
 
+  // no membership check here: the balance check below only passes for people who really owe or are owed on this trip
   const [expenses, settlements] = await Promise.all([
     loadExpenses(tripId),
     loadSettlements(tripId),

@@ -1,11 +1,9 @@
-import { Loader } from '@googlemaps/js-api-loader';
+import { Loader } from "@googlemaps/js-api-loader";
 
 const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-/** Map ID for advanced markers + cloud styling. DEMO_MAP_ID works for development. */
-export const MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
+export const MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID || "DEMO_MAP_ID";
 
-/** True once VITE_GOOGLE_MAPS_API_KEY is set in client/.env.local */
 export const hasGoogleMaps = Boolean(apiKey);
 
 let loader;
@@ -15,16 +13,32 @@ let loader;
  * @returns {Promise<{ Map: typeof google.maps.Map, AdvancedMarkerElement: typeof google.maps.marker.AdvancedMarkerElement, LatLngBounds: typeof google.maps.LatLngBounds, Polyline: typeof google.maps.Polyline, InfoWindow: typeof google.maps.InfoWindow, SymbolPath: typeof google.maps.SymbolPath }>}
  */
 export async function loadGoogleMaps() {
-  if (!hasGoogleMaps) throw new Error('VITE_GOOGLE_MAPS_API_KEY is not set');
+  if (!hasGoogleMaps) throw new Error("VITE_GOOGLE_MAPS_API_KEY is not set");
   // 'alpha' is a superset of 'weekly' — needed so the same loader can also serve 'maps3d' below.
-  loader ||= new Loader({ apiKey, version: 'alpha', region: 'SG', language: 'en' });
-  // SymbolPath lives in 'core', not 'maps'
-  const [{ Map, Polyline, InfoWindow }, { AdvancedMarkerElement }, { LatLngBounds, SymbolPath }] = await Promise.all([
-    loader.importLibrary('maps'),
-    loader.importLibrary('marker'),
-    loader.importLibrary('core'),
+  // 'weekly' (the stable channel) includes 'maps3d' since Oct 2025; 'alpha' shows Google's dev-only banner.
+  loader ||= new Loader({
+    apiKey,
+    version: "weekly",
+    region: "SG",
+    language: "en",
+  });
+  const [
+    { Map, Polyline, InfoWindow },
+    { AdvancedMarkerElement },
+    { LatLngBounds, SymbolPath },
+  ] = await Promise.all([
+    loader.importLibrary("maps"),
+    loader.importLibrary("marker"),
+    loader.importLibrary("core"),
   ]);
-  return { Map, Polyline, AdvancedMarkerElement, LatLngBounds, InfoWindow, SymbolPath };
+  return {
+    Map,
+    Polyline,
+    AdvancedMarkerElement,
+    LatLngBounds,
+    InfoWindow,
+    SymbolPath,
+  };
 }
 
 /**
@@ -33,11 +47,30 @@ export async function loadGoogleMaps() {
  * @returns {Promise<{ Map3DElement: typeof google.maps.maps3d.Map3DElement, Marker3DElement: typeof google.maps.maps3d.Marker3DElement, Polyline3DElement: typeof google.maps.maps3d.Polyline3DElement, AltitudeMode: typeof google.maps.maps3d.AltitudeMode }>}
  */
 export async function loadGoogleMaps3D() {
-  if (!hasGoogleMaps) throw new Error('VITE_GOOGLE_MAPS_API_KEY is not set');
-  loader ||= new Loader({ apiKey, version: 'alpha', region: 'SG', language: 'en' });
-  const [{ Marker3DInteractiveElement, Polyline3DElement, AltitudeMode, Map3DElement }, { PinElement }] = await Promise.all([
-    loader.importLibrary('maps3d'),
-    loader.importLibrary('marker'),
+  if (!hasGoogleMaps) throw new Error("VITE_GOOGLE_MAPS_API_KEY is not set");
+  loader ||= new Loader({
+    apiKey,
+    version: "alpha",
+    region: "SG",
+    language: "en",
+  });
+  const [
+    {
+      Marker3DInteractiveElement,
+      Polyline3DElement,
+      AltitudeMode,
+      Map3DElement,
+    },
+    { PinElement },
+  ] = await Promise.all([
+    loader.importLibrary("maps3d"),
+    loader.importLibrary("marker"),
   ]);
-  return { Map3DElement, Marker3DInteractiveElement, Polyline3DElement, AltitudeMode, PinElement };
+  return {
+    Map3DElement,
+    Marker3DInteractiveElement,
+    Polyline3DElement,
+    AltitudeMode,
+    PinElement,
+  };
 }

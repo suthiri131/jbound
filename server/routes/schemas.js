@@ -80,7 +80,6 @@ export const updateMeBody = z
   })
   .refine((b) => Object.keys(b).length > 0, 'Nothing to update');
 
-// ---------- places ----------
 export const placesQuery = z.object({
   vibes: csvVibes,
   hiddenGem: boolQuery,
@@ -90,6 +89,7 @@ export const placesQuery = z.object({
   q: z.string().trim().max(60).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
+
 export const googleSearchQuery = z.object({
   q: z.string().trim().max(80).optional(),
   vibe: vibe.optional(),
@@ -139,6 +139,14 @@ export const commentBody = z.object({ text: z.string().trim().min(1).max(1000) }
 
 // ---------- trips ----------
 const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Use a hex colour like #2E5A3C');
+// how a trip looks on the Planner: one of five bags, with up to four badges pinned on
+export const BAG_KINDS = ['rucksack', 'daypack', 'messenger', 'tote', 'satchel'];
+export const BAG_BADGES = ['mushroom', 'mountain', 'compass', 'star', 'leaf', 'heart', 'sun', 'durian'];
+const bagBadges = z
+  .array(z.enum(BAG_BADGES))
+  .max(4, 'A bag holds up to 4 badges')
+  .refine((list) => new Set(list).size === list.length, 'Each badge can only go on once');
+
 export const createTripBody = z
   .object({
     name: z.string().trim().min(1).max(100),
@@ -153,6 +161,8 @@ export const updateTripBody = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   mission: z.string().trim().max(160).nullable().optional(),
   coverColor: hexColor.optional(),
+  bagKind: z.enum(BAG_KINDS).nullable().optional(),
+  bagBadges: bagBadges.nullable().optional(),
   startDate: isoDate.nullable().optional(),
   endDate: isoDate.nullable().optional(),
 });
@@ -225,8 +235,8 @@ export const createExpenseBody = z.object({
   amount: z.coerce.number().positive().max(1_000_000).multipleOf(0.01),
   currency,
   description: z.string().trim().min(1).max(120),
-  paidBy: uuid.optional(),
-  splitAmong: z.array(uuid).max(50).optional(),
+  paidBy: uuid,
+  splitAmong: z.array(uuid).min(1).max(50).refine((ids) => new Set(ids).size === ids.length, 'Each member can only be in the split once'),
   splitAmounts: z.array(z.object({ memberId: uuid, amount: z.coerce.number().min(0).multipleOf(0.01) })).max(50).optional(),
 });
 export const balancesQuery = z.object({ currency: currency.default('SGD') });

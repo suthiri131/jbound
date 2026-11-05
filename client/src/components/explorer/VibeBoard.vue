@@ -1,8 +1,4 @@
 <script setup>
-/**
- * The notice board's opening screen, sat on the cork: pick the flyers you're feeling. On explore the flyers come
- * unpinned and flutter off the board, then `explore` fires so the page can pin the places up in their place.
- */
 import { ref } from "vue";
 import { VIBES, VIBE_TINT, VIBE_FLYER } from "@/utils/constants";
 import VibeIcon from "@/components/common/VibeIcon.vue";
@@ -43,9 +39,6 @@ const TILTS = [-3, 2, -1.5, 3, -2.5, 1.5, -1];
       <h2 class="display display-lg">
         What's the vibe today, {{ name || "explorer" }}?
       </h2>
-      <p class="hand">
-        Tap the flyers you're feeling. Pick as many as you like.
-      </p>
     </header>
 
     <ul class="flyers" role="group" aria-label="Vibes">

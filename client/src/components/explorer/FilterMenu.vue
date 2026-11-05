@@ -1,23 +1,35 @@
 <script setup>
-
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, nextTick, onBeforeUnmount } from "vue";
+import { VIBES } from "@/utils/constants";
+import VibeIcon from "@/components/common/VibeIcon.vue";
 
 const props = defineProps({
   modelValue: { type: Object, required: true }, // { checkpoint, maxDistanceKm, maxPrice, hiddenGem }
   defaults: { type: Object, required: true },
+  vibes: { type: Array, default: () => [] },
 });
-const emit = defineEmits(["update:modelValue"]);
+const emit = defineEmits([
+  "update:modelValue",
+  "toggle-vibe",
+  "clear-vibes",
+  "change-vibe",
+]);
 
 const open = ref(false);
-const root = ref(null);
+const pop = ref(null);
+const button = ref(null);
 
 const set = (key, value) =>
   emit("update:modelValue", { ...props.modelValue, [key]: value });
-const reset = () => emit("update:modelValue", { ...props.defaults });
+const reset = () => {
+  emit("update:modelValue", { ...props.defaults });
+  emit("clear-vibes");
+};
 
 /** how many filters differ from the defaults → small badge on the button */
 const activeCount = computed(
   () =>
+    props.vibes.length +
     Object.keys(props.defaults).filter(
       (k) => props.modelValue[k] !== props.defaults[k],
     ).length,
@@ -25,33 +37,44 @@ const activeCount = computed(
 
 const price = (n) => "$".repeat(n);
 
-// close when tapping outside or pressing Esc
-function onDocClick(e) {
-  if (open.value && root.value && !root.value.contains(e.target))
-    open.value = false;
+function onOutsideClick(e) {
+  if (!pop.value?.contains(e.target) && !button.value?.contains(e.target))
+    close(false);
 }
 function onKey(e) {
-  if (e.key === "Escape") open.value = false;
+  if (e.key === "Escape") close();
 }
-onMounted(() => {
-  document.addEventListener("click", onDocClick);
+async function show() {
+  open.value = true;
+  document.addEventListener("pointerdown", onOutsideClick);
   document.addEventListener("keydown", onKey);
-});
+  await nextTick();
+  pop.value?.querySelector("button")?.focus();
+}
+function close(returnFocus = true) {
+  if (!open.value) return;
+  open.value = false;
+  document.removeEventListener("pointerdown", onOutsideClick);
+  document.removeEventListener("keydown", onKey);
+  if (returnFocus) button.value?.focus();
+}
+const toggle = () => (open.value ? close() : show());
 onBeforeUnmount(() => {
-  document.removeEventListener("click", onDocClick);
+  document.removeEventListener("pointerdown", onOutsideClick);
   document.removeEventListener("keydown", onKey);
 });
 </script>
 
 <template>
-  <div ref="root" class="filter-menu">
+  <div class="filter-menu">
     <button
+      ref="button"
       type="button"
       class="btn filter-btn"
       :aria-expanded="open"
       aria-controls="explorer-filters"
       data-cy="filters-button"
-      @click="open = !open"
+      @click="toggle"
     >
       <svg
         width="18"
@@ -79,17 +102,37 @@ onBeforeUnmount(() => {
 
     <div
       v-if="open"
-      class="scrim-mobile"
-      aria-hidden="true"
-      @click="open = false"
-    />
-    <div
-      v-if="open"
       id="explorer-filters"
-      class="menu card"
+      ref="pop"
+      class="pop"
       role="dialog"
       aria-label="Filters"
     >
+      <div class="field">
+        <span>Vibes</span>
+        <div class="vibes" role="group" aria-label="Filter by vibe">
+          <button
+            v-for="v in VIBES"
+            :key="v.id"
+            type="button"
+            class="vibe"
+            :aria-pressed="vibes.includes(v.id)"
+            :data-cy="`vibe-${v.id}`"
+            @click="emit('toggle-vibe', v.id)"
+          >
+            <VibeIcon :vibe="v.id" :size="15" /> {{ v.label }}
+          </button>
+          <button
+            type="button"
+            class="vibe change"
+            data-cy="change-vibe"
+            @click="emit('change-vibe')"
+          >
+            ↺ Change my vibe
+          </button>
+        </div>
+      </div>
+
       <div class="field">
         <span>Crossing at</span>
         <div class="segmented" role="group" aria-label="Checkpoint">
@@ -169,11 +212,7 @@ onBeforeUnmount(() => {
         >
           Reset
         </button>
-        <button
-          type="button"
-          class="btn btn-sm btn-primary"
-          @click="open = false"
-        >
+        <button type="button" class="btn btn-sm btn-primary" @click="close()">
           Done
         </button>
       </div>
@@ -199,15 +238,72 @@ onBeforeUnmount(() => {
   color: var(--card);
   font-size: 12px;
 }
-.menu {
+.pop {
   position: absolute;
+  z-index: 30;
   top: calc(100% + 10px);
   right: 0;
-  z-index: 40;
-  width: 320px;
-  padding: 18px;
+  width: min(340px, calc(100vw - 40px));
+  padding: 14px;
   display: grid;
   gap: 16px;
+  border: 2px solid var(--ink);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  animation: pop-in 0.16s ease-out;
+}
+.pop::before {
+  /* the little point up to the Filters button */
+  content: "";
+  position: absolute;
+  top: -9px;
+  right: 34px;
+  width: 14px;
+  height: 14px;
+  background: var(--card);
+  border-left: 2px solid var(--ink);
+  border-top: 2px solid var(--ink);
+  rotate: 45deg;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.vibes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.vibe {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fbf6e9;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vibe[aria-pressed="true"] {
+  background: #4f6b34;
+  color: #fbf6e9;
+}
+.vibe.change {
+  border-style: dashed;
+  background: transparent;
 }
 .check {
   display: flex;
@@ -240,28 +336,9 @@ input[type="range"] {
   justify-content: flex-end;
   gap: 8px;
 }
-.scrim-mobile {
-  display: none;
-}
-
-/* phones: bottom sheet */
-@media (max-width: 640px) {
-  .scrim-mobile {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 39;
-    background: rgba(42, 33, 23, 0.45);
-  }
-  .menu {
-    position: fixed;
-    top: auto;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: auto;
-    border-radius: 18px 18px 0 0;
-    padding: 20px 16px 24px;
+@media (prefers-reduced-motion: reduce) {
+  .pop {
+    animation: none;
   }
 }
 </style>

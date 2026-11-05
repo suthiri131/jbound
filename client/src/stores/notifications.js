@@ -2,15 +2,19 @@ import { defineStore } from 'pinia';
 import { api } from '@/lib/api';
 
 export const useNotificationsStore = defineStore('notifications', {
-  state: () => ({ inviteCount: 0 }),
+  state: () => ({ inviteCount: 0, tripsNeedingPhotos: 0 }),
+  getters: {
+    /** The bell's badge: things still waiting on the user. */
+    badgeCount: (s) => s.inviteCount + s.tripsNeedingPhotos,
+  },
   actions: {
-    async fetchInviteCount() {
-      try {
-        const { data } = await api.get('/trips/invites');
-        this.inviteCount = data.length;
-      } catch {
-        this.inviteCount = 0;
-      }
+    setReminders(reminders) {
+      this.tripsNeedingPhotos = new Set(reminders.filter((r) => r.needsPhotos).map((r) => r.tripId)).size;
+    },
+    async fetchBadgeCount() {
+      const [invites, reminders] = await Promise.allSettled([api.get('/trips/invites'), api.get('/trips/memory-reminders')]);
+      this.inviteCount = invites.status === 'fulfilled' ? invites.value.data.length : 0;
+      this.setReminders(reminders.status === 'fulfilled' ? reminders.value.data : []);
     },
   },
-}); 
+});

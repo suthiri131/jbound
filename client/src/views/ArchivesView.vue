@@ -1,4 +1,5 @@
 <script setup>
+import BackLabel from "@/components/common/BackLabel.vue";
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api, errorMessage } from '@/lib/api';
@@ -9,6 +10,8 @@ import ScrapbookPage from '@/components/archives/ScrapbookPage.vue';
 import { buildScrapbookPages } from '@/utils/scrapbookLayout';
 import { useOneCupboard } from '@/composables/useOneCupboard';
 import { askConfirm, showAlert } from '@/lib/dialog';
+import WanderingEyes from '@/components/common/WanderingEyes.vue';
+
 
 // phases in which the server still accepts memory uploads
 const UPLOAD_PHASES = ['on_the_road', 'memory_box'];
@@ -232,7 +235,7 @@ async function swapOutReviewed() {
 <template>
   <main class="attic-page">
     <h1 class="sr-only">Archives</h1>
-    <RouterLink v-if="!tripId" to="/" class="camp-back out">← Step outside</RouterLink>
+    <RouterLink v-if="!tripId" to="/" class="camp-back out" aria-label="Back to Basecamp"><BackLabel /></RouterLink>
 
     <div
       v-if="tripId"
@@ -301,8 +304,8 @@ async function swapOutReviewed() {
       @open="openDrawer"
       @pick="reviewDrawer"
     >
-      <p v-if="!loading && !loadError && !attic.drawers.length && !pendingTrip" class="hand empty">
-        Nothing in here yet. Finished trips move into a drawer a week after they end.
+      <WanderingEyes v-if="loading && !attic.drawers.length" center text="Climbing up to the attic…" />
+      <p v-if="!loading && !loadError && !attic.drawers.length && !pendingTrip" class="hand empty">Nothing in here yet. Finished trips move into a drawer a week after they end.
       </p>
     </AtticScene>
 
