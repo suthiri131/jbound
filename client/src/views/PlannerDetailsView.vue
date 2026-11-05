@@ -321,11 +321,13 @@ const canMemories = computed(() =>
         <CampChat :key="trip.id" :trip-id="trip.id" />
       </div>
       <button v-show="!chatOpen" ref="chatLauncher" type="button" class="btn btn-mustard chat-launcher" :aria-expanded="chatOpen" aria-label="Open Camp chat" title="Chat with your crew" aria-controls="camp-chat-panel" @click="toggleChat">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-
+        <span class="chat-launcher-inner">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2 2-6a8.5 8.5 0 1 1 18-4.5Z" />
             <path d="M7 10h8M7 14h5" />
-        </svg>
+          </svg>
+          <span class="chat-launcher-text">Chat</span>
+        </span>
       </button>
     </aside>
 
@@ -512,7 +514,32 @@ const canMemories = computed(() =>
 /* Chat stays accessible independently of the route and itinerary length. */
 .floating-chat { position: fixed; right: 24px; bottom: 24px; z-index: 80; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; max-width: calc(100vw - 32px); }
 .chat-panel { position: relative; width: min(480px, calc(100vw - 32px)); }
-.chat-launcher { width: 64px; height: 64px; padding: 0; border-radius: 50%; }
+.chat-launcher {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 112px;
+  height: 52px;
+  padding: 0 18px;
+  border-radius: 999px;
+}
+.chat-launcher-inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.chat-launcher svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+.chat-launcher-text {
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
 .chat-close { position: absolute; top: 10px; right: 12px; z-index: 1; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: var(--paper); font-size: 26px; cursor: pointer; }
 .chat-panel :deep(.chat) { display: flex; flex-direction: column; max-height: min(560px, calc(100dvh - 120px)); }
 .chat-panel :deep(.head) { flex: none; padding-right: 48px; flex-wrap: wrap; }
@@ -521,6 +548,14 @@ const canMemories = computed(() =>
 .chat-panel :deep(.compose) { flex: none; }
 @media (max-width: 600px) {
   .floating-chat { right: 16px; bottom: 16px; }
+  .chat-launcher {
+    min-width: 98px;
+    height: 48px;
+    padding: 0 14px;
+  }
+  .chat-launcher-text {
+    font-size: 0.9rem;
+  }
 }
 /* camp chat: the leather notebook */
 .planner :deep(.chat) {
