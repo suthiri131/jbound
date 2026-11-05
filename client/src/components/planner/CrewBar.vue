@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, reactive, nextTick, onBeforeUnmount } from 'vue';
 import { api, assetUrl, errorMessage } from '@/lib/api';
+import { askConfirm, currentDialog } from '@/lib/dialog';
 import { useAuthStore } from '@/stores/auth';
 import { initials } from '@/utils/format';
 import { useTripPresence } from '../../composables/useTripPresence';
@@ -39,10 +40,11 @@ const usernameInput = ref(null);
 const fallbackInput = ref(null);
 
 function onOutsideClick(e) {
+  if (currentDialog.value) return; // answering "make a new code?" shouldn't close the popover showing the code
   if (!popover.value?.contains(e.target) && !inviteButton.value?.contains(e.target)) closeInvite(false);
 }
 function onKey(e) {
-  if (e.key === 'Escape') closeInvite();
+  if (e.key === 'Escape' && !currentDialog.value) closeInvite();
 }
 async function openInvite() {
   inviteOpen.value = true;
@@ -103,7 +105,12 @@ async function invite() {
 }
 
 async function newCode() {
-  if (!window.confirm('Make a new invite code? The old code and link will stop working.')) return;
+  const sure = await askConfirm({
+    title: 'Make a new invite code?',
+    message: 'The old code and link will stop working.',
+    confirmLabel: 'Make new code',
+  });
+  if (!sure) return;
   try {
     await api.post(`/trips/${props.trip.id}/invite-code`);
     emit('notify', 'New invite code ready. The old one no longer works.');
@@ -115,12 +122,12 @@ async function newCode() {
 
 async function removeMember(m) {
   const isSelf = m.id === auth.user?.id;
-  const confirmText = isSelf
-    ? 'Leave this crew? You can be invited back later.'
+  const question = isSelf
+    ? { title: 'Leave this crew?', message: 'You can be invited back later.', confirmLabel: 'Leave crew' }
     : m.status === 'pending'
-      ? `Cancel the invite to ${m.name}?`
-      : `Remove ${m.name} from the crew?`;
-  if (!window.confirm(confirmText)) return;
+      ? { title: `Cancel the invite to ${m.name}?`, confirmLabel: 'Cancel invite', cancelLabel: 'Keep invite' } // two "Cancel" buttons would be confusing
+      : { title: `Remove ${m.name} from the crew?`, confirmLabel: 'Remove' };
+  if (!(await askConfirm({ ...question, danger: true }))) return;
   try {
     await api.delete(`/trips/${props.trip.id}/members/${m.id}`);
     emit('changed');
