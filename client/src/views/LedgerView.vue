@@ -187,9 +187,18 @@ async function deleteExpense() {
 async function confirmSettlement(settlement) {
   errorMessage.value = '';
   try {
-    await apiRequest(`/trips/${encodeURIComponent(tripId.value)}/expenses/settlements`, { method: 'POST', data: { from: settlement.from, to: settlement.to, amountSgd: settlement.amountSgd } });
-    await loadLedger();
-  } catch (error) { errorMessage.value = error.message; }
+    await apiRequest(`/trips/${encodeURIComponent(tripId.value)}/expenses/settlements`, {
+      method: 'POST',
+      data: {
+        from: settlement.from,
+        to: settlement.to,
+        amountSgd: settlement.amountSgd
+      }
+    });
+    await loadTrips();
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
 }
 // ---------- the stall scene beside the receipt ----------
 const formOpen = ref(false);
