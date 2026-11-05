@@ -89,7 +89,32 @@ Run the client's unit tests in watch mode:
 pnpm --filter jbound-client test:unit
 ```
 
-The Cypress spec in `cypress/e2e/map.cy.js` (`pnpm --filter jbound-client test:e2e:cypress`) is out of date: it targets Planner markup and demo data that no longer exist, so expect it to fail until it is rewritten.
+### End-to-end tests (Cypress)
+
+One-time setup:
+
+1. `pnpm install` from the repo root (already covers Cypress — it's a pinned `devDependency`
+   in `client/package.json`, no separate install step needed).
+2. Copy `.env.example` to `.env` in both `server/` and `client/` and fill it. For more information, contact Coen.
+   
+3. Copy `cypress.env.json.example` to `cypress.env.json` (repo root, gitignored) and fill
+   in test account credentials. These are self-service: sign up your own throwaway
+   account(s) through the running app itself, no one needs to hand them to you.
+
+Running the suite:
+
+1. Start the backend: Run `pnpm dev` in `server/`.
+2. Start the frontend: Run `pnpm dev` in `client/`.
+3. Run the tests headless: `pnpm --filter jbound-client test:e2e:cypress`.
+   To watch it run in a real browser instead: Open another terminal and run `npx cypress open --project ..` in `client/`.
+
+Troubleshooting Tips :
+- Always run Cypress from `client/`, as running it from the root picks up
+  a different, unpinned Cypress version and everything breaks with unrelated errors.
+- If sign-ins start failing after many repeated test runs, the backend's auth rate limiter
+  is kicking in and you need to restart the backend with `AUTH_RATE_LIMIT=off pnpm dev` to lift it.
+- `cypress/e2e/map.cy.js` is out of date (targets Planner markup and demo data that no
+  longer exist) and is superseded by `cypress/e2e/route-map.cy.js`.
 
 ## Build the client
 

@@ -1,14 +1,5 @@
-// Covers test cases #31-32: place search + pin to trip, place detail page shows map + info.
-// ExplorerView.vue and PlaceView.vue already have good data-cy coverage (explorer-search,
-// vibe-*, place-card, place-link, pin, pin-trip, pin-confirm, place-directions, place-pin,
-// place-tab-*) — used throughout below instead of guessing selectors.
+// covering place search, pinning a place to a trip, and the place detail page
 
-
-// Known app bug (not a test issue): useCampPresence.js's start() can race itself when
-// Basecamp loads twice in quick succession (e.g. right after a sign-in redirect), throwing
-// "cannot add `presence` callbacks ... after `subscribe()`" as an uncaught rejection. That
-// crashes unrelated tests in Cypress by default, so we swallow just this one known error here
-// rather than let it mask real failures. Worth a look from whoever owns Basecamp/presence.
 Cypress.on('uncaught:exception', (err) => {
   if (err.message.includes('presence` callbacks')) return false;
 });
@@ -30,7 +21,6 @@ describe('Explorer', () => {
   it('searches for a place and can pin a result to a trip', () => {
     cy.visit('/explorer?vibes=eating');
     cy.get('[data-cy="explorer-search"]').type('food');
-    // the search is debounced (600ms) — wait for the board to settle rather than a fixed sleep
     cy.get('[data-cy="place-card"]', { timeout: 10000 }).should('have.length.greaterThan', 0);
 
     cy.get('[data-cy="place-card"]').first().within(() => {
@@ -52,9 +42,7 @@ describe('Explorer', () => {
     cy.get('[data-cy="place-link"]', { timeout: 10000 }).first().click();
     cy.url().should('include', '/explorer/place/');
     cy.get('[data-cy="place-tab-overview"]').should('have.attr', 'aria-selected', 'true');
-    // .should('be.visible') alone never scrolls a nested scroll container (.cork-scroll) —
-    // only Cypress actions do that, not plain assertions — so scroll it into view explicitly first.
-    cy.get('.map, .map-fallback', { timeout: 10000 }).scrollIntoView().should('be.visible'); // real map or the "add API key" fallback, either is a valid render
+    cy.get('.map, .map-fallback', { timeout: 10000 }).scrollIntoView().should('be.visible');
     cy.get('[data-cy="place-directions"]').scrollIntoView().should('be.visible');
     cy.get('[data-cy="place-pin"]').scrollIntoView().should('be.visible');
 

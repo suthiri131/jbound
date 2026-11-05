@@ -1,15 +1,5 @@
-// Covers test case #35: core pages stay within an iPhone-width viewport (no horizontal scroll).
-// Generic page-level check, not component-specific — same pattern the old (broken) map.cy.js
-// used just for the map canvas, applied here to the whole document on each page.
-// Both /planner and /archives are auth-guarded (redirect to /sign-in otherwise, see auth.cy.js),
-// so this needs a signed-in session to actually test the intended pages rather than the sign-in page.
+// covering mobile viewport layout on the Planner and Archives pages
 
-
-// Known app bug (not a test issue): useCampPresence.js's start() can race itself when
-// Basecamp loads twice in quick succession (e.g. right after a sign-in redirect), throwing
-// "cannot add `presence` callbacks ... after `subscribe()`" as an uncaught rejection. That
-// crashes unrelated tests in Cypress by default, so we swallow just this one known error here
-// rather than let it mask real failures. Worth a look from whoever owns Basecamp/presence.
 Cypress.on('uncaught:exception', (err) => {
   if (err.message.includes('presence` callbacks')) return false;
 });

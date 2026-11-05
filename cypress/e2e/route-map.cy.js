@@ -1,14 +1,5 @@
-// Covers test cases #15, #17, #18. Replaces the old cypress/e2e/map.cy.js, which asserted
-// selectors (.map-canvas, data-map-ready, [title="JB Sentral"], a POST /api/routes intercept)
-// that don't match the current app — RouteMap.vue uses .map/.map-pin and GET /trips/:id/route.
-// Requires a trip with >=2 located stops; set CYPRESS_TEST_TRIP_ID to one, or this suite skips.
+// covering route map markers and the 2D/3D view toggle
 
-
-// Known app bug (not a test issue): useCampPresence.js's start() can race itself when
-// Basecamp loads twice in quick succession (e.g. right after a sign-in redirect), throwing
-// "cannot add `presence` callbacks ... after `subscribe()`" as an uncaught rejection. That
-// crashes unrelated tests in Cypress by default, so we swallow just this one known error here
-// rather than let it mask real failures. Worth a look from whoever owns Basecamp/presence.
 Cypress.on('uncaught:exception', (err) => {
   if (err.message.includes('presence` callbacks')) return false;
 });

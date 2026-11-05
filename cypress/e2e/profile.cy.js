@@ -1,14 +1,5 @@
-// Covers test cases #33 (edit character, saves) and #34 (delete account -> account-deleted page).
-// #34 creates and deletes its OWN disposable account via sign-up rather than touching
-// Cypress.env('TEST_EMAIL') — account deletion is permanent and irreversible (removes profile,
-// tales, trip memberships), so it must never run against the shared test account other specs rely on.
+// covering editing the camp character and deleting an account
 
-
-// Known app bug (not a test issue): useCampPresence.js's start() can race itself when
-// Basecamp loads twice in quick succession (e.g. right after a sign-in redirect), throwing
-// "cannot add `presence` callbacks ... after `subscribe()`" as an uncaught rejection. That
-// crashes unrelated tests in Cypress by default, so we swallow just this one known error here
-// rather than let it mask real failures. Worth a look from whoever owns Basecamp/presence.
 Cypress.on('uncaught:exception', (err) => {
   if (err.message.includes('presence` callbacks')) return false;
 });
@@ -27,7 +18,7 @@ describe('Profile', () => {
     login(Cypress.env('TEST_EMAIL'), Cypress.env('TEST_PASSWORD'));
     cy.visit('/profile');
 
-    cy.contains('button', 'Surprise me').click(); // randomises the look, guaranteed to make it "dirty"
+    cy.contains('button', 'Surprise me').click();
     cy.contains('button', 'Save character').click();
     cy.get('p.status[role="status"]').should('contain.text', 'Saved');
   });
@@ -41,7 +32,7 @@ describe('Profile', () => {
     cy.get('input[type="text"]').eq(1).type('Deleter');
     cy.get('input[type="email"]').type(email);
     cy.get('input[type="password"]').eq(0).type(password);
-    cy.get('input[type="password"]').eq(1).type(password); // confirm password
+    cy.get('input[type="password"]').eq(1).type(password);
     cy.get('button[type="submit"]').click();
     cy.url().should('eq', Cypress.config().baseUrl + '/');
 
