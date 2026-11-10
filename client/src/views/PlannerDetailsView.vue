@@ -225,6 +225,15 @@ async function onArchived() {
   router.replace("/planner");
 }
 
+async function onLeft() {
+  const name = trip.value?.name;
+  trip.value = null;
+  feas.value = null;
+  await trips.fetch(true);
+  await router.replace("/planner");
+  notify(name ? `You left ${name}` : "You left the trip");
+}
+
 const canMemories = computed(() =>
   ["on_the_road", "memory_box"].includes(trip.value?.phase),
 );
@@ -246,7 +255,7 @@ const canMemories = computed(() =>
         <RouterLink to="/archives">Open its drawer in the tent →</RouterLink>
       </div>
 
-      <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @joined="notify" @notify="notify" />
+      <CrewBar :trip="trip" :is-live="isLive" @changed="loadTrip" @left="onLeft" @joined="notify" @notify="notify" />
 
       <div class="split">
         <div class="map-column">

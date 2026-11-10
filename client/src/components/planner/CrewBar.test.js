@@ -111,5 +111,7 @@ describe('CrewBar popups', () => {
     answerDialog(true);
     await flushPromises();
     expect(api.delete).toHaveBeenCalledWith('/trips/t1/members/me');
+    expect(wrapper.emitted('left')).toHaveLength(1);
+    expect(wrapper.emitted('changed')).toBeUndefined();
   });
 });

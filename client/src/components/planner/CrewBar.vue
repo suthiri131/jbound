@@ -8,7 +8,7 @@ import { useTripPresence } from '../../composables/useTripPresence';
 
 const props = defineProps({ trip: { type: Object, required: true }, isLive: { type: Boolean, default: true } });
 // `notify` shows a little toast on the trip page (copied, invite sent, or what went wrong)
-const emit = defineEmits(['changed', 'joined', 'notify']);
+const emit = defineEmits(['changed', 'joined', 'notify', 'left']);
 const auth = useAuthStore();
 
 const AVATAR_TINTS = ['#E0A43B', '#DCE5CF', '#F2CDB8', '#CFE0D9', '#F6E2B3'];
@@ -130,7 +130,8 @@ async function removeMember(m) {
   if (!(await askConfirm({ ...question, danger: true }))) return;
   try {
     await api.delete(`/trips/${props.trip.id}/members/${m.id}`);
-    emit('changed');
+    // after leaving you can no longer load the trip, so let the page route away instead of refreshing
+    emit(isSelf ? 'left' : 'changed');
   } catch (err) {
     emit('notify', errorMessage(err));
   }
